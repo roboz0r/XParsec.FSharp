@@ -35,14 +35,14 @@ let private runTraceChild (size: Fixtures.FixtureSize) (iterations: int) =
 
     // Warm-up so JIT / tiered compilation settles before the trace window.
     for _ in 1..5 do
-        let reader = Reader.ofLexed lexed Set.empty
+        let reader = Reader.ofParseInput (lexed.WithDefines Set.empty)
         FSharpAst.parse reader |> ignore
 
     printfn "TRACE_BEGIN size=%A iterations=%d" size iterations
     let sw = Stopwatch.StartNew()
 
     for i in 1..iterations do
-        let reader = Reader.ofLexed lexed Set.empty
+        let reader = Reader.ofParseInput (lexed.WithDefines Set.empty)
         FSharpAst.parse reader |> ignore
 
         if i % 50 = 0 then
@@ -113,13 +113,13 @@ let private runTraceAndAggregate (size: Fixtures.FixtureSize) (iterations: int) 
 
 /// The SA analogue of `runTraceChild`: the loop that runs under `dotnet-trace collect`.
 /// Providers + sources are built ONCE (mirroring the benchmark's `GlobalSetup`) so the
-/// trace window covers only the analyse chain, not the heavy BCL-leaf provider compose.
+/// trace window covers only the analyse chain, not the heavy BCL provider compose.
 let private runSaTraceChild (depth: SemanticAnalysisFixtures.ChainDepth) (iterations: int) =
     let stages = SemanticAnalysisFixtures.stagesFor depth
 
     let runOnce () =
         for s in stages do
-            SemanticAnalysisFixtures.analyseStage XParsec.FSharp.SemanticAnalysis.Pipeline.analyseForSelfHost s
+            SemanticAnalysisFixtures.analyseStage XParsec.FSharp.SemanticAnalysis.Pipeline.analyseFor s
             |> ignore
 
     // Warm-up so JIT / tiered compilation settles before the trace window.
