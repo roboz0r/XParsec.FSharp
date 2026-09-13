@@ -35,9 +35,7 @@
     <Compile Include="Debug.fs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\XParsec\XParsec.fsproj" />
-  </ItemGroup>
-  <ItemGroup>
+    <PackageReference Include="XParsec" />
     <PackageReference Include="System.Collections.Immutable" />
   </ItemGroup>
 </Project>
