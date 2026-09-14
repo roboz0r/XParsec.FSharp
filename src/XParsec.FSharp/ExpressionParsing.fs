@@ -1393,6 +1393,9 @@ module Expr =
                 | Token.BacktickedIdentifier
                 | Token.UnterminatedBacktickedIdentifier
                 | Token.KWNull
+                // `base` parses as an ordinary ident atom, so `f base` juxtaposes like any
+                // other argument and semantic analysis reports the misuse.
+                | Token.KWBase
                 | Token.KWLParen
                 | Token.KWLBracket
                 | Token.KWLArrayBracket
