@@ -55,7 +55,7 @@ module ValSig =
                 opt (
                     parser {
                         let! eq = pEquals
-                        let! e = Expr.parseAtomic
+                        let! e = Expr.parse
                         return (eq, e)
                     }
                 )
