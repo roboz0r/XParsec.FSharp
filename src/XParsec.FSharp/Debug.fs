@@ -26,9 +26,8 @@ type private OutputItem =
     | Line of indentLevel: int * text: string
     | TokenRow of TokenRowData
 
-/// Collects print output into a buffer, then emits it with the label column
-/// dynamically sized to fit the deepest indentation level, so that the
-/// literal/kind/index columns align perfectly across the whole output.
+/// Buffers text and token rows, then flushes them with dynamically aligned columns
+/// across all indentation levels.
 type PrintContext(indentSize: int) =
     let items = ResizeArray<OutputItem>()
     let mutable currentIndent = 0
@@ -56,7 +55,7 @@ type PrintContext(indentSize: int) =
         )
 
     member _.Flush(writer: TextWriter) =
-        // Dynamic label column width: widest (indent + label) across all token rows.
+        // Calculate max width for the label column (indentation + label length).
         let maxLabelColWidth =
             let mutable m = 0
 
@@ -89,13 +88,13 @@ type PrintContext(indentSize: int) =
 
 // ---- Helpers ----
 
-/// Temporarily increases the indentation level, runs `f`, then restores it.
+/// Increases indentation by one level for the duration of `f`.
 let inline indent (ctx: PrintContext) (f: unit -> unit) =
     ctx.Indent <- ctx.Indent + 1
     f ()
     ctx.Indent <- ctx.Indent - 1
 
-/// Writes "header:" then runs `f` indented by one level.
+/// Prints a section header and runs `f` indented under it.
 let printSection (ctx: PrintContext) (header: string) (f: unit -> unit) =
     ctx.WriteLine($"{header}:")
     indent ctx f
@@ -103,10 +102,8 @@ let printSection (ctx: PrintContext) (header: string) (f: unit -> unit) =
 let tokenKindString (lexed: Lexed) (token: PositionedToken) (i: int<token>) =
     let rawToken = lexed.Tokens.[i]
 
-    // If this token has been rewritten by a split (kind or start index differs from the
-    // raw lexer token at this index, e.g. `>]` split into `>` and `]`, or `^-` split into
-    // `^` and `-`), use the rewritten kind name directly instead of deriving an operator
-    // name from the original raw literal.
+    // For split tokens (e.g. '>\]' split into '>' and '\]'), use the rewritten token kind
+    // directly instead of deriving an operator name from the original source text.
     if rawToken.Token <> token.Token || rawToken.StartIndex <> token.StartIndex then
         $"{TokenInfo.withoutFlags token.Token}"
     else
@@ -116,7 +113,7 @@ let tokenKindString (lexed: Lexed) (token: PositionedToken) (i: int<token>) =
         | ValueSome opInfo -> opInfo.GetName(s)
         | ValueNone -> $"{TokenInfo.withoutFlags rawToken.Token}"
 
-/// Adds a single token row to the print buffer.
+/// Adds a single formatted token row to the print buffer.
 let printTokenRow (label: string) (ctx: PrintContext) (lexed: Lexed) (token: SyntaxToken) =
     let pt = token.PositionedToken
 
@@ -145,9 +142,7 @@ let printTokenRow (label: string) (ctx: PrintContext) (lexed: Lexed) (token: Syn
 
 // ---- Visitor factory ----
 
-/// Builds an AstVisitor<SyntaxToken> that writes debug output into ctx.
-/// EnterSection with a non-empty name prints "name:" and increases indentation.
-/// EnterSection with an empty name just increases indentation (like `indent`).
+/// Creates an AST visitor that writes formatted debug output to the given context.
 let makeDebugVisitor (ctx: PrintContext) (lexed: Lexed) : AstVisitor<SyntaxToken> =
     {
         VisitToken = fun label tok -> printTokenRow label ctx lexed tok
@@ -162,7 +157,7 @@ let makeDebugVisitor (ctx: PrintContext) (lexed: Lexed) : AstVisitor<SyntaxToken
         EqualTokens = fun a b -> a.Index = b.Index
     }
 
-// ---- Print functions (thin wrappers over AstTraversal walk functions) ----
+// ---- Print functions (wrappers over AstTraversal walk functions) ----
 
 let printAccess (ctx: PrintContext) (lexed: Lexed) (access: Access<SyntaxToken>) =
     walkAccess (makeDebugVisitor ctx lexed) access
@@ -309,12 +304,10 @@ let printImplementationFile (ctx: PrintContext) (lexed: Lexed) (file: Implementa
 let printFSharpAst (ctx: PrintContext) (lexed: Lexed) (ast: FSharpAst<SyntaxToken>) =
     walkFSharpAst (makeDebugVisitor ctx lexed) ast
 
-/// Formats a DiagnosticCode as a short, stable string suitable for golden-file output: the
-/// code the seam presents to a consumer, plus the payload for the cases a golden wants to
-/// see it on. EXHAUSTIVE, and deliberately so: under a catch-all, a new payload-carrying
-/// case would print a bare name into a golden — passing, while silently showing nothing of
-/// what it carries. A delimiter code's `openedAt` is deliberately NOT printed: the golden
-/// already carries the diagnostic's own resolved position on the same line.
+/// Formats a diagnostic code and any relevant payload data for golden testing.
+///
+/// Note: This match is deliberately exhaustive without a wildcard pattern so that
+/// any newly added diagnostic codes or payloads must be explicitly accounted for.
 let sprintDiagnosticCode (code: DiagnosticCode) : string =
     let name = DiagnosticCode.code code
 
@@ -341,9 +334,7 @@ let sprintDiagnosticCode (code: DiagnosticCode) : string =
     | DiagnosticCode.ExpectedQuotationTypedRight
     | DiagnosticCode.ExpectedQuotationUntypedRight -> name
 
-/// Appends a "---\nDiagnostics:" section to the buffer when there are diagnostics.
-/// Diagnostics are emitted in source order (reversed from the accumulation order).
-/// Has no effect when `diagnostics` is empty, so well-formed golden files are not touched.
+/// Prints diagnostics in source order if any are present.
 let printDiagnostics (ctx: PrintContext) (input: string) (diagnostics: Diagnostic list) =
     if not diagnostics.IsEmpty then
         let lineIndex = LineIndex.OfString input
@@ -372,6 +363,7 @@ let printDiagnostics (ctx: PrintContext) (input: string) (diagnostics: Diagnosti
                     | None -> ()
             )
 
+/// Prints compiler warning directives (#nowarn / #warnon) in source order if any are present.
 let printWarnDirectives (ctx: PrintContext) (warnDirectives: WarnDirective list) =
     if not warnDirectives.IsEmpty then
         ctx.WriteLine("---")
@@ -380,7 +372,6 @@ let printWarnDirectives (ctx: PrintContext) (warnDirectives: WarnDirective list)
         indent
             ctx
             (fun () ->
-                // Print in source order (reverse of accumulation order)
                 for d in List.rev warnDirectives do
                     let kind = if d.Suppress then "#nowarn" else "#warnon"
                     ctx.WriteLine($"{kind} {d.WarningNumber} (Ln {d.Line})")

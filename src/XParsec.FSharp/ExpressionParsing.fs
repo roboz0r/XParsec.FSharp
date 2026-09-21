@@ -32,17 +32,9 @@ module ElifBranches =
 
                     match! peekNextSyntaxToken with
                     | t when t.Token = Token.KWIf ->
-                        // `else if` is collapsed into a single chain arm (matching
-                        // F#'s LexFilter: `ELSE` immediately followed by `IF` becomes
-                        // `ELIF`) only when it's clearly sugar for flat chaining:
-                        //   (a) same source line (classic inline `else if`), or
-                        //   (b) `if` at or left of the `else` column (multi-line form
-                        //       where the `if` is undentated to align with `else`).
-                        // When the `if` is strictly to the right of `else`, the user
-                        // has written a nested `if` inside the else body — let the
-                        // else branch parse the whole body as an expression so
-                        // subsequent sibling statements at the inner col join via
-                        // the else body's own SeqBlock.
+                        // Collapse `else if` into a single chain arm if it's on the same line
+                        // or if `if` aligns with or undents to `else`. If `if` is indented further
+                        // to the right, treat it as a nested `if` inside the else body.
                         let! state = getUserState
 
                         let collapse =
@@ -65,18 +57,8 @@ module ElifBranches =
             ]
             "Expected 'elif' or 'else'"
 
-    // Anchor the arm's If and Then contexts at (indent + 1). `indent` is the
-    // chain's effective offside column — the leftmost of the arm's keywords:
-    //   - `elif`     — elif's column
-    //   - `else if`  — min(else_col, if_col). `else if` is F# LexFilter sugar
-    //                  that collapses to a single chain arm; the arm aligns at
-    //                  the leftmost keyword. For same-line `else if` that's
-    //                  `else`; for multi-line `else\nif` (where collapse requires
-    //                  `if_col <= else_col`, e.g. `if` starts the next line after
-    //                  a trailing `else`) it's `if`.
-    // Anchoring at +1 (rather than the peeked expression token's column, which
-    // is what plain `withContext` would use) is needed so multi-line conditions
-    // that undent onto the following line remain within the If context.
+    // Anchors the branch's 'If' and 'Then' contexts at (indent + 1) to allow
+    // multi-line conditions that undent on following lines to remain within scope.
     let pConditionThen (indent: int) (armKeyword: SyntaxToken) (reader: Reader<PositionedToken, ParseState, _>) =
         let pCond =
             withContextAt OffsideContext.If (indent + 1) armKeyword.PositionedToken refExpr.Parser
@@ -114,7 +96,7 @@ module ElifBranches =
             | Error e -> Error e
 
         | Ok(ElIfTok.ElseIf(elseTok, ifTok)) ->
-            // Leftmost of the pair is the chain's alignment column — see comment on pConditionThen.
+            // Use the leftmost keyword column as the alignment indent
             let indent = min (getIndent reader elseTok) (getIndent reader ifTok)
 
             match pConditionThen indent elseTok reader with
@@ -142,22 +124,20 @@ module Binding =
     let private pMutableTok =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.KWMutable) "Expected 'mutable'"
 
-    /// Build the binding pattern from an IdentOrOp
+    /// Creates a pattern from an identifier or operator token.
     let private patternOfIdentOrOp (identOrOp: IdentOrOp<SyntaxToken>) : Pat<SyntaxToken> =
         match identOrOp with
         | IdentOrOp.Ident t -> Pat.NamedSimple t
         | _ -> Pat.Op identOrOp
 
-    // Parses a single static-optimization constraint: `^T : Type` or `^T : struct`.
-    // Distinct from general type-parameter constraints (Constraint.pTyparConstraints)
-    // because the RHS is an arbitrary named type, not a keyword like 'equality'.
+    // Parses a static-optimization constraint: `^T : Type` or `^T : struct`.
     let private pStaticOptimizationConstraint =
         parser {
             let! typar = Typar.parse
 
             match! peekNextSyntaxToken with
             | t when t.Token = Token.KWStruct ->
-                // Bare `'T struct` — no colon
+                // Bare `'T struct` without a colon
                 let! structTok = consumePeeked t
                 return StaticOptimizationConstraint.WhenTyparIsStruct(typar, ValueNone, structTok)
             | _ ->
@@ -179,7 +159,7 @@ module Binding =
             return struct (andTok, c)
         }
 
-    // Parses one `when c1 and c2 ... = optimizedExpr` clause.
+    // Parses `when c1 and c2 ... = optimizedExpr`
     let private pStaticOptimizationClause =
         parser {
             let! whenTok = pWhen
@@ -198,11 +178,7 @@ module Binding =
                 }
         }
 
-    // Collect any trailing `when` clauses onto the binding body, flat and in source order.
-    // `many` always succeeds and rewinds the reader on a failed attempt, so a peek failure
-    // (EndOfInput / offside) after the body cleanly yields no clauses. Without that, every
-    // binding body would need to guarantee a following token, which is not true at
-    // end-of-file or at the END of a member list inside a type definition.
+    // Collects any trailing `when` static-optimization clauses onto the binding body.
     let private pChainStaticOptimizations (baseExpr: Expr<SyntaxToken>) =
         parser {
             let! clauses = many pStaticOptimizationClause
@@ -213,10 +189,8 @@ module Binding =
         }
 
     let private pBindingBody =
-        // Captures the colon's column before consumption so the following type
-        // can be parsed inside a stricter offside context (col_of_colon + 1).
-        // Without this, Type.parse would greedily slurp suffix identifiers from
-        // following lines as type suffixes (`'T array` + `res` -> `res<'T array>`).
+        // Captures the colon column so the return type can be parsed in a stricter
+        // offside context (colonCol + 1), preventing multi-line suffix parsing issues.
         let pColonPeek (reader: FSReader) =
             match peekNextSyntaxToken reader with
             | Ok t when t.Token = Token.OpColon ->
@@ -245,11 +219,8 @@ module Binding =
             return! pChainStaticOptimizations annotated
         }
 
-    // Detects the START of a named-field destructure: `( Identifier = ...`. Used only as a
-    // lookahead guard in `parseFunction`; the shape is unambiguously a value-binding
-    // pattern (F# let bindings don't support default-valued parameters), so letting
-    // parseFunction commit here would cause pEnclosed to recover with a virtual `)`
-    // and bury the real parse.
+    // Lookahead guard to identify named-field pattern destructuring `(Identifier = ...)`,
+    // preventing `parseFunction` from incorrectly matching value-binding patterns.
     let private pNamedFieldCtorPatStart =
         lookAhead (
             parser {
@@ -278,10 +249,8 @@ module Binding =
             let! identOrOp = IdentOrOp.parse
             do! notFollowedByL pNamedFieldCtorPatStart "named-field destructure"
             let! typarDefns = opt TyparDefns.parse
-            // Parse argument patterns (atomic to avoid consuming return type annotations).
-            // Operator definitions (e.g., `let (|PointFree|) = expr`) allow zero arguments.
-            // Generic value definitions (e.g., `let inline f<'T> : Type = expr`) also allow zero arguments.
-            // Named function definitions require at least one argument.
+            // Operators and generic values allow zero argument patterns;
+            // standard named function definitions require at least one.
             let! argumentPats =
                 match identOrOp with
                 | IdentOrOp.ParenOp _ -> many Pat.parseAtomicBindingArg
@@ -339,8 +308,7 @@ module Binding =
     let parse attrs : FSParser<Binding<_>> =
         choiceL [ parseFunction attrs; parseValue attrs ] "Binding"
 
-    /// `b and b and …`, over a caller-supplied binding parser: a property's `with` clause
-    /// admits only `get` / `set` in that position, not the general binding.
+    /// Parses one or more `and`-separated bindings using the provided binding parser.
     let sepByAnd1 (pBinding: Attributes<SyntaxToken> voption -> FSParser<Binding<_>>) attrs =
         let pAndBinding =
             parser {
@@ -372,8 +340,7 @@ module Binding =
 
 [<AutoOpen>]
 module private MemberHelpers =
-    // Forward reference for MemberDefn to avoid circular dependency issues
-    // and provide a stub for ObjectMembers
+    // Forward reference for MemberDefn to resolve circular dependencies
     let refMemberDefn = FSRefParser<MemberDefn<SyntaxToken>>()
 
 [<RequireQualifiedAccess>]
@@ -393,7 +360,7 @@ module ObjectConstruction =
     let private errNoConstructorArguments: ErrorType<PositionedToken, ParseState> =
         Message "No constructor arguments"
 
-    // Dummy function to ensure the static constructor runs and initializes refObjectConstruction
+    // Explicit initialization hook for static references
     let mutable private x = 0
     let init () = x <- x + 1
 
@@ -401,8 +368,7 @@ module ObjectConstruction =
         parser {
             let! typ = Type.parse
 
-            // Check for constructor arguments: parens, literals, or other expression starters.
-            // Attributes can use `[<Attr "str">]` or `[<Attr(args)>]` syntax.
+            // Look ahead for constructor arguments (e.g., `[<Attr "str">]` or `[<Attr(args)>]`)
             let! argExpr =
                 opt (
                     parser {
@@ -415,8 +381,7 @@ module ObjectConstruction =
                             || token.Token = Token.VerbatimStringOpen
                             || token.Token = Token.String3Open
                         then
-                            // Inside `[< … >]` a `;` separates attributes
-                            // `[<A("x"); B>]` parses as two attributes
+                            // Inside `[< … >]`, semicolons separate multiple attributes
                             return! refExprNoSeq.Parser
                         else
                             return! fail errNoConstructorArguments
@@ -434,9 +399,7 @@ module ObjectConstruction =
 module BaseCall =
     let parse: FSParser<BaseCall<SyntaxToken>> =
         parser {
-            // Note: This parser expects 'inherit' to be handled by the caller,
-            // as the BaseCall AST type does not contain the 'inherit' token.
-
+            // Assumes the leading 'inherit' keyword has already been consumed by the caller
             let! construction = ObjectConstruction.parse
 
             let! asPart =
@@ -458,9 +421,7 @@ module ObjectMembers =
     let parse: FSParser<ObjectMembers<SyntaxToken>> =
         parser {
             let! withTok = pWith
-
-            // Parse list of members until 'end'
-            // We use `many` combined with a check for the `end` token to terminate
+            // Parse members terminated by 'end'
             let! members, endTok = manyTill refMemberDefn.Parser pEnd
 
             return ObjectMembers.ObjectMembers(withTok, members, endTok)
@@ -476,7 +437,7 @@ module InterfaceImpl =
             return InterfaceImpl.InterfaceImpl(interfaceTok, typ, members)
         }
 
-/// Used by ExprOperatorParser to carry auxiliary information from operator-specific parsers back to the main expression parser for completion.
+/// Auxiliary data passed from operator-specific parsers back to the expression parser for AST construction.
 [<RequireQualifiedAccess>]
 type ExprAux =
     | Ident of SyntaxToken
@@ -536,10 +497,7 @@ module Expr =
 
     let private refExprRange = FSRefParser<Expr<SyntaxToken>>()
 
-    // Grammar: typedSeqExprBlock = seqExpr [':' type]
-    // Captures the colon's column before consumption so the following type
-    // parses inside a stricter offside context (colonCol + 1), preventing
-    // Type.parse from greedily slurping suffix identifiers on following lines.
+    // Parses `seqExpr [':' type]`, enforcing offside context on the type annotation.
     let pTypedSeqExprBlock =
         let pColonPeek (reader: FSReader) =
             match peekNextSyntaxToken reader with
@@ -564,22 +522,18 @@ module Expr =
             | ValueNone -> return expr
         }
 
-    /// Completion functions for operator parsing — pure transformations from the
-    /// parsed pieces (LHS / operator / RHS or Aux) into an Expr. These are
-    /// independent of any ExprOperatorParser state, so they live at module scope.
+    /// Functions that assemble AST Expr nodes from parsed operators and operands.
     module private Complete =
         let infix (l: Expr<_>) (op: SyntaxToken) (r: Expr<_>) = Expr.InfixApp(l, op, r)
 
         let range (l: Expr<_>) (op: SyntaxToken) (r: Expr<_>) =
             match l with
             | Expr.Range(l, dotdot1, step) ->
-                // We already have a range on the left, so this must be a stepped range
-                // with the new step in the middle and the new end on the right
+                // Convert chained range `start..step..stop` into a stepped range
                 Expr.SteppedRange(l, dotdot1, step, op, r)
             | _ -> Expr.Range(l, op, r)
 
-        // Shared PrefixNoConsume completion for fun, function, if, match, try, while, for —
-        // each wraps its fully-parsed body into ExprAux.ForExpr (historical name).
+        // Completes control-flow expressions (if, match, for, while, etc.) stored in ExprAux.ForExpr
         let forE _forTok (expr: ExprAux) =
             match expr with
             | ExprAux.ForExpr forExpr -> forExpr
@@ -679,11 +633,8 @@ module Expr =
             | ExprAux.KeywordExpr e -> e op
             | _ -> failwith "Unexpected Aux type for keyword expression"
 
-    /// Keyword-expression body parsers (if/match/fun/function/try/while/for/let/use/yield/return/do).
-    /// Each parser consumes its own keyword via `assertKeywordToken` and uses `withContextAt` to
-    /// set the offside indent based on the keyword's column; lhsParser peeks but does NOT consume.
-    /// Lifted from ExprOperatorParser so they're initialized once at module load rather than
-    /// per-instance.
+    /// Parsers for keyword-prefixed expressions (if, match, let, fun, etc.).
+    /// Keywords are peeked by lhsParser and consumed here to establish offside indentation.
     module private KWBody =
         let recoverExprMissing p =
             recoverWith
@@ -692,7 +643,6 @@ module Expr =
                 (missingOrSkipped Expr.Missing Expr.SkipsTokens)
                 p
 
-        // Used for for-to and use identifiers (not the dot-access pIdent above)
         let pIdentTok = nextSyntaxIdentifierLMsg "identifier"
 
         let pDoneVirt reader =
@@ -708,23 +658,19 @@ module Expr =
                 | ValueSome t ->
                     let doneTok = virtualToken (PositionedToken.Create(Token.VirtualDone, t.StartIndex))
                     Ok doneTok
-                | ValueNone ->
-                    // No more tokens means something else skipped past the EOF marker token
-                    // So, we throw here
-                    failwith "Unexpected end of input while looking for 'done' or virtual 'done'"
+                | ValueNone -> failwith "Unexpected end of input while looking for 'done' or virtual 'done'"
 
         let pIfExpr =
             parser {
                 let! (ifTok, indent) = assertKeywordToken Token.KWIf
-                // Condition at if_col + 1
+
                 let! cond =
                     recoverExprMissing (
                         withContextAt OffsideContext.If (indent + 1) ifTok.PositionedToken refExpr.Parser
                     )
-                // then permitted undentation at if_col via contextPermitsToken
+
                 let! thenTok = recoverWithVirtualToken Token.KWThen "Expected 'then' after condition" pThen
-                // Body anchored to if_col + 1, NOT then_col + 1
-                // Grammar: THEN typedSeqExprBlock
+                // Grammar: THEN typedSeqExprBlock (anchored to if_col + 1)
                 let! thenExpr =
                     recoverExprMissing (
                         withContextAt OffsideContext.Then (indent + 1) ifTok.PositionedToken refTypedSeqExprBlock.Parser
@@ -771,7 +717,7 @@ module Expr =
                 : Result<ExprAux, _> =
                 let savedState = reader.State
 
-                // Push Match context at match_col — stays active for with/| undentation
+                // Maintain Match context at match_col for 'with' and '|' alignment
                 let matchEntry =
                     {
                         Context = OffsideContext.Match
@@ -781,7 +727,6 @@ module Expr =
 
                 reader.State <- ParseState.pushOffside matchEntry reader.State
 
-                // Match expression inner content at match_col + 1
                 match
                     recoverExprMissing
                         (withContextAt OffsideContext.SeqBlock (indent + 1) matchTok.PositionedToken refExpr.Parser)
@@ -792,7 +737,6 @@ module Expr =
                     Error e
                 | Ok e ->
 
-                    // with permitted at match_col via contextPermitsToken (Match context still active)
                     match
                         recoverWithVirtualToken Token.KWWith "Expected 'with' after match expression" pWith reader
                     with
@@ -801,7 +745,6 @@ module Expr =
                         Error e
                     | Ok w ->
 
-                        // | permitted at match_col via contextPermitsToken (Match context still active)
                         match pMatchRules reader with
                         | Error e ->
                             reader.State <- savedState
@@ -819,7 +762,6 @@ module Expr =
         let pFunctionExpr =
             parser {
                 let! (funcTok, indent) = assertKeywordToken Token.KWFunction
-                // Function context at function_col for | undentation
                 let! rules = withContextAt OffsideContext.Function indent funcTok.PositionedToken pMatchRules
                 return ExprAux.ForExpr(Expr.Function(funcTok, rules))
             }
@@ -830,20 +772,15 @@ module Expr =
 
             parser {
                 let! (funTok, indent) = assertKeywordToken Token.KWFun
-                // params, arrow, and body all at fun_col + 1
+
                 let! result =
                     withContextAt
                         OffsideContext.Fun
                         (indent + 1)
                         funTok.PositionedToken
                         (parser {
-                            // Grammar (above): FUN atomicPatterns RARROW. Lambda
-                            // parameters are *atomic* patterns — a bare identifier is
-                            // a simple bound variable, NOT a ctor pattern that swallows the
-                            // following parameters. `Pat.parse` would parse `fun acc k`
-                            // as the applied pattern `acc k` (`Pat.Named acc [k]`);
-                            // `parseAtomicBindingArgMany1` (the same parser the let/
-                            // member bindings use) keeps them as separate bound variables.
+                            // Lambda arguments use atomic patterns so identifiers are parsed as
+                            // individual parameters rather than applied constructor patterns.
                             let! pats = Pat.parseAtomicBindingArgMany1
 
                             let! arrow =
@@ -888,8 +825,7 @@ module Expr =
                             Rules(ValueNone, ImmutableArray.Create(missingWithSkips), ImmutableArray.Empty)
                     )
 
-            // Manually manage the Try context so it stays active through with/finally parsing,
-            // similar to how parseMatchBody keeps Match context active for | undentation.
+            // Explicitly manage Try context indentation across 'with' and 'finally' blocks
             fun (reader: Reader<PositionedToken, ParseState, _>) ->
                 match assertKeywordToken Token.KWTry reader with
                 | Error e -> Error e
@@ -897,7 +833,6 @@ module Expr =
 
                     let savedState = reader.State
 
-                    // Push Try context at try_col — stays active for with/finally/| undentation
                     let tryEntry =
                         {
                             Context = OffsideContext.Try
@@ -907,8 +842,6 @@ module Expr =
 
                     reader.State <- ParseState.pushOffside tryEntry reader.State
 
-                    // Try body — SeqBlock set by refExprSeqBlock at first expression's indent.
-                    // The Try context below it permits with/finally undentation to try_col.
                     // Grammar: TRY typedSeqExprBlock WITH|FINALLY ...
                     match recoverExprMissing refTypedSeqExprBlock.Parser reader with
                     | Error e ->
@@ -916,12 +849,9 @@ module Expr =
                         Error e
                     | Ok tryExpr ->
 
-                        // with/finally permitted at try_col via contextPermitsToken (Try context still active)
                         let pWith' =
                             parser {
                                 let! withTok = pWith
-                                // | permitted at try_col via contextPermitsToken (Try context still active)
-                                // MatchClauses at try_col so clause bodies can be at try_col
                                 let! rules = pTryMatchRules indent tryTok.PositionedToken
                                 return Expr.TryWith(tryTok, tryExpr, withTok, rules)
                             }
@@ -929,7 +859,6 @@ module Expr =
                         let pFinally' =
                             parser {
                                 let! finTok = pFinally
-                                // Grammar: FINALLY typedSeqExprBlock
                                 let! finExpr = refTypedSeqExprBlock.Parser
                                 return Expr.TryFinally(tryTok, tryExpr, finTok, finExpr)
                             }
@@ -948,24 +877,20 @@ module Expr =
                             Ok(ExprAux.ForExpr result)
 
         let pWhileExpr =
-            // Accepts both `while` and F# 7+ `while!` (CE-bang form). The keyword
-            // token carries the distinction via whileTok.Token; downstream consumers
-            // dispatch on that — mirrors how Match/MatchBang share Expr.Match.
+            // Accepts both `while` and `while!` (computation expression form)
             parser {
                 let! (whileTok, indent) = assertKeywordTokens Token.KWWhile Token.KWWhileBang
-                // Condition at while_col + 1 (uses refExprNoSeq to prevent `do` from being consumed
-                // as a keyword expression via sequential composition)
+                // Condition uses refExprNoSeq so 'do' is not consumed as a sequential expression
                 let! cond =
                     recoverExprMissing (
                         withContextAt OffsideContext.While (indent + 1) whileTok.PositionedToken refExprNoSeq.Parser
                     )
-                // do keyword also at while_col + 1 (NOT permitted undentation)
+
                 let! doTok =
                     recoverWithVirtualToken
                         Token.KWDo
                         "Expected 'do' after while condition"
                         (withContextAt OffsideContext.While (indent + 1) whileTok.PositionedToken pDo)
-                // Body at while_col
                 // Grammar: WHILE _ DO typedSeqExprBlock
                 let! body =
                     recoverExprMissing (
@@ -1008,7 +933,7 @@ module Expr =
                     "Expected 'for-to' or 'for-in' loop header"
 
             let assertFor reader =
-                // We throw here as `pForExpr` should only be called if we've already peeked and confirmed we have a 'for' token.
+                // Consumes 'for' keyword; throws if called unexpectedly
                 match peekNextSyntaxToken reader with
                 | Ok t when t.Token = Token.KWFor ->
                     (consumePeeked t
@@ -1029,8 +954,7 @@ module Expr =
 
             parser {
                 let! (forTok, indent) = assertFor
-                // The pattern and iterator (or variable and range) must be indented past the 'for' keyword
-                // After do, the body can be at the same indent as 'for' or indented further
+                // Loop header requires deeper indent than 'for'; body can align with 'for'
                 let headerMinIndent = indent + 1
                 let bodyMinIndent = indent
                 let! forBuilder = withContextAt OffsideContext.For headerMinIndent forTok.PositionedToken pForHeader
@@ -1046,15 +970,13 @@ module Expr =
             match peekNextSyntaxToken reader with
             | Ok t when t.Token = Token.KWIn -> consumePeeked t reader
             | Ok t ->
-                // Not 'in', but maybe we emit a virtual 'in' for offside rule in let bindings without 'in'.
-                // We can only emit VirtualIn if the next token is indented less than or equal to the 'let' and we're at the correct context indent.
+                // Synthesize VirtualIn if indentation rules indicate the end of the binding definition
                 let indent = ParseState.getIndent reader.State (reader.Index * 1<token>)
                 let state = reader.State
 
                 let atContextIndent =
                     match state.Context with
-                    // Inside paren-like contexts (Indent = 0), the offside rule is relaxed.
-                    // Always emit virtual 'in' since the paren delimiter governs scope, not indentation.
+                    // Relaxed offside rule inside parentheses/brackets
                     | { Indent = 0 } :: _ -> true
                     | { Indent = ctxIndent } :: _ -> indent = ctxIndent || indent = letIndent
                     | [] -> indent = 0 || indent = letIndent
@@ -1062,14 +984,9 @@ module Expr =
                 if atContextIndent then
                     Ok(virtualToken (PositionedToken.Create(Token.VirtualIn, t.StartIndex)))
                 else
-                    // TODO: Consider parser recovery here instead of hard failure,
-                    // e.g. skip tokens until we find one that is at the correct indent
-                    // or a valid separator (e.g. semicolon, newline with correct indent, or closing delimiter).
-                    // Maybe still emit a virtual 'in' as well as a diagnostic error for the missing 'in' to allow parsing to continue and produce a more complete AST with error nodes.
                     fail errExpectedInAtLetIndent reader
             | Error _ ->
-                // Peek failed (e.g., EOF offside or end of input).
-                // Emit a virtual 'in' — this handles `use _ = expr` at the end of a scope.
+                // Synthesize VirtualIn at EOF to handle trailing `use` bindings at scope end
                 let pos = reader.Index * 1<token>
 
                 let startIndex =
@@ -1080,10 +997,8 @@ module Expr =
 
                 Ok(virtualToken (PositionedToken.Create(Token.VirtualIn, startIndex)))
 
-        // Shared definition parser for let/use bindings:
-        // Parses [rec] binding [and binding ...] inside a Let offside context.
-        // 'use rec' and 'use ... and ...' are syntactically accepted here; semantic
-        // validation is responsible for rejecting those forms with diagnostics.
+        // Parses `[rec] binding [and binding ...]`. Invalid forms like `use rec`
+        // are accepted syntactically and flagged during semantic analysis.
         let pLetOrUseDefn indent token =
             withContextAt
                 OffsideContext.Let
@@ -1095,8 +1010,7 @@ module Expr =
                     return struct (recTok, bindings, ands)
                 })
 
-        /// Build nested `Expr.LetOrUse` from an accumulated list of bindings (innermost last)
-        /// and a body expression. The fold runs backwards so that the first binding wraps the outermost scope.
+        /// Folds a list of bindings into nested `Expr.LetOrUse` expressions (outermost first).
         let buildNestedLetOrUse
             (bindings: ResizeArray<struct (SyntaxToken * SyntaxToken voption * _ * _ * SyntaxToken)>)
             (body: Expr<SyntaxToken> voption)
@@ -1120,13 +1034,7 @@ module Expr =
             | ValueSome expr -> expr
             | ValueNone -> Expr.Missing
 
-        /// Single body parser used by both `let/let!` and `use/use!`.
-        /// The keyword token has been peeked but NOT consumed by lhsParser.
-        ///
-        /// Sequential let/use bindings (e.g. `let x = 1\nlet y = 2\nexpr`) are collected
-        /// iteratively to avoid deep recursion — each `let` in a sequence would otherwise
-        /// add ~30 stack frames via the Pratt parser → SeqBlock → pLetOrUseBody chain,
-        /// overflowing the stack on moderately nested code.
+        /// Parses sequential `let`/`use` bindings iteratively to prevent stack overflow from deep recursion.
         let pLetOrUseBody =
             fun (reader: Reader<PositionedToken, ParseState, _>) ->
                 let bindings = ResizeArray()
@@ -1138,7 +1046,7 @@ module Expr =
                     | Error e ->
                         if bindings.Count = 0 then
                             error <- Error e
-                        // If we already have bindings, stop iterating; the body parse will report the error
+
                         cont <- false
                     | Ok peeked ->
                         match peeked.Token with
@@ -1176,7 +1084,6 @@ module Expr =
                 if bindings.Count = 0 then
                     error
                 else
-                    // Committed after consuming let/use bindings — recover body expression if it fails
                     // Grammar: LET bindings IN typedSeqExprBlock
                     let body =
                         match refTypedSeqExprBlock.Parser reader with
@@ -1187,7 +1094,7 @@ module Expr =
                             match lastKw.Token with
                             | Token.KWUse
                             | Token.KWUseBang ->
-                                // use/use! with no body is valid F# (e.g. `use _ = expr` at end of scope)
+                                // Trailing `use`/`use!` with no subsequent body is valid F#
                                 ValueNone
                             | _ ->
                                 reader.State <-
@@ -1212,7 +1119,6 @@ module Expr =
                     refTypedSeqExprBlock.Parser
 
             parser {
-                // Committed after do/return/yield keyword
                 let! expr = pBody
 
                 return
@@ -1231,20 +1137,13 @@ module Expr =
                     )
             }
 
-    /// High-precedence-application / type-application lookaheads — the `f(x)`, `f[i]`,
-    /// and `f<T>` forms that bind tighter than whitespace application. Lifted from
-    /// ExprOperatorParser to avoid re-evaluating their bodies on each generic
-    /// instantiation of an enclosing class member.
+    /// High-precedence operators that bind tighter than whitespace application: `f(x)`, `f[i]`, and `f<T>`.
     module private HighPrec =
-        // Shared once-allocated ErrorType for pTypeApplication's failure paths. Kept as a
-        // separate module-level binding (with explicit type) so the value-restriction rule
-        // can't generalize pTypeApplication into a thunk that re-allocates the Message.
+        // Cached error message to avoid allocations on failure paths
         let private pTypeApplicationErr: ErrorType<PositionedToken, ParseState> =
             Message "Expected '<' for type application"
 
-        /// Direct-style type-application lookahead. Moved to module scope so the binding
-        /// is initialized once as a static field (rather than re-evaluated for each generic
-        /// instantiation of an enclosing class member).
+        /// Lookahead parser for type applications (e.g. `<int>`).
         let pTypeApplication: FSParser<SyntaxToken> =
             fun reader ->
                 if not (isPrevTokenSyntax reader) then
@@ -1252,8 +1151,7 @@ module Expr =
                 else
                     match reader.Peek() with
                     | ValueSome t when t.Token = Token.OpLessThan ->
-                        // OpLessThan has a unique OpFamily ID, so it identifies bare `<` exactly —
-                        // no span check needed. Custom `<`-starting ops emit a different enum value.
+                        // OpLessThan specifically identifies `<` without custom operator suffixes
                         let st = syntaxToken t reader.Index
 
                         let typeAngle =
@@ -1277,10 +1175,7 @@ module Expr =
             }
 
         let pHighPrec token char =
-            // Use satisfy to check the raw token is '(' AND the previous raw token is not trivia,
-            // confirming true adjacency (e.g. f(x), not f (x) or a newline-separated expression).
-            // Hoist the error message into a single ErrorType.Message value so the failure
-            // paths below don't allocate per invocation.
+            // Requires the token to be immediately adjacent to the preceding token (no whitespace)
             let errMsg = Message $"Expected '{char}' for high precedence"
 
             let pSatisfy =
@@ -1320,12 +1215,12 @@ module Expr =
                 | _ -> failwith "Unexpected token in peekHighPrecApp"
 
         let parseHighPrecIndex: FSParser<ExprAux> =
-            // Parse [ expr ] for F# 6+ dot-less indexing arr[i] — no whitespace before '['
+            // Parses dot-less indexing `arr[i]`
             parser {
                 let! pos = getPosition
                 let! lBracket = pHighPrecLBracket
                 let lBracket = syntaxToken lBracket pos.Index
-                // Special case: f[] with empty brackets → treat as f [] (application to empty list)
+                // Special case: treat `f[]` as application to an empty list `f []`
                 match! peekNextSyntaxToken with
                 | t when t.Token = Token.KWRBracket ->
                     let! rBracket = consumePeeked t
@@ -1337,13 +1232,13 @@ module Expr =
             }
 
         let parseHighPrecApp: FSParser<ExprAux> =
-            // Parse ( expr ) for high-precedence application f(x, y) — no whitespace before '('
+            // Parses high-precedence application `f(x, y)`
             parser {
                 let! pos = getPosition
                 let! lParen = pHighPrecLParen
                 let lParen = syntaxToken lParen pos.Index
 
-                // Handle f() — empty argument list
+                // Handle `f()` as application to unit
                 match! peekNextSyntaxToken with
                 | t when t.Token = Token.KWRParen ->
                     let! rParen = consumePeeked t
@@ -1367,19 +1262,14 @@ module Expr =
 
     module private Application =
         let parse =
-            /// Checks whether the operator at the given raw token index is an ADJACENT_PREFIX_OP:
-            /// adjacent to the following token (no whitespace after) but with whitespace before.
-            /// See F# spec 3.8.1 "Post-filtering of Adjacent Prefix Tokens".
+            /// Checks if an operator has leading whitespace but no trailing whitespace (F# spec 3.8.1).
             let isAdjacentPrefixOp (state: ParseState) (rawIndex: int<token>) =
                 let tokens = state.Lexed.Tokens
 
-                // Check right-adjacency: next raw token must NOT be trivia (whitespace/newline/comment)
                 let rightAdjacent =
                     rawIndex + 1<token> < tokens.Length * 1<token>
                     && not (ParseState.isTriviaToken state tokens[rawIndex + 1<token>])
 
-                // Check left-separation: previous raw token must be trivia (whitespace/newline/comment)
-                // or the operator must be at the start of input
                 let leftSeparated =
                     rawIndex = 0<token>
                     || (rawIndex > 0<token>
@@ -1393,8 +1283,7 @@ module Expr =
                 | Token.BacktickedIdentifier
                 | Token.UnterminatedBacktickedIdentifier
                 | Token.KWNull
-                // `base` parses as an ordinary ident atom, so `f base` juxtaposes like any
-                // other argument and semantic analysis reports the misuse.
+                // `base` is parsed syntactically as an identifier; invalid usages are caught semantically
                 | Token.KWBase
                 | Token.KWLParen
                 | Token.KWLBracket
@@ -1420,10 +1309,7 @@ module Expr =
                     else
                         match OperatorInfo.TryCreate t.PositionedToken with
                         | ValueSome opInfo when opInfo.CanBePrefix ->
-                            // Prefix-only operators (e.g. !, ~~~) always start application args.
-                            // Dual-use operators (e.g. -, +) only start application args when they
-                            // are ADJACENT_PREFIX_OPs: adjacent to the right token with whitespace before.
-                            // See F# spec 3.8.1 "Post-filtering of Adjacent Prefix Tokens".
+                            // Dual-use operators (e.g. `+`, `-`) only start arguments if right-adjacent
                             opInfo.Precedence = PrecedenceLevel.Prefix
                             || (
                                 match t.Index with
@@ -1433,7 +1319,8 @@ module Expr =
                         | _ -> false
 
             let failApp = fail (Message "Expected expression after application")
-            // Application is *juxtaposition* of two expressions with trivia in between, e.g. `f x` or `f (g y)` or `f(*comment*)x`.
+
+            // Parses function application (whitespace juxtaposition `f x`)
             parser {
                 match! peekNextSyntaxToken with
                 | t when t.Token = Token.EOF -> return! failApp
@@ -1450,11 +1337,8 @@ module Expr =
                                 if indent > ctxIndent then
                                     true
                                 elif indent < ctxIndent then
-                                    // Token is undented from the SeqBlock but might still be a valid
-                                    // application argument inside a paren-like context (rule 15.1.10.4).
-                                    // Walk past SeqBlock+Paren pairs to find the enclosing non-paren
-                                    // context and check indent > that context's indent (strictly greater
-                                    // to preserve sequential-expression semantics at the same indent).
+                                    // Inside parentheses or brackets, undented tokens can still be valid
+                                    // arguments if they are indented past the outer non-paren block.
                                     match state.Context with
                                     | { Context = OffsideContext.SeqBlock } :: ctx :: deeper when
                                         ctx.Context = OffsideContext.Paren
@@ -1481,7 +1365,7 @@ module Expr =
                                         walkPastParens deeper
                                     | _ -> false
                                 else
-                                    false // indent = ctxIndent → sequential expression, not application
+                                    false
                             | [] -> indent > 0
 
                         if atAppIndent then
@@ -1490,16 +1374,11 @@ module Expr =
                             return! failApp
             }
 
-    /// Parses a subsequent tuple separator `,` for the Pratt parser's InfixNary
-    /// loop. Unlike the first comma (which is identified by the full RHS
-    /// operator dispatcher), this parser only needs to recognise another `,`.
+    /// Parses subsequent `,` delimiters in n-ary tuples.
     let private pTupleComma: Parser<SyntaxToken, _, _, _> =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.OpComma) "','"
 
-    /// Matches a real `;` or emits a layout-sensitive `VirtualSep` when the
-    /// next token can start an expression at the enclosing context's indent.
-    /// Used as the subsequent-separator parser for both the expression-level
-    /// RHS dispatcher and the InfixNary nary-loop for sequences.
+    /// Parses explicit `;` or synthesizes `VirtualSep` for newline-separated sequential expressions.
     let private pSepVirt =
         let failSep =
             fail (Message "Expected ';' or newline at the same indent for expression sequencing")
@@ -1509,12 +1388,7 @@ module Expr =
             | t when t.Token = Token.EOF -> return! failSep
             | t when t.Token = Token.OpSemicolon -> return! consumePeeked t
             | t ->
-                // Not a semicolon, but maybe we emit a virtual semicolon for newline-separated expressions.
-                // Only emit VirtualSep when the next token can actually start an expression.
-                // Tokens that cannot start expressions (closing delimiters, block-continuation keywords
-                // like `with`/`finally`/`then`/`else`, pure infix operators, etc.) must NOT trigger
-                // VirtualSep — doing so causes infinite loops in the Pratt parser's InfixNary handler
-                // because the zero-width virtual token never advances the reader.
+                // Emit VirtualSep only if the next token can legally start an expression at this indent
                 if TokenInfo.canStartExpression t.Token then
                     let! indent = currentIndent
                     let! state = getUserState
@@ -1524,18 +1398,8 @@ module Expr =
                         | { Indent = ctxIndent } :: _ -> indent = ctxIndent
                         | [] -> indent = 0
 
-                    // pars.fsy `moduleDefns`: a `let`/`use` binding (`defnBindings`) beginning at a
-                    // module-BODY column is a NEW module declaration, separated from a
-                    // preceding do-expression by OBLOCKSEP — never an OSEMI sequential
-                    // continuation. Sequencing it in would parse the binding as the trailing
-                    // statement of the do-expression's `seqExpr`, whose let/use body is then
-                    // absent (EOF or the next sibling decl) → `Expr.Missing`. End the sequence
-                    // here so the module-elems loop consumes the binding as its own element.
-                    // `Offside.isDeclBlock` identifies a module body POSITIVELY (file-level
-                    // entry frame or a nested `module X =` body), so the rule covers a nested
-                    // body whose elements sit exactly at the `Module` frame's minimum column.
-                    // `let!`/`use!` are NOT included: they start no `moduleDefns` entry — leave
-                    // them to sequence and be rejected by the expression grammar.
+                    // In module declarations, top-level `let`/`use` bindings at the module body column
+                    // terminate any preceding expression sequence rather than being sequenced into it.
                     let isDeclStartAtBodyColumn =
                         match state.Context with
                         | frame :: _ when Offside.isDeclBlock frame ->
@@ -1564,7 +1428,6 @@ module Expr =
         let pIdentAfterDot = nextSyntaxIdentifierLMsg "Expected identifier after '.'"
 
         let parseDotRhs: FSParser<ExprAux> =
-            // Note: cannot use module-level pIdent here as that maps to Expr.Ident
             choiceL
                 [
                     // .[expr] — indexed access (e.g. xs.[0])
@@ -1586,7 +1449,7 @@ module Expr =
                         let! ident = pIdentAfterDot
                         return ExprAux.Ident ident
                     }
-                    // .N — positional DU field access (e.g. cons.( :: ).1)
+                    // .N — positional union field access (e.g. expr.1)
                     parser {
                         let! intTok =
                             nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.NumInt32) "integer field index"
@@ -1603,20 +1466,18 @@ module Expr =
                 | Token.KWRBracket
                 | Token.OpComma
                 | Token.EOF ->
-                    // This is likely a slice like arr.[1..] or a range with an omitted end like [1..]
-                    // We return an Aux to indicate this and handle it in the completion function.
+                    // Slices with open upper bounds (e.g. `arr[1..]`)
                     Ok ExprAux.SliceFrom
                 | _ ->
-                    // Otherwise, we expect a full range expression on the right
+                    // Full range expression on the RHS (e.g. `1..10`)
                     (refExprRange.Parser |>> ExprAux.Range) reader
             | Error e ->
-                // If we fail to peek, treat it as an omitted end (e.g. [1..EOF)
+                // EOF treated as an open upper bound
                 Ok ExprAux.SliceFrom
 
         let parseTypeCastRhs = Type.parse |>> ExprAux.TypeCast
 
-        // RHS of an infix `?` (dynamic member lookup) — expects a single identifier.
-        // F# spec 6.4.5: `expr ? ident` is shorthand for `(?) expr ident`.
+        // Parses RHS of dynamic member operator `?` (e.g. `obj?Property`)
         let parseDynamicRhs: FSParser<ExprAux> =
             parser {
                 let! ident = nextSyntaxIdentifierLMsg "Expected identifier after '?'"
@@ -1626,7 +1487,6 @@ module Expr =
         let dynamicLookupHandler: SyntaxToken -> RHSOperator<_, _, _, _, _, _> =
             let power = BindingPower.fromLevel (int PrecedenceLevel.Dot)
             fun op -> InfixMapped(op, preturn op, power, parseDynamicRhs, Complete.dynamicLookup)
-
 
         let rhsOperators
             : (SyntaxToken
@@ -1638,26 +1498,14 @@ module Expr =
                     let power = BindingPower.fromLevel i
 
                     match pl with
-                    // Pattern only keywords
-                    // | PrecedenceLevel.As -> (fun op -> InfixRight(op, preturn op, BindingPower.rightAssocLhs power, Complete.infix))
-                    // | PrecedenceLevel.When -> (fun op -> InfixRight(op, preturn op, BindingPower.rightAssocLhs power, Complete.infix))
                     | PrecedenceLevel.Pipe -> (fun op -> InfixLeft(op, preturn op, power, Complete.infix))
-                    | PrecedenceLevel.Semicolon ->
-                        // (fun op -> InfixRight(op, preturn op, BindingPower.rightAssocLhs power, completeSemicolon))
-                        (fun op -> InfixNary(op, pSepVirt, power, true, Complete.sequence))
-                    // | PrecedenceLevel.RArrow -> `->` is listed in the operator precedence table but never used as an operator in expressions
-                    //     (fun op -> InfixRight(op, preturn op, BindingPower.rightAssocLhs power, Complete.infix))
-                    // LHS keywords
-                    // | PrecedenceLevel.Let -> (fun op -> InfixNonAssociative(op, preturn op, power, Complete.infix))
-                    // | PrecedenceLevel.Function -> (fun op -> InfixNonAssociative(op, preturn op, power, Complete.infix))
-                    // | PrecedenceLevel.If -> (fun op -> InfixNonAssociative(op, preturn op, power, Complete.infix))
+                    | PrecedenceLevel.Semicolon -> (fun op -> InfixNary(op, pSepVirt, power, true, Complete.sequence))
                     | PrecedenceLevel.Assignment ->
                         (fun op -> InfixRight(op, preturn op, BindingPower.rightAssocLhs power, Complete.assignment))
                     | PrecedenceLevel.Comma -> (fun op -> InfixNary(op, pTupleComma, power, false, Complete.tuple))
                     | PrecedenceLevel.Range ->
                         (fun op ->
-                            // The binary '..' operator. Non-associative. The ternary '.. ..' form or the postfix form are special grammar rules.
-                            // Parse as Left-associative and disambiguate if we see another '..' at the same precedence level on the right.
+                            // Binary `..` operator; disambiguated for ternary stepped ranges
                             InfixMapped(op, preturn op, power, parseRangeRhs, Complete.rangeOrSliceFrom)
                         )
                     | PrecedenceLevel.LogicalOr -> (fun op -> InfixLeft(op, preturn op, power, Complete.infix))
@@ -1677,10 +1525,7 @@ module Expr =
                     | PrecedenceLevel.Power ->
                         (fun op -> InfixRight(op, preturn op, BindingPower.rightAssocLhs power, Complete.infix))
                     | PrecedenceLevel.Application ->
-                        // (fun op -> InfixLeft(op, preturn op, power, Complete.infix))
                         (fun op -> InfixNary(op, Application.parse, power, false, Complete.app))
-                    // | PrecedenceLevel.PatternMatchBar -> Pattern only operator
-                    // | PrecedenceLevel.Prefix -> LHS only
                     | PrecedenceLevel.Dot -> (fun op -> InfixMapped(op, preturn op, power, parseDotRhs, Complete.dot))
                     | PrecedenceLevel.HighIndexApplication ->
                         (fun op -> InfixMapped(op, preturn op, power, HighPrec.parseHighPrecIndex, Complete.highPrec))
@@ -1688,7 +1533,6 @@ module Expr =
                         (fun op -> InfixMapped(op, preturn op, power, HighPrec.parseHighPrecApp, Complete.highPrec))
                     | PrecedenceLevel.HighTypeApplication ->
                         (fun op -> InfixMapped(op, preturn op, power, HighPrec.pTypeAppRhs, Complete.typeApp))
-                    // | PrecedenceLevel.Parens -> LHS only
                     | pl ->
                         (fun op ->
                             invalidOp
@@ -1697,14 +1541,11 @@ module Expr =
                 )
 
         let getRhsOperatorHandler (opInfo: OperatorInfo) token =
-            // OpDynamic (`?`) shares PrecedenceLevel.Dot with `.` but produces a different
-            // AST shape (DynamicLookup, ident-only RHS) — dispatch by token before the
-            // precedence-level array lookup.
+            // OpDynamic (`?`) shares Dot precedence but yields a different AST node
             match opInfo.Token with
             | Token.OpDynamic -> dynamicLookupHandler token
             | _ ->
-                // Note: Precedence gets bit-packed into the token and converted directly
-                // to RHS handler index for efficiency.
+                // Map token precedence level directly to RHS operator handler
                 let pl = opInfo.Precedence
                 let handler = rhsOperators[LanguagePrimitives.EnumToValue pl]
                 handler token
@@ -1738,9 +1579,7 @@ module Expr =
                     | Token.KWFun
                     | Token.KWFunction -> fail errUnexpectedPrefixKeywordRhs
                     | _ when
-                        // These precedence levels are LHS-only (no RHS handler registered).
-                        // When encountered in RHS position, fail so the Pratt parser stops
-                        // and lets function application or outer parsers handle them.
+                        // Reject LHS-only operators in infix position
                         (match opInfo.Precedence with
                          | PrecedenceLevel.Prefix
                          | PrecedenceLevel.Function
@@ -1755,15 +1594,8 @@ module Expr =
                         fail errLhsOnlyOpInInfix
                     | _ -> preturn (getRhsOperatorHandler opInfo token)
 
-            // Peek once, then dispatch to the narrowest applicable sub-parser rather
-            // than trying all six alternatives in sequence. Preserves the exact priority
-            // of the prior `choiceL [ ... ]` trial order (first-success wins).
-            //
-            // Note on `Token.OpLessThan`: the Token enum packs `Kind ||| Precedence`, so
-            // all five comparison/bitwise operators (`<`, `>`, `<=`, `>=`, `<>`) share the
-            // same numeric value. A single arm therefore catches the whole family — the
-            // sub-parsers (`reprocessedOperatorAfterTypeParams`, `pTypeApplication`)
-            // disambiguate by string internally.
+            // Dispatches peeked tokens to their corresponding RHS operator parsers.
+            // Note: Token.OpLessThan represents all comparison tokens due to precedence bit-packing.
             let rhsDispatch: FSParser<SyntaxToken> =
                 fun reader ->
                     match peekNextSyntaxToken reader with
@@ -1774,10 +1606,6 @@ module Expr =
                         match token.Token with
                         | Token.KWLParen
                         | Token.KWLBracket ->
-                            // `(` and `[` are expression-starters per canStartExpression,
-                            // so if Application declines (e.g. indent does not qualify as an
-                            // application argument), pSepVirt can still emit a VirtualSep to
-                            // terminate a sequential expression at the context indent.
                             match HighPrec.peekHighPrecApp reader with
                             | Ok r -> Ok r
                             | Error _ ->
@@ -1791,18 +1619,13 @@ module Expr =
                         | Token.OpSemicolon -> pSepVirt reader
 
                         | Token.OpLessThan ->
-                            // Bare `<` — try type-application lookahead (e.g. `Foo<int>`).
+                            // Check for type application syntax (e.g. `Foo<int>`)
                             match HighPrec.pTypeApplication reader with
                             | Ok r -> Ok r
                             | Error _ -> nextSyntaxToken reader
 
                         | _ when
-                            // After closing a type-app with a virtual `>` from a fused
-                            // operator like `>>`, `>>>`, `>=`, `>.`, `>>=`, the original
-                            // token is still unconsumed with CharsConsumedAfterTypeParams > 0.
-                            // Any `>`-starting operator token here needs to be re-lexed
-                            // past the consumed chars so the remainder (`>`, `=`, `.`, etc.)
-                            // advances the stream correctly.
+                            // Re-lex fused operators (e.g. `>>`, `>=`) split during type argument parsing
                             state.CharsConsumedAfterTypeParams > 0 && TokenInfo.isOperator token.Token
                             ->
                             match reprocessedOperatorAfterTypeParams reader with
@@ -1828,9 +1651,7 @@ module Expr =
         let peekIsSliceAll =
             parser {
                 let! token = peekNextSyntaxToken
-                // We are in the middle of parsing a slice like A[0..1,*], and we've just parsed the '*' token.
-                // Now we peek to see if the next token is a ',' or ']' which would indicate slice-all syntax.
-                // Otherwise '*' is just a regular operator for multiplication.
+                // Checks if `*` is being used as a slice-all wildcard (`A[*, 1]`) rather than multiplication
                 match token.Token with
                 | Token.KWRBracket
                 | Token.EOF
@@ -1838,14 +1659,7 @@ module Expr =
                 | _ -> return! fail errExpectedSliceAll
             }
 
-        // Keyword-prefix dispatch table. Flattened to one entry per token for a simple
-        // linear scan — same shape as `dispatchNextSyntaxTokenFallback` but passes the
-        // peeked token through to each handler so it can be consumed without re-peeking
-        // (this is the expression parser's hottest dispatch site). Most CE/control-flow
-        // entries do NOT consume the keyword here — the body parser peeks the keyword
-        // again to establish offside indent, then consumes via `assertKeywordToken`.
-        // The `do/do!/return/return!/yield/yield!` forms consume up front because their
-        // body expects to start past the keyword.
+        // Dispatch helpers for prefix keyword operators
         let kwPrefixNoConsume body completer (token: SyntaxToken) =
             preturn (PrefixMapped(token, preturn token, body, completer))
 
@@ -1855,20 +1669,11 @@ module Expr =
                 return PrefixMapped(tok, preturn tok, body, completer)
             }
 
-        // Unified body for the lazy/assert/fixed/upcast/downcast prefix-keywords.
-        // All five emit Expr.PrefixApp; the keyword token is preserved on the node
-        // so semantic analysis recovers the form via ExprPatterns. Hoisted so the
-        // `|>>` pipeline is built once at construction rather than per dispatch.
-        // Spec treats these at function-application precedence; PrefixMapped's MinP
-        // right-binding-power gives them a full typedSeqExprBlock RHS.
+        // Parses prefix expression keywords (`lazy`, `assert`, `fixed`, `upcast`, `downcast`)
         let pKeywordPrefixBody =
             refExprSeqBlock.Parser
             |>> fun e -> ExprAux.KeywordExpr(fun kwTok -> Expr.PrefixApp(kwTok, e))
 
-        // Slice / address-of operator prefixes. They use `Prefix` / `PrefixMapped`
-        // directly rather than the `kwPrefix*` helpers because their power / aux shape
-        // diverges from the keyword-prefix pattern (custom precedence, peekIsSliceAll
-        // continuation parser).
         let pOpRangePrefix (token: SyntaxToken) =
             // A[..5]
             parser {
@@ -1884,8 +1689,7 @@ module Expr =
                 return PrefixMapped(tok, preturn tok, peekIsSliceAll, Complete.sliceAll)
             }
 
-        // `&` / `&&` are address-of / native-address-of when used as prefix. Override
-        // their infix precedence (LogicalAnd) with Prefix so they bind tighter.
+        // Address-of operators `&` and `&&` bind tighter than their infix logical variants
         let pOpAddressOfPrefix (token: SyntaxToken) =
             parser {
                 let! tok = consumePeeked token
@@ -1895,7 +1699,7 @@ module Expr =
 
         let kwPrefixRoutes: struct (Token * (SyntaxToken -> Parser<_, _, _, _>))[] =
             [|
-                // CE / control-flow keyword prefixes — body parser consumes the keyword
+                // CE and control-flow keyword prefixes — body parser consumes the keyword
                 struct (Token.KWLet, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
                 struct (Token.KWMatch, kwPrefixNoConsume KWBody.pMatchExpr Complete.forE)
                 struct (Token.KWIf, kwPrefixNoConsume KWBody.pIfExpr Complete.forE)
@@ -1923,19 +1727,14 @@ module Expr =
                 struct (Token.KWUpcast, kwPrefixConsume pKeywordPrefixBody Complete.keyword)
                 struct (Token.KWDowncast, kwPrefixConsume pKeywordPrefixBody Complete.keyword)
 
-                // Operator prefixes whose shape diverges from the kwPrefix* helpers
+                // Operators with specialized prefix precedence or lookaheads
                 struct (Token.OpRange, pOpRangePrefix)
                 struct (Token.OpMultiply, pOpMultiplyPrefix)
                 struct (Token.OpAmp, pOpAddressOfPrefix)
                 struct (Token.OpAmpAmp, pOpAddressOfPrefix)
             |]
 
-        // Generic prefix-operator fallback for any `CanBePrefix` operator not in the
-        // dispatch table — `-`, `+`, `!`, `~`, etc. The +1 on the precedence makes
-        // the prefix bind tighter than the same operator's infix form so `-x - 1`
-        // parses as `(-x) - 1`, while staying below Application so `-f x` is still
-        // `-(f x)`. Operators that need a different power (slice, address-of) are
-        // handled explicitly in `kwPrefixRoutes`.
+        // Fallback for prefix operators (`+`, `-`, `!`, etc.), binding tighter than their infix variants
         let pOperatorPrefix (token: SyntaxToken) =
             parser {
                 match OperatorInfo.TryCreate(token.PositionedToken) with
@@ -1972,24 +1771,18 @@ module Expr =
 
     let pConst = Constant.parse |>> Expr.Const
 
-    // `null` is structurally distinct from a typed literal — it's a polymorphic
-    // absence-of-value of any reference type — so it gets its own AST case
-    // (mirroring Pat.Null and Type.Null). Constant.isLiteralToken excludes
-    // KWNull for this reason; the dispatch table below routes it here.
+    // Parses `null` literal expressions
     let pNullExpr = pNull |>> Expr.Null
 
     let private isStringTextFragment (tok: Token) =
         match tok with
-        // Plain string fragments
         | Token.StringFragment
         | Token.EscapeSequence
-        // Interpolated string fragments
         | Token.InterpolatedStringFragment
         | Token.VerbatimInterpolatedStringFragment
         | Token.Interpolated3StringFragment
         | Token.EscapeLBrace
         | Token.EscapeRBrace
-        // Shared fragment tokens
         | Token.EscapePercent
         | Token.VerbatimEscapeQuote -> true
         | _ -> false
@@ -2005,7 +1798,6 @@ module Expr =
 
     let private isStringClose (tok: Token) =
         match tok with
-        // Plain string close
         | Token.StringClose
         | Token.ByteArrayClose
         | Token.VerbatimStringClose
@@ -2014,7 +1806,6 @@ module Expr =
         | Token.UnterminatedStringLiteral
         | Token.UnterminatedVerbatimStringLiteral
         | Token.UnterminatedString3Literal
-        // Interpolated string close
         | Token.InterpolatedStringClose
         | Token.VerbatimInterpolatedStringClose
         | Token.Interpolated3StringClose
@@ -2117,12 +1908,7 @@ module Expr =
         fun (reader: Reader<PositionedToken, ParseState, _>) ->
             match peekNextSyntaxToken reader with
             | Error e -> Error e
-            // Plain (non-interpolated) strings share ONE body parser with the
-            // IL-intrinsic path — `parsePlainStringLiteral` — so the plain-string
-            // token vocabulary cannot drift between the two. (That drift is what let
-            // an unescaped `%` in an IL template mis-parse: this loop carried invalid
-            // format tokens through as `InvalidText`, but the IL helper bailed.)
-            // Interpolated strings keep the hole-aware loop above, which needs `refExpr`.
+            // Plain strings are parsed with `parsePlainStringLiteral`; interpolated strings use the hole-aware loop above
             | Ok t when isPlainStringOpen t.Token ->
                 match parsePlainStringLiteral "Expected string open" reader with
                 | Error e -> Error e
@@ -2304,14 +2090,12 @@ module Expr =
         parser {
             let! newTok = pNew
             let! typ = Type.parse
-            // Constructor args are a parenthesised expression: new T(args)
             let! argExpr = pParen
             return Expr.New(newTok, typ, argExpr)
         }
 
     /// Consumes the closing delimiter for a record/anonymous record expression.
     /// Accepts the matching close token, or the mismatched one with a diagnostic.
-    /// `expectedClose` is the correct close token; `mismatchedClose` is the wrong one.
     let private pRecordClose
         (openTok: SyntaxToken)
         (expectedClose: Token)
@@ -2321,8 +2105,6 @@ module Expr =
             match peekNextSyntaxToken reader with
             | Ok tok when tok.Token = expectedClose -> consumePeeked tok reader
             | Ok tok when tok.Token = mismatchedClose ->
-                // The wrong close is CONSUMED as the close, so nothing is inserted and the
-                // diagnostic is reported at the token itself.
                 reader.State <-
                     ParseState.addDiagnosticAt
                         (DiagnosticCode.MismatchedDelimiter(openTok.Token, Site.ofToken openTok, expectedClose))
@@ -2332,8 +2114,7 @@ module Expr =
                 consumePeeked tok reader
             | _ -> fail (Message $"Expected closing delimiter") reader
 
-    /// Parses record field initializers with optional trailing semicolon,
-    /// then consumes the close delimiter (with mismatch recovery).
+    /// Parses record field initializers with optional trailing semicolon and consumes the close delimiter.
     let private pRecordFieldsAndClose (openTok: SyntaxToken) (expectedClose: Token) (mismatchedClose: Token) =
         parser {
             let! fields, seps = withContext OffsideContext.SeqBlock (sepBy1 FieldInitializer.parse pRecordFieldSep)
@@ -2349,8 +2130,7 @@ module Expr =
             return struct (fields, seps, rClose)
         }
 
-    /// Parses the inner content of a record or anonymous record expression,
-    /// given the opening token and its ParenKind.
+    /// Parses the inner content of a record or anonymous record expression.
     let private pRecordInner
         (lParen: ParenKind<SyntaxToken>)
         (openTok: SyntaxToken)
@@ -2377,8 +2157,7 @@ module Expr =
             ]
             "Record fields"
 
-    /// Shared boilerplate: consume open delimiter, push offside context, run inner parser,
-    /// pop context, and handle failure/restore.
+    /// Shared helper: pushes offside context for braced expressions, runs inner parser, and restores state.
     let private pBracedExpr
         (pOpen: Parser<SyntaxToken, PositionedToken, ParseState, _>)
         (offsideCtx: OffsideContext)
@@ -2415,8 +2194,7 @@ module Expr =
             (fun lBrace ->
                 choiceL
                     [
-                        // { CE keywords... } — computation expression body
-                        // Detected by first token being a CE-specific keyword (not a valid record field name)
+                        // Computation expression body identified by leading CE keyword
                         parser {
                             let! peekTok = peekNextSyntaxToken
 
@@ -2445,7 +2223,7 @@ module Expr =
                                 return Expr.EnclosedBlock(ParenKind.Brace lBrace, body, rBrace)
                             | _ -> return! fail errNotCEBody
                         }
-                        // '{' new base-call object-members interface-impls '}' -- object expression
+                        // Object expression: { new base-call with members ... }
                         parser {
                             let! newTok = pNew
                             let! construction = ObjectConstruction.parse
@@ -2523,8 +2301,7 @@ module Expr =
                         }
                         // Record literal or clone
                         pRecordInner (ParenKind.Brace lBrace) lBrace Token.KWRBrace Token.KWRBraceBar
-                        // Fallback: { expr-seq } — computation expression body without leading CE keyword
-                        // (e.g., seq { someExpr }, task { callAsync() })
+                        // Fallback: computation expression without leading CE keyword (e.g. `seq { ... }`)
                         parser {
                             let! body = refExprSeqBlock.Parser
 
@@ -2545,11 +2322,10 @@ module Expr =
             "Anonymous record"
 
     let private pILIntrinsic =
-        // Structured IL intrinsic parser: (# "instr" type('T) args : retType #)
+        // IL intrinsic: (# "instr" type('T) args : retType #)
         let pAnyToken = nextSyntaxTokenSatisfiesLMsg (fun _ -> true) "IL intrinsic token"
 
         let pTypeArg (reader: Reader<PositionedToken, ParseState, _>) =
-            // Parse type('T) or type ('T) — balanced parens after 'type' keyword
             match peekNextSyntaxToken reader with
             | Error e -> Error e
             | Ok tok when tok.Token = Token.KWType ->
@@ -2590,17 +2366,12 @@ module Expr =
             match nextSyntaxTokenIsLMsg Token.KWLHashParen "(#" reader with
             | Error e -> Error e
             | Ok lHashParen ->
-                // Instruction string
                 match parsePlainStringLiteral "IL instruction string" reader with
                 | Error e -> Error e
                 | Ok(instrKind, instrParts, instrClose) ->
-                    // Optional type argument: type('T)
                     match pTypeArg reader with
                     | Error e -> Error e
                     | Ok typeArg ->
-                        // Collect args, stopping at ':' or '#)'. Each arg is parsed at min binding power
-                        // just above Application so dot chains, indexers, and type applications bind in,
-                        // but juxtaposition (whitespace application) stops so each space-separated arg is distinct.
                         let args = ResizeArray()
                         let mutable finished = false
                         let mutable error = ValueNone
@@ -2620,7 +2391,6 @@ module Expr =
                         match error with
                         | ValueSome e -> Error e
                         | ValueNone ->
-                            // Optional return type annotation (: Type)
                             match opt ReturnType.parse reader with
                             | Error e -> Error e
                             | Ok returnType ->
@@ -2647,9 +2417,7 @@ module Expr =
             (missingOrSkipped Expr.Missing Expr.SkipsTokens)
             p
 
-
-    /// Parses `?ident` — optional argument expression in function calls.
-    /// e.g., `f(?x=value)` passes `value` as optional parameter `x`.
+    /// Parses optional argument expression in function calls (e.g. `?ident`).
     let private pOptionalArgExpr =
         parser {
             let! qmark = pQuestionMark
@@ -2660,12 +2428,6 @@ module Expr =
     let parseAtomic =
         dispatchNextSyntaxTokenFallback
             [
-                // Ordered by approximate token frequency in idiomatic F# source (see
-                // keyword/token histogram over the F# compiler corpus). `dispatchNextSyntaxTokenFallback`
-                // does a linear scan, so common cases should come first.
-                // Note: KWLet, KWIf, KWMatch, KWFunction, KWFun, KWTry, KWWhile, KWFor, KWUse
-                // are handled as PrefixMapped operators in ExprOperatorParser.lhsParser,
-                // not here.
                 Token.Identifier, pIdentExpr
                 Token.KWLParen, recoverExpr pParen
                 Token.StringOpen, pString
@@ -2710,39 +2472,27 @@ module Expr =
         refExprSeqBlock.Set parseSeqBlock
         refTypedSeqExprBlock.Set pTypedSeqExprBlock
 
-        // Single expression without sequential composition — used for while conditions
-        // and other contexts where the next keyword (e.g. `do`) must not be consumed as
-        // a keyword expression via newline-triggered virtual semicolons.
+        // Non-sequential expressions (e.g. while conditions) where keywords like 'do' must not be consumed
         refExprNoSeq.Set(
             Operator.parserAt (int PrecedenceLevel.Semicolon + 1 |> BindingPower.fromLevel) parseAtomic operators
         )
 
-        // IL intrinsic arguments: parse at just above Application so dot chains, indexers,
-        // and type applications bind in, but juxtaposition stops so each whitespace-separated
-        // arg in `(# "op" a.b c : ty #)` is captured as a separate arg.
+        // IL intrinsic arguments: binds above Application to prevent whitespace juxtaposition
         refExprILArg.Set(
             Operator.parserAt (int PrecedenceLevel.Application + 1 |> BindingPower.fromLevel) parseAtomic operators
         )
 
-        // Semicolon has special handling in F# records, and object expressions
-        // where it is used as a separator between elements rather than an operator, and it
-        // should not be treated as an operator in those contexts.
-        // So, we create a separate parser for expressions in records
-        // and set the starting precedence one level higher so it will be parsed in `pRecordOrObjectExpr`
+        // Expressions inside records and object expressions use higher precedence so `;` acts as a field separator
         refExprInRecords.Set(
             Operator.parserAt (int PrecedenceLevel.Semicolon + 1 |> BindingPower.fromLevel) parseAtomic operators
         )
 
-        // Pattern guards (when <expr>) must stop before '->' (Arrow) so the arrow
-        // remains available for Rule.parse to consume with pArrowRight.
-        // Arrow is right-associative so its LBP = base+1; using Arrow+1 as the level
-        // makes minBp = base+3, which is just above Arrow's LBP, excluding it.
+        // Expressions in pattern guards (`when <expr>`) stop before `->`
         refExprGuard.Set(
             Operator.parserAt (int PrecedenceLevel.RArrow + 1 |> BindingPower.fromLevel) parseAtomic operators
         )
 
-        // Range operator '..' may be a postfix operator in slice syntax (e.g. A[1..]) or an infix operator in range expressions (e.g. 1..10).
-        // So, we treat it effectively an a left-infix operator that special cases to prefix with the right terminator.
+        // Range expressions `start..end` or `start..step..end`
         refExprRange.Set(
             Operator.parserAt (int PrecedenceLevel.Range + 1 |> BindingPower.fromLevel) parseAtomic operators
         )

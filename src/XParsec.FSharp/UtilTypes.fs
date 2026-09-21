@@ -34,9 +34,10 @@ type ImmutableArrayM<'T, [<Measure>] 'M>(arr: ImmutableArray<'T>) =
             (arr :> System.Collections.Generic.IEnumerable<'T>).GetEnumerator()
 
 
-/// Measure-typed wrapper over a ReadableArray slice. Mirrors ImmutableArrayM
-/// but uses a partial-view backing so Lexed output can avoid the copy the
-/// ImmutableArray.Builder.ToImmutable finaliser would otherwise perform.
+/// A unit-of-measure wrapper around a ReadableArray slice.
+///
+/// Provides an `ImmutableArrayM`-like interface, but avoids copying array data
+/// during lexing by using a view over the existing buffer.
 [<Struct>]
 type ReadableArrayM<'T, [<Measure>] 'M>(arr: ReadableArray<'T>) =
     member _.Length = arr.Length

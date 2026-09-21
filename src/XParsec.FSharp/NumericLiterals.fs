@@ -4,11 +4,9 @@ open System
 open System.Globalization
 open XParsec.FSharp
 
-// Post-lexing interpretation of a numeric-literal token: its value, read from the
-// `NumericBase` / `NumericKind` flags the lexer has already classified onto it.
+// Evaluates numeric literal tokens using the base and kind metadata provided by the lexer.
 
-/// One of F#'s integral primitive types, by its width and signedness. Shared by the literal
-/// reader, the semantic constant model and both backends.
+/// Supported primitive integer types.
 [<RequireQualifiedAccess>]
 type IntKind =
     | SByte
@@ -19,11 +17,11 @@ type IntKind =
     | UInt32
     | Int64
     | UInt64
-    /// Pointer-width. Has no JS representation, and cannot underlie a CLR enum.
+    /// Pointer-sized integer (nativeint / unativeint). Not supported as a CLR enum underlying type.
     | NativeInt
     | UNativeInt
 
-/// Per-kind facts: width, signedness and the literal suffix.
+/// Metadata and helper functions for integer types.
 module IntKind =
 
     let all: IntKind list =
@@ -40,7 +38,7 @@ module IntKind =
             IntKind.UNativeInt
         ]
 
-    /// The F# literal suffix (`10y`, `10UL`). `Int32` is unsuffixed.
+    /// Returns the F# literal suffix (e.g., "y" for 10y, "UL" for 10UL, "" for int32).
     let suffix (k: IntKind) : string =
         match k with
         | IntKind.SByte -> "y"
@@ -67,7 +65,7 @@ module IntKind =
         | IntKind.UInt64
         | IntKind.UNativeInt -> false
 
-    /// Pointer-width: `nativeint` / `unativeint`, a distinct CIL stack type.
+    /// True if the type is pointer-sized (nativeint or unativeint).
     let isNative (k: IntKind) : bool =
         match k with
         | IntKind.NativeInt
@@ -81,8 +79,8 @@ module IntKind =
         | IntKind.Int64
         | IntKind.UInt64 -> false
 
-    /// The integral kind a lexed token's `NumericKind` denotes, `ValueNone` for the
-    /// non-integral ones: the floats, `decimal`, and the custom `NumericLiteral` suffixes.
+    /// Maps a lexer NumericKind to an IntKind.
+    /// Returns ValueNone for non-integers (floats, decimals, and custom literals).
     let ofNumericKind (kind: NumericKind) : IntKind voption =
         match kind with
         | NumericKind.SByte -> ValueSome IntKind.SByte
@@ -110,37 +108,34 @@ type IntValue =
     | NativeInt of int64
     | UNativeInt of uint64
 
-/// A per-bit operation on two integral values of one kind. The result depends on the
-/// operands' bits alone, so a pointer-width operand folds.
+/// Bitwise operations (OR, AND, XOR).
 [<RequireQualifiedAccess>]
 type IntBitwiseOp =
     | Or
     | And
     | Xor
 
-/// Wrapping arithmetic on two integral values of one kind, computed at that kind's width.
+/// Arithmetic operations (+, -, *) with two's-complement wrapping.
 [<RequireQualifiedAccess>]
 type IntArithOp =
     | Add
     | Subtract
     | Multiply
 
-/// A bit shift. The right operand is an `int32` count rather than a value of the shifted
-/// kind, and a signed kind shifts right arithmetically.
+/// Bit shift operations (<<<, >>>). Shift counts are always int32.
 [<RequireQualifiedAccess>]
 type IntShiftOp =
     | Left
     | Right
 
-/// Why an integral operation yields no value.
+/// Reasons why compile-time constant folding failed.
 [<RequireQualifiedAccess>]
 type IntFoldRejection =
-    /// The operands are of two kinds; a binary integral operation takes one.
+    /// Both operands must be the same integer type.
     | KindMismatch
-    /// The result depends on the operand's width, and a pointer-width kind takes the
-    /// target's.
+    /// Cannot fold pointer-sized types (nativeint / unativeint) because their bit width is target-dependent.
     | TargetWidth
-    /// The shift count lies outside `[0, width)`, which the targets mask differently.
+    /// Shift count is negative or exceeds the bit width of the type.
     | ShiftCount
 
 module IntValue =
@@ -158,7 +153,7 @@ module IntValue =
         | IntValue.NativeInt _ -> IntKind.NativeInt
         | IntValue.UNativeInt _ -> IntKind.UNativeInt
 
-    /// `n` wrapped onto `k`'s width: the low bits of the two's-complement pattern.
+    /// Converts an int64 to the specified integer kind, truncating higher bits.
     let ofInt64 (k: IntKind) (n: int64) : IntValue =
         match k with
         | IntKind.SByte -> IntValue.SByte(sbyte n)
@@ -174,9 +169,8 @@ module IntValue =
 
     let zero (k: IntKind) : IntValue = ofInt64 k 0L
 
-    /// Read a magnitude at `k`'s width, range-checked by the `Convert` overload
-    /// (`Convert.ToByte("300", 10)` throws). Throws `OverflowException` / `FormatException`
-    /// for a magnitude or sign the kind cannot hold.
+    /// Parses a string representation of an integer with the given radix.
+    /// Throws OverflowException or FormatException on invalid values.
     let parse (k: IntKind) (digits: string) (radix: int) : IntValue =
         match k with
         | IntKind.SByte -> IntValue.SByte(Convert.ToSByte(digits, radix))
@@ -190,7 +184,7 @@ module IntValue =
         | IntKind.NativeInt -> IntValue.NativeInt(Convert.ToInt64(digits, radix))
         | IntKind.UNativeInt -> IntValue.UNativeInt(Convert.ToUInt64(digits, radix))
 
-    /// The value's decimal text, as the .NET primitive's `ToString()` prints it.
+    /// Formats the integer as a decimal string.
     let render (v: IntValue) : string =
         match v with
         | IntValue.SByte n -> string n
@@ -204,8 +198,7 @@ module IntValue =
         | IntValue.NativeInt n -> string n
         | IntValue.UNativeInt n -> string n
 
-    /// The value boxed at its own .NET primitive type, as a CLR enum-case field constant must
-    /// carry it: the metadata writer reads the box's runtime type.
+    /// Boxes the value as its corresponding .NET primitive (used for CLR enum metadata).
     let boxed (v: IntValue) : obj =
         match v with
         | IntValue.SByte n -> box n
@@ -219,9 +212,8 @@ module IntValue =
         | IntValue.NativeInt n -> box (nativeint n)
         | IntValue.UNativeInt n -> box (unativeint n)
 
-    /// Two's-complement negation at the value's own width: `-(-128y)` is `-128y` and
-    /// `-Int32.MinValue` is itself. `ValueNone` for an unsigned value, since F# defines no
-    /// negation on one.
+    /// Negates a signed integer using two's-complement wrapping.
+    /// Returns ValueNone for unsigned types.
     let negate (v: IntValue) : IntValue voption =
         match v with
         | IntValue.SByte n -> ValueSome(IntValue.SByte(-n))
@@ -235,7 +227,7 @@ module IntValue =
         | IntValue.UInt64 _
         | IntValue.UNativeInt _ -> ValueNone
 
-    /// `l op r` at the operands' shared kind; `ValueNone` where the kinds differ.
+    /// Evaluates a bitwise operation. Returns ValueNone if operand types do not match.
     let bitwise (op: IntBitwiseOp) (l: IntValue) (r: IntValue) : IntValue voption =
         let inline apply (a: ^a) (b: ^a) : ^a =
             match op with
@@ -256,8 +248,8 @@ module IntValue =
         | IntValue.UNativeInt a, IntValue.UNativeInt b -> ValueSome(IntValue.UNativeInt(apply a b))
         | _ -> ValueNone
 
-    /// `l op r` at the operands' shared kind, wrapping at that kind's width. A pointer-width
-    /// operand is refused, since the wrap is the target's.
+    /// Evaluates wrapping arithmetic (+, -, *).
+    /// Fails if operand types mismatch or if folding target-dependent pointer types.
     let arithmetic (op: IntArithOp) (l: IntValue) (r: IntValue) : Result<IntValue, IntFoldRejection> =
         let inline apply (a: ^a) (b: ^a) : ^a =
             match op with
@@ -278,8 +270,8 @@ module IntValue =
         | IntValue.UNativeInt _, IntValue.UNativeInt _ -> Error IntFoldRejection.TargetWidth
         | _ -> Error IntFoldRejection.KindMismatch
 
-    /// `v` shifted by `count` bits, logically for an unsigned kind and arithmetically for a
-    /// signed one. A count within the kind's width shifts identically on every target.
+    /// Evaluates a bit shift (arithmetic for signed, logical for unsigned).
+    /// Fails if the shift count is out of range or on pointer-sized types.
     let shift (op: IntShiftOp) (v: IntValue) (count: int) : Result<IntValue, IntFoldRejection> =
         let inline at (width: int) (mk: ^a -> IntValue) (a: ^a) : Result<IntValue, IntFoldRejection> =
             if count < 0 || count >= width then
@@ -301,7 +293,7 @@ module IntValue =
         | IntValue.NativeInt _
         | IntValue.UNativeInt _ -> Error IntFoldRejection.TargetWidth
 
-    /// `~~~v`, every bit of the value's own width inverted.
+    /// Evaluates bitwise NOT (~~~). Inverts all bits for the type's width.
     let complement (v: IntValue) : Result<IntValue, IntFoldRejection> =
         match v with
         | IntValue.SByte a -> Ok(IntValue.SByte(~~~a))
@@ -322,26 +314,19 @@ type NumericLiteralValue =
     | Float32 of single
     | Decimal of decimal
 
-/// Why a literal token carries no primitive constant.
+/// Reasons why a numeric literal cannot be converted to a compile-time constant.
 [<RequireQualifiedAccess>]
 type NumericLiteralRejection =
-    /// A custom numeric literal, whose suffix F# translates to a call into the
-    /// `NumericLiteral<suffix>` module in scope (`52I` = `NumericLiteralI.FromInt32 52`), or
-    /// a suffix F# reserves and gives no meaning to. Neither projects to a constant.
+    /// Custom numeric literals (e.g., 52I) or reserved suffixes that require runtime module calls.
     | CustomLiteral
-    /// The lexed magnitude or sign does not fit the classified kind: an out-of-range
-    /// magnitude (`300uy`), or a negative-signed *unsigned* literal (`-1uy`, formed by the
-    /// negative-literal merge).
+    /// The literal's value exceeds the range of its type (e.g., 300uy or -1uy).
     | OutOfRange
-    /// The token is not a numeric literal, or carries a `NumericKind` outside the declared
-    /// set (a 5-bit field, so F# cannot prove the match exhaustive). A producer bug at every
-    /// call site, not a user error.
+    /// The token is not a numeric literal, or has an invalid NumericKind value.
     | NotNumeric
 
 module NumericLiterals =
 
-    /// The .NET radix for a classified base: 2/8/10/16 is the only set the
-    /// `Convert.To…(string, int)` overloads accept, decimal included.
+    /// Maps a NumericBase enum to a numeric radix (2, 8, 10, or 16).
     let private baseRadix (numBase: NumericBase) : int =
         match numBase with
         | NumericBase.Hex -> 16
@@ -349,9 +334,7 @@ module NumericLiterals =
         | NumericBase.Binary -> 2
         | _ -> 10
 
-    /// The bare digit span of an integer magnitude: drop the trailing width-suffix letters
-    /// (`u`/`l`/`y`/`s`/`n`, any case, none of which collide with the hex digits `a`–`f`),
-    /// then the two-char radix prefix for a non-decimal base, then the digit-group underscores.
+    /// Strips base prefixes (0x, 0o, 0b), type suffixes (u, l, y, s, n), and underscores from an integer literal.
     let private intDigits (numBase: NumericBase) (text: string) : string =
         let mutable hi = text.Length
 
@@ -370,26 +353,21 @@ module NumericLiterals =
         let lo = if numBase = NumericBase.Decimal then 0 else 2
         text.Substring(lo, hi - lo).Replace("_", "")
 
-    /// The classified numeric kind of a token, `ValueNone` when it is not a numeric literal.
-    /// The public read of the lexer's flag field, whose radix axis is already collapsed:
-    /// `10y` and `0x0Ay` are both `NumericKind.SByte`.
+    /// Returns the NumericKind for a token, or ValueNone if the token is not numeric.
     let numericKindOf (token: Token) : NumericKind voption =
         if TokenInfo.isNumeric token then
             ValueSome(TokenInfo.numericKind token)
         else
             ValueNone
 
-    /// Strip a single trailing suffix, case-insensitively: the float (`f`) and decimal (`m`)
-    /// markers.
+    /// Strips a trailing suffix (such as 'f' or 'm') case-insensitively.
     let private stripSuffix (suffix: string) (text: string) : string =
         if text.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) then
             text.Substring(0, text.Length - suffix.Length)
         else
             text
 
-    /// Parse a numeric literal's value from its raw source `text`, at the kind and base the
-    /// lexer recorded on `token`. A non-decimal magnitude is read as its two's-complement bit
-    /// pattern (`0xFFFFFFFF` is `-1`), matching F#'s wrap semantics for radix literals.
+    /// Parses a numeric literal token's raw source text into its evaluated constant value.
     let parseNumericLiteral (token: Token) (text: string) : Result<NumericLiteralValue, NumericLiteralRejection> =
         if not (TokenInfo.isNumeric token) then
             Error NumericLiteralRejection.NotNumeric
@@ -398,9 +376,6 @@ module NumericLiterals =
             let radix = baseRadix numBase
             let kind = TokenInfo.numericKind token
 
-            // An integral kind reads its magnitude through `IntValue.parse`, whose
-            // `Convert` overload is that kind's range check. The kinds `ofNumericKind`
-            // declines are the non-integral ones, and each parses its own way.
             let project () =
                 match IntKind.ofNumericKind kind with
                 | ValueSome k -> Ok(NumericLiteralValue.Integral(IntValue.parse k (intDigits numBase text) radix))
@@ -428,8 +403,6 @@ module NumericLiterals =
                     | NumericKind.BigIntegerN
                     | NumericKind.BigIntegerG
                     | NumericKind.ReservedNumericLiteral -> Error NumericLiteralRejection.CustomLiteral
-                    // `NumericKind` is a 5-bit field, so a hand-built token can carry a value
-                    // outside the declared cases. That is a corrupt token, not a literal.
                     | _ -> Error NumericLiteralRejection.NotNumeric
 
             try

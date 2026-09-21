@@ -9,20 +9,20 @@ open XParsec.FSharp.Parser.ParseState
 
 [<RequireQualifiedAccess>]
 module ImplementationFile =
-    /// Parses: [attributes] module [access] LongIdent <module-elems>
-    /// Distinguished from module abbreviation (module X = Y.Z) by the absence of '=' after the LongIdent.
+    /// Parses a named module: `[attributes] module [access] LongIdent <module-elems>`.
+    /// Distinguished from a module abbreviation (`module X = Y.Z`) by the absence of `=` after the identifier.
     let private pNamedModule =
         let notFollowedByEquals = notFollowedBySyntaxToken Token.OpEquality
-        do ObjectConstruction.init () // Force static constructor to run and initialize refObjectConstruction
+        do ObjectConstruction.init () // Initialize refObjectConstruction via static constructor
 
         parser {
             let! attrs = opt Attributes.parse
             let! modTok = pModule
             let! access = opt Access.parse
             let! isRec = opt pRec
-            // Committed after 'module' — recover with virtual ident if LongIdent fails
+            // Once 'module' is matched, recover missing/malformed identifiers with a virtual token.
             let! longIdent = recoverLongIdent "Expected module identifier" LongIdent.parse
-            // Distinguish named module (module Foo.Bar <elems>) from module abbreviation (module X = Y.Z)
+            // Avoid matching module abbreviations (e.g., `module M = Other.Module`).
             do! notFollowedByEquals
             let! elems = ModuleElem.parseElemsWithRecovery
             return NamedModule.NamedModule(attrs, modTok, access, isRec, longIdent, elems)
@@ -33,8 +33,7 @@ module ImplementationFile =
             [
                 Token.KWNamespace, many1 NamespaceDeclGroup.parse |>> ImplementationFile.Namespaces
                 Token.KWModule,
-                // Try named module first (module LongIdent <elems>),
-                // fall back to anonymous module (e.g. module abbreviation as first elem)
+                // Match named module first; fall back to anonymous module (e.g. file begins with a module abbreviation).
                 choiceL
                     [
                         pNamedModule |>> ImplementationFile.NamedModule
@@ -42,7 +41,7 @@ module ImplementationFile =
                     ]
                     "ImplementationFile"
             ]
-            // No namespace/module keyword → try named module (with attrs) or anonymous module
+            // File does not start with `namespace` or `module` (e.g., attributes or top-level declarations).
             (choiceL
                 [
                     pNamedModule |>> ImplementationFile.NamedModule
@@ -52,13 +51,11 @@ module ImplementationFile =
 
 [<RequireQualifiedAccess>]
 module FSharpAst =
-    /// Succeeds at end-of-file by consuming the EOF sentinel token (skipping trivia and directives).
-    /// We also check that the reader is indeed at EOF to avoid accepting spurious tokens after a successful parse.
+    /// Consumes the EOF token (including trailing trivia/directives) and asserts end of input.
     let private pEof = nextSyntaxTokenIsLMsg Token.EOF "Expected end of file" .>> eof
 
-    // Plain `choice`, not the config-shadowed `choiceL`: this runs once per file, so
-    // collapsing its alternatives to a label saves nothing measurable and made the
-    // reported error differ between Debug and Release.
+    // Plain `choice` is used here so individual parser error messages are preserved
+    // rather than masked by a labeled `choiceL`.
     let private pNormal =
         choice
             [
@@ -71,7 +68,7 @@ module FSharpAst =
                 )
             ]
 
-    /// Skips all remaining non-EOF tokens, collecting them into a list.
+    /// Consumes and collects all remaining non-EOF tokens into an array.
     let private skipToEof (reader: Reader<PositionedToken, ParseState, _>) =
         let skipped = ResizeArray<SyntaxToken>()
         let mutable keepGoing = true
@@ -89,8 +86,7 @@ module FSharpAst =
 
         ImmutableArray.CreateRange(skipped)
 
-    /// Appends skipped tokens as a ModuleElem.SkipsTokens to the appropriate container
-    /// in an ImplementationFile, so leftover tokens are visible in the AST.
+    /// Appends unparsed tokens as a `SkipsTokens` element to the AST container for diagnostic reporting.
     let private appendSkippedToImpl (skipped: ImmutableArray<SyntaxToken>) (implFile: ImplementationFile<SyntaxToken>) =
         let skipElem = ModuleElem.SkipsTokens(skipped)
 
@@ -112,7 +108,7 @@ module FSharpAst =
             ImplementationFile.Namespaces(decls.SetItem(lastIdx, updatedLast))
         | ImplementationFile.Namespaces _ -> ImplementationFile.AnonymousModule(ImmutableArray.Create(skipElem))
 
-    /// Skips all remaining non-EOF tokens, collecting them into a list keyed for sig-file diagnostics.
+    /// Appends unparsed tokens as a `SkipsTokens` element to the signature AST container for diagnostic reporting.
     let private appendSkippedToSig (skipped: ImmutableArray<SyntaxToken>) (sigFile: SignatureFile<SyntaxToken>) =
         let skipElem = ModuleSignatureElement.SkipsTokens(skipped)
 
@@ -140,8 +136,8 @@ module FSharpAst =
             SignatureFile.Namespaces(decls.SetItem(lastIdx, updatedLast))
         | SignatureFile.Namespaces _ -> SignatureFile.AnonymousModule(ImmutableArray.Create(skipElem))
 
-    /// Infallible top-level signature-file parser. Always returns Ok with errors captured as diagnostics.
-    /// Use for `.fsi` files; `.fs` files go through `parse`.
+    /// Top-level parser for signature files (`.fsi`).
+    /// Infallible: always returns `Ok`, recording parse errors as diagnostics and unparsed tokens as `SkipsTokens`.
     let parseSignature: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
         fun reader ->
             let startPos = reader.Position
@@ -157,8 +153,7 @@ module FSharpAst =
             let entry: Offside =
                 {
                     Context = OffsideContext.SeqBlock
-                    // The EOF anchor is LOAD-BEARING: `Offside.isDeclBlock` identifies
-                    // the file-level entry frame by it (no real token opened this block).
+                    // Uses a synthetic EOF token so `Offside.isDeclBlock` can identify the root file-level frame.
                     Indent = fileIndent
                     Token = PositionedToken.Create(Token.EOF, 0)
                 }
@@ -170,7 +165,7 @@ module FSharpAst =
             match pSig reader with
             | Ok result -> Ok result
             | Error topErr ->
-                // Reset and try SignatureFile.parse without pEof, then collect leftover tokens.
+                // Full parse failed: attempt to parse as much as possible without requiring EOF, then capture trailing tokens.
                 reader.Position <- startPos
 
                 match SignatureFile.parse reader with
@@ -191,7 +186,7 @@ module FSharpAst =
                     Ok(FSharpAst.SignatureFile sigFile')
 
                 | Error _ ->
-                    // Nothing parseable at all — return empty anonymous sig with diagnostics.
+                    // Total failure: return an empty signature with all tokens captured as skipped.
                     reader.Position <- startPos
                     let skipped = skipToEof reader
 
@@ -208,13 +203,13 @@ module FSharpAst =
 
                     Ok(FSharpAst.SignatureFile(SignatureFile.AnonymousModule elems))
 
-    /// Infallible top-level parser. Always returns Ok with errors captured as diagnostics.
+    /// Top-level parser for implementation files (`.fs`).
+    /// Infallible: always returns `Ok`, recording parse errors as diagnostics and unparsed tokens as `SkipsTokens`.
     let parse: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
         fun reader ->
             let startPos = reader.Position
 
-            // Push a file-level SeqBlock context so that collection/CE undentation rules
-            // (checkCollectionUndent) always find a base offside line at the outermost level.
+            // Establish a base `SeqBlock` context so undentation rules have a root offside line.
             let fileIndent =
                 match peekNextSyntaxToken reader with
                 | Ok tok ->
@@ -226,8 +221,7 @@ module FSharpAst =
             let entry: Offside =
                 {
                     Context = OffsideContext.SeqBlock
-                    // The EOF anchor is LOAD-BEARING: `Offside.isDeclBlock` identifies
-                    // the file-level entry frame by it (no real token opened this block).
+                    // Uses a synthetic EOF token so `Offside.isDeclBlock` can identify the root file-level frame.
                     Indent = fileIndent
                     Token = PositionedToken.Create(Token.EOF, 0)
                 }
@@ -237,13 +231,11 @@ module FSharpAst =
             match pNormal reader with
             | Ok result -> Ok result
             | Error topErr ->
-                // Normal parsing failed. Reset and try ImplementationFile without pEof,
-                // then consume leftover tokens as diagnostics.
+                // 1. Fallback: Parse an implementation file without requiring EOF, capturing trailing tokens.
                 reader.Position <- startPos
 
                 match ImplementationFile.parse reader with
                 | Ok implFile ->
-                    // Parsed something but didn't reach EOF. Collect leftover tokens.
                     let skipped = skipToEof reader
 
                     let implFile' =
@@ -260,12 +252,11 @@ module FSharpAst =
                     Ok(FSharpAst.ImplementationFile implFile')
 
                 | Error _ ->
-                    // Even ImplementationFile.parse failed. Reset and try just Expr.parse.
+                    // 2. Fallback: Parse as a standalone script expression.
                     reader.Position <- startPos
 
                     match Expr.parse reader with
                     | Ok expr ->
-                        // Parsed an expression. Collect leftover tokens.
                         let skipped = skipToEof reader
                         let elems = ImmutableArray.CreateBuilder(if skipped.IsEmpty then 1 else 2)
                         elems.Add(ModuleElem.Expression expr)
@@ -281,7 +272,7 @@ module FSharpAst =
                         Ok(FSharpAst.ScriptFragment(ScriptFragment.ScriptFragment(elems.ToImmutable())))
 
                     | Error _ ->
-                        // Nothing parseable at all. Skip all tokens and return empty module.
+                        // 3. Fallback: Return an empty module with all tokens captured as skipped.
                         reader.Position <- startPos
                         let skipped = skipToEof reader
 

@@ -20,18 +20,14 @@ module Typar =
     let pNamed =
         parser {
             let! quote = pSingleQuote
-            // This is an oddity of the parser. Technically F# allows bizarre things like
-            // `' (* comment *)          T` as a type parameter name.
+            // F# allows trivia (whitespace/comments) between the quote and identifier: `' (* comment *) T`
             let! ident = pIdent
             return Typar.Named(quote, ident)
         }
 
     let pStatic =
         parser {
-            // Note: In Lexer, ^ might be OpConcatenate, need to check token text or handle appropriately
-            // Assuming ^ comes as an operator or specific token.
-            // Often ^identifier is lexed as a single token or Op + Ident.
-            // Here assuming standard token stream:
+            // Static type parameters (e.g. ^T) use the '^' operator token
             let! caret = pOpConcatenate
             let! ident = pIdent
             return Typar.Static(caret, ident)
@@ -42,7 +38,7 @@ module Typar =
             [
                 Token.Wildcard, pAnon
                 Token.KWSingleQuote, pNamed
-                // 'T lexed as a single TypeParameter token (not split into ' + T)
+                // Handles 'T when lexed as a single TypeParameter token
                 Token.TypeParameter, (nextSyntaxToken |>> fun tok -> Typar.Named(tok, tok))
                 Token.OpConcatenate, pStatic
             ]
@@ -50,13 +46,12 @@ module Typar =
 
 [<RequireQualifiedAccess>]
 module StaticTypars =
-    // '(' typar or typar or ... typar ')' — multiple typars joined by 'or'.
-    // Requires at least one 'or' to distinguish from other '(...)' forms.
+    // Parses multiple type parameters joined by 'or': ( ^a or ^b )
     let pOrList =
         parser {
             let! lParen = pLParen
             let! firstTypar = Typar.parse
-            let! firstOr = pOr // at least one 'or' required
+            let! firstOr = pOr
             let! restTypars, moreOrs = sepBy Typar.parse pOr
             let! rParen = pRParen
 
@@ -79,18 +74,14 @@ module StaticTypars =
             return StaticTypars.OrList(lParen, allTypars, allOrs, rParen)
         }
 
-    // typar — single typar; accepts both 'T (Named) and ^T (Static) since they are interchangeable in modern F#
+    // Parses a single type parameter (accepts both 'T and ^T)
     let pSingle = Typar.parse |>> StaticTypars.Single
 
     let parse = choiceL [ pOrList; pSingle ] "Static Type Parameters"
 
 [<RequireQualifiedAccess>]
 module WithClause =
-    // Parses the property-accessor clause shared by abstract member signatures and
-    // SRTP property-trait constraints:
-    //   with get | with set | with get,set | with set,get
-    // Lives in TypeParsing.fs (not TypeDefnParsing.fs) because pConstraintMemberSig
-    // here needs it, and TypeParsing.fs compiles earlier in the DAG.
+    // Parses property accessor clauses: `with get`, `with set`, `with get, set`, or `with set, get`
 
     let private errExpectedGet: ErrorType<PositionedToken, ParseState> =
         Message "Expected 'get'"
@@ -175,21 +166,17 @@ module Constraint =
     let private errUnknownConstraintType: ErrorType<PositionedToken, ParseState> =
         Message "Unknown constraint type"
 
-    // Hoisted helpers — allocate Message once at module load instead of per invocation.
+    // Pre-allocated static tokens and parsers
     let private pUnitIdent = nextSyntaxIdentifierLMsg "Expected 'unit'"
 
     let private pUpcast =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.OpUpcast) ":>"
 
-    // Parses the member name inside a constraint member sig: plain ident, parenthesized operator,
-    // or active-pattern name. Returns IdentOrOp to match MemberSig.ident.
+    // Parses a member name in a constraint (identifier, operator, or active pattern)
     let private pConstraintMemberName: FSParser<IdentOrOp<SyntaxToken>> =
         IdentOrOp.parse
 
-    // Parses the signature inside a constraint member: ident-or-(op) ':' curried-sig ('with' get/set)?
-    // Uses the same CurriedSig grammar as ordinary abstract member sigs (via refCurriedSig)
-    // so multi-arg curried shapes like `'T * 'T -> bool` land in CurriedSig.args rather than
-    // being flattened into a FunctionType chain under an empty CurriedSig.
+    // Parses a member constraint signature: ident ':' curried-sig ['with' get/set]
     let pConstraintMemberSig =
         parser {
             let! ident = pConstraintMemberName
@@ -202,7 +189,7 @@ module Constraint =
             | ValueNone -> return MemberSig.MethodOrPropSig(ident, ValueNone, colon, sign)
         }
 
-    // static-typars ':' '(' ['static'] 'member' member-sig ')'
+    // Parses static member traits: static-typars ':' '(' ['static'] 'member' member-sig ')'
     let private pMemberTrait =
         parser {
             let! staticTypars = StaticTypars.parse
@@ -215,6 +202,7 @@ module Constraint =
             return Constraint.MemberTrait(staticTypars, colon, lParen, staticToken, memberToken, membersig, rParen)
         }
 
+    // Parses default constructor constraints: (new : unit -> 'T)
     let private pDefaultConstructor (typar: Typar<_>) colon lParen (tokenNew: SyntaxToken) =
         parser {
             let! colonUnit = pColon
@@ -241,8 +229,8 @@ module Constraint =
         parser {
             let! typar = Typar.parse
 
-            // Check for :> (Coercion) vs : (Everything else)
-            let! coercion = opt pUpcast // :>
+            // Check for coercion constraint (:>) vs standard constraint (:)
+            let! coercion = opt pUpcast
 
             match coercion with
             | ValueSome op ->
@@ -251,7 +239,6 @@ module Constraint =
             | ValueNone ->
                 let! colon = pColon
 
-                // Branch based on next token
                 let! state = getUserState
                 let! token = nextSyntaxToken
 
@@ -281,7 +268,6 @@ module Constraint =
                     let! rAngle = pCloseTypeParams
                     return Constraint.Enum(typar, colon, token, lAngle, t, rAngle)
                 | Token.KWLParen ->
-                    // Could be (new : unit -> 'T)
                     let! next = nextSyntaxToken
 
                     if next.Token = Token.KWNew then
@@ -305,9 +291,7 @@ module Constraint =
 
 [<RequireQualifiedAccess>]
 module TyparConstraints =
-    /// `when c1 [and c2]*` the general typar-constraint list,
-    /// shared by the three positions that accept one: inside `<...>`, trailing a
-    /// type header, and suffixing an inline type (`Type.WhenConstrainedType`).
+    /// Parses type parameter constraints: `when c1 and c2 ...`
     let parse: Parser<TyparConstraints<SyntaxToken>, _, _, _> =
         parser {
             let! whenTok = pWhen
@@ -336,7 +320,6 @@ module TyparDefns =
         parser {
             let! lAngle = pLessThan
 
-            // Parse list of TyparDefn
             let! defns, _ =
                 sepBy1
                     (parser {
@@ -355,7 +338,7 @@ module TyparDefns =
 [<RequireQualifiedAccess>]
 module Type =
 
-    // Hoisted helpers — allocate Message + closure once at module load instead of per invocation.
+    // Pre-allocated static parsers and errors
     let private pLHashParen = nextSyntaxTokenIsLMsg Token.KWLHashParen "(#"
     let private pRHashParen = nextSyntaxTokenIsLMsg Token.KWRHashParen "#)"
     let private pAnonRecFieldIdent = nextSyntaxIdentifierLMsg "field name"
@@ -366,17 +349,14 @@ module Type =
     let private errRetryAsMeasureArg: ErrorType<PositionedToken, ParseState> =
         Message "Retry as measure argument"
 
-    // Generic type-argument parser. Tries Type first; if Type.parse leaves a measure
-    // operator dangling at the peek position (/, *, ^, fused ^- / ^+), backtracks and
-    // re-parses the slot as a Measure. Mirrors the abbrev measure-retry at
-    // TypeDefnParsing.fs:1219-1243. Single-identifier args (Foo<kg>) take the Type branch
-    // — the type checker resolves the measure-vs-type ambiguity using typar sort info.
+    // Parses a generic argument inside '<...>'.
+    // Attempts to parse as a Type first; if trailing operators indicate a unit of measure
+    // (e.g. '/', '*', '^'), backtracks and re-parses as a Measure.
     let private pTypeArg =
         choice
             [
                 parser {
                     let! tNormal = refType.Parser
-                    // A failed peek (end of input, offside token) means no operator follows.
                     let! peekAfter = opt peekNextSyntaxToken
                     let! state = getUserState
 
@@ -398,8 +378,7 @@ module Type =
                 (refMeasure.Parser |>> TypeArg.Measure)
             ]
 
-    // Hoisted: field-parser for anon record types. Previously defined inline inside
-    // `parseAtomic`'s choiceL arm, which rebuilt it on every outer invocation.
+    // Parses a single field in an anonymous record: `ident : Type`
     let private pAnonRecField =
         parser {
             let! ident = pAnonRecFieldIdent
@@ -411,14 +390,14 @@ module Type =
     let parseAtomic =
         choiceL
             [
-                // (Type)
+                // Parenthesized type: (Type)
                 parser {
                     let! l = pLParen
                     let! t = refType.Parser
                     let! r = pRParen
                     return Type.ParenType(l, t, r)
                 }
-                // struct (Type)
+                // Struct tuple: struct (Type * Type)
                 parser {
                     let! s = pStruct
                     let! l = pLParen
@@ -428,20 +407,17 @@ module Type =
                     let! r = pRParen
                     return Type.StructTupleType(s, l, ts, asterisks, r)
                 }
-                // #Type
+                // Flexible type: #Type
                 parser {
                     let! h = pHash
                     let! t = refType.Parser
                     return Type.AnonymousSubtype(h, t)
                 }
-                // null
+                // Null literal type: null
                 pNull |>> Type.Null
-                // 'a
+                // Type variable: 'a
                 Typar.parse |>> Type.VarType
-                // (# "iltype" #) — opaque value repr; (# class "iltype" #) — heritable
-                // external reference base (usable as an `inherit` parent). The optional
-                // `class`/`interface` tag is unambiguous: the hash-paren delimiters bound
-                // it, so it can never be read as a verbose `class … end` body.
+                // IL intrinsic types: (# "iltype" #) or (# class "iltype" #)
                 parser {
                     let! l = pLHashParen
 
@@ -456,22 +432,17 @@ module Type =
                     let! r = pRHashParen
                     return Type.ILIntrinsic(l, kindTag, kind, parts, instrClose, r)
                 }
-                // {| field: Type; ... |} — Anonymous record type
+                // Anonymous record: {| x: int; y: string |}
                 parser {
                     let! lBraceBar = pLBraceBar
                     let! fields, seps = sepBy1 pAnonRecField pSemi
                     let! rBraceBar = pRBraceBar
                     return Type.AnonRecordType(lBraceBar, fields, seps, rBraceBar)
                 }
-                // LongIdent or LongIdent<Types>
+                // Named type or Generic type: LongIdent or LongIdent<Type, ...>
                 parser {
                     let! lid = LongIdent.parse
-                    // Commit to generic-args parsing once '<' is consumed: a failure inside
-                    // the args list (e.g. an unparseable arg, missing '>') should propagate
-                    // up so outer recoverWith (ReturnType.parse, etc.) can skip to the right
-                    // boundary. The previous shape wrapped the whole block in `opt`, which
-                    // silently fell back to `NamedType lid` and left the offending tokens in
-                    // the stream, causing the binding to fail at `pEquals` with no recovery.
+                    // Once '<' is encountered, commit to parsing generic arguments
                     let! lessOpt = opt pLessThan
 
                     match lessOpt with
@@ -484,19 +455,16 @@ module Type =
             ]
             "Atomic Type"
 
-    // Matches '[' or '[|' as an array-rank open bracket in postfix type position.
     let private pArrayOpenBracket =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.KWLArrayBracket || t.Token = Token.KWLBracket) "["
 
-    // Matches ']' or '|]' as an array-rank close bracket in postfix type position.
     let private pArrayCloseBracket =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.KWRArrayBracket || t.Token = Token.KWRBracket) "]"
 
     let private errExpectedDot: ErrorType<PositionedToken, ParseState> =
         Message "Expected '.'"
 
-    // A dot that may appear as a regular OpDot token or embedded in a fused operator
-    // like ">." after pCloseTypeParams consumed the ">" and set CharsConsumedAfterTypeParams.
+    // Parses '.' as a standard token or extracted from a fused operator (e.g. '>.' after type arguments)
     let private pPostfixDot =
         choiceL
             [
@@ -512,7 +480,7 @@ module Type =
             ]
             "."
 
-    // Array continuation: [] or [,] or [|]
+    // Postfix array rank continuation: `[]`, `[,]`, or `[|]`
     let private pPostfixArrayCont =
         parser {
             let! l = pArrayOpenBracket
@@ -521,7 +489,7 @@ module Type =
             return struct (l, commas, r)
         }
 
-    // Dotted nested type continuation: .Foo.Bar
+    // Postfix dotted access continuation: `.NestedType`
     let private pPostfixDottedCont =
         parser {
             let! dot = pPostfixDot
@@ -529,22 +497,13 @@ module Type =
             return struct (dot, lid)
         }
 
-    // Suffix continuation: list (as in `int list`)
+    // Postfix type suffix continuation: `int list`
     let private pPostfixSuffixCont: FSParser<LongIdent<SyntaxToken>> = LongIdent.parse
 
-    // Postfix operators: [] (Array), .Ident (Dotted), ident (Suffixed e.g. int list).
-    // Peek once per iteration and dispatch to the single matching sub-parser rather than
-    // trying all three via `opt` (which re-peeks the same token inside each attempt).
-    // The three leading-token sets are disjoint, so the peeked token uniquely selects
-    // at most one branch; anything else terminates the postfix chain.
-    //
-    // One extra case: when a generic type application consumed a virtual `>` from a fused
-    // operator (e.g. `>.` in `Foo<int>.Bar`), the reader is still positioned at the fused
-    // token with CharsConsumedAfterTypeParams > 0. `pPostfixDottedCont`'s inner `pPostfixDot`
-    // knows how to reprocess such a token into `.`, but it can also legitimately fail (e.g.
-    // if the fused token is `>>` not `>.`), in which case the postfix chain must terminate cleanly.
-    // For that case we use `opt pPostfixDottedCont` so a non-dot reprocessed operator rolls
-    // back instead of propagating as a parse error.
+    // Parses postfix type modifiers:
+    //   - Array indexing: `int[]`, `int[,]`
+    //   - Dotted members: `Foo<int>.Bar`
+    //   - Type suffixes:  `int list`
     let private pPostfixType: FSParser<Type<SyntaxToken>> =
         fun reader ->
             match parseAtomic reader with
@@ -560,6 +519,7 @@ module Type =
                     | Ok peeked ->
                         let state = reader.State
 
+                        // Handle fused operator boundaries after generic closing bracket (e.g. `Foo<int>.Bar`)
                         if state.CharsConsumedAfterTypeParams > 0 && TokenInfo.isOperator peeked.Token then
                             match opt pPostfixDottedCont reader with
                             | Ok(ValueSome(struct (dot, lid))) -> acc <- Type.DottedType(acc, dot, lid)
@@ -579,15 +539,8 @@ module Type =
                             | Token.Identifier
                             | Token.BacktickedIdentifier
                             | Token.UnterminatedBacktickedIdentifier ->
-                                // Postfix suffix application (`int list`) must obey the offside
-                                // line: the suffix identifier has to be on the same line as — or
-                                // indented past — the enclosing construct. `peekNextSyntaxToken`
-                                // skips the newline, so without this guard a dedented identifier
-                                // starting the *next* declaration (e.g. `S of int⏎printfn …`) is
-                                // wrongly swallowed as `int printfn`, stranding the rest of that
-                                // line. A same-line suffix always sits strictly right of the
-                                // context indent (the base type is itself ≥ ctxIndent), so a plain
-                                // `col > ctxIndent` test only ever rejects a dedented new line.
+                                // Ensure postfix suffix (e.g. `list` in `int list`) respects indentation rules
+                                // so it does not swallow identifiers on subsequent lines.
                                 let peekedCol =
                                     match peeked.Index with
                                     | TokenIndex.Virtual -> 0
@@ -610,7 +563,7 @@ module Type =
                 | ValueSome e -> Error e
                 | ValueNone -> Ok acc
 
-    // Subtype constraint: 'T :> IDisposable (flexible type annotation)
+    // Flexible type annotation / subtype constraint: `'T :> IDisposable`
     let private pSubtypeType =
         parser {
             let! lhs = pPostfixType
@@ -627,7 +580,6 @@ module Type =
             | _ -> return lhs
         }
 
-    // Union: T | T (for nullable reference types: string | null)
     let private pBarType =
         parser {
             let! bar = pBar
@@ -635,8 +587,7 @@ module Type =
             return (bar, rhs)
         }
 
-    // Left-associative chain: a | b | c => ((a | b) | c), matching the
-    // left-nested CST tree translateType flattens through mkUnion.
+    // Left-associative type union (e.g. nullable reference types: `string | null`)
     let private pUnionType =
         parser {
             let! lhs = pSubtypeType
@@ -651,7 +602,7 @@ module Type =
             return acc
         }
 
-    // Tuple: T * T * T
+    // Tuple types: `T * T * T`
     let private pTupleType =
         parser {
             let! types, asterisks = sepBy1 pUnionType pOpMultiply
@@ -662,9 +613,7 @@ module Type =
                 return Type.TupleType(types, asterisks)
         }
 
-    // Function: T -> T -> T (Right Associative)
-    // Iterative implementation: collect a -> b -> c as (a, arrow0)(b, arrow1)(c) then
-    // right-fold into FunctionType(a, arrow0, FunctionType(b, arrow1, c)).
+    // Right-associative function types: `T -> T -> T`
     let private pFunctionType =
         parser {
             let! first = pTupleType
@@ -689,7 +638,7 @@ module Type =
             return acc
         }
 
-    // Entry point for simple types
+    /// Entry point for parsing types, including optional `when` constraints.
     let parse =
         parser {
             let! typ = pFunctionType
@@ -699,17 +648,13 @@ module Type =
             | ValueNone -> return typ
         }
 
-    /// Parses a single type without consuming `*` as a tuple separator.
-    /// Use in contexts where `*` is an explicit separator (e.g. union case fields).
+    /// Parses a single type without consuming `*` as a tuple separator (e.g. for DU case fields).
     let parseField = pPostfixType
 
-    /// Like `parseField` but ALSO accepts nullable-union types (`T | null`).
-    /// Use in CurriedSig/UncurriedSig arg-spec position, where `*` separates args
-    /// but `|` inside an arg-type denotes a nullable union (F# 9+).
+    /// Parses an argument type where `*` separates arguments but `|` is allowed for nullable types (`T | null`).
     let parseArgField = pUnionType
 
-    // Variants that do NOT consume `|` as a nullable-ref type union.
-    // Used in contexts where `|` separates something else (e.g. DU case separators).
+    // Parsers that do not treat `|` as a type union (used where `|` serves as a syntax delimiter, like DU cases)
     let private pTupleTypeNoUnion =
         parser {
             let! types, asterisks = sepBy1 pSubtypeType pOpMultiply
@@ -744,8 +689,7 @@ module Type =
             return acc
         }
 
-    /// Type parser that does not treat `|` as a type-union separator.
-    /// Use in contexts where `|` has a different meaning (e.g. DU case separator).
+    /// Parses a type without treating `|` as a type-union separator.
     let parseNoUnion =
         parser {
             let! typ = pFunctionTypeNoUnion
@@ -755,7 +699,7 @@ module Type =
             | ValueNone -> return typ
         }
 
-    // Initialize the recursive ref parser
+    // Initialize the recursive type parser reference
     do refType.Set parse
 
 module ReturnType =

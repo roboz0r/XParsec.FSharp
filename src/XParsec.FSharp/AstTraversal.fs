@@ -3,21 +3,24 @@ module XParsec.FSharp.AstTraversal
 open XParsec.FSharp
 open XParsec.FSharp.Parser
 
-/// Callbacks invoked by AST walk functions in source order.
-/// EnterSection/ExitSection bracket structural sections; an empty name means
-/// indent-only (no header line is emitted by a typical debug visitor).
+/// Callbacks for traversing an AST in source order (typically used for debug dumping or formatting).
 type AstVisitor<'T> =
     {
-        /// Called for every leaf token; the string is the role label (e.g. "if", "then", "=").
+        /// Visited for each leaf token.
+        /// Arguments: `role` (e.g., "if", "then", "=") and the `token` value.
         VisitToken: string -> 'T -> unit
-        /// Called on entering a structural section. Empty name = indent only, no header.
+
+        /// Begins a nested section.
+        /// Pass an empty string to indent the block without printing a section header.
         EnterSection: string -> unit
-        /// Called on exiting a section entered via EnterSection.
+
+        /// Closes the current section.
         ExitSection: string -> unit
-        /// Called for literal text output (e.g. "Missing", unimplemented stubs).
+
+        /// Emits an arbitrary line of text (e.g. placeholders, missing nodes).
         WriteLine: string -> unit
-        /// Token equality used to suppress duplicate token output
-        /// (e.g. Typar.Named where quote and ident are the same lexed token).
+
+        /// Compares two tokens for equality to prevent emitting duplicates.
         EqualTokens: 'T -> 'T -> bool
     }
 

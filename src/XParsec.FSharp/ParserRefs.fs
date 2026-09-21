@@ -5,46 +5,35 @@ open XParsec.FSharp.Lexer
 
 [<AutoOpen>]
 module internal ParserRefs =
-    // Forward reference mechanism for recursive parsing
-    // Breaks reference cycles in the parser definitions, allowing us to define
-    // mutually recursive parsers across different modules/files.
+    // Mutually recursive parsers broken across multiple files using forward references.
     type FSRefParser<'T> = RefParser<'T, PositionedToken, ParseState, FSReadable>
 
     let refObjectConstruction = FSRefParser<ObjectConstruction<SyntaxToken>>()
     let refType = FSRefParser<Type<SyntaxToken>>()
 
-    /// Forward reference to CurriedSig.parse (defined in TypeDefnParsing.fs),
-    /// needed by pConstraintMemberSig in TypeParsing.fs so SRTP member-trait
-    /// constraints share the same signature shape as abstract member sigs.
+    /// Curried member signature, shared by abstract members and SRTP trait constraints.
     let refCurriedSig = FSRefParser<CurriedSig<SyntaxToken>>()
 
     let refMeasure = FSRefParser<Measure<SyntaxToken>>()
     let refExpr = FSRefParser<Expr<SyntaxToken>>()
     let refExprSeqBlock = FSRefParser<Expr<SyntaxToken>>()
 
-    /// Seq-block expression body with optional trailing type annotation (F# `typedSeqExprBlock`).
-    /// Used for grammar productions like match-clause RHS, lambda body, if/then/else branches, etc.
+    /// A sequence block with an optional type annotation (e.g. lambda bodies, match clauses, `if/then/else` branches).
     let refTypedSeqExprBlock = FSRefParser<Expr<SyntaxToken>>()
 
-    /// Expression parser bounded to stop before Arrow-level operators (->).
-    /// Used in pattern guard context (when <expr> ->) so that '->' is not consumed
-    /// as part of the guard expression and remains available for Rule.parse.
+    /// Guard expression in a pattern (`when <expr> ->`), stopping before `->`.
     let refExprGuard = FSRefParser<Expr<SyntaxToken>>()
 
-    /// Expression parser that stops before sequential composition (semicolons/virtual seps).
-    /// Used for while conditions, where `do` at the same indent must not be consumed as a
-    /// `do expr` keyword expression via sequential composition.
+    /// Expression that stops before sequential separators (semicolons/newlines).
+    /// Used in `while <expr> do` so a trailing `do` is not swallowed as a `do <expr>` statement.
     let refExprNoSeq = FSRefParser<Expr<SyntaxToken>>()
 
-    /// Expression parser for parsing expressions in collection and record initializers,
-    /// which should stop before consuming a semicolon.
+    /// Field/element expression inside records and collection initializers, stopping before `;`.
     let refExprInRecords = FSRefParser<Expr<SyntaxToken>>()
 
-    /// Atomic expression parser for use in IL intrinsics, where each argument
-    /// is a standalone atomic expression (identifier, literal, parenthesized expr, etc.)
+    /// Single atomic expression (literal, identifier, parenthesized expr).
     let refExprAtomic = FSRefParser<Expr<SyntaxToken>>()
 
-    /// Expression parser for IL intrinsic arguments: accepts dot chains, indexers,
-    /// and type applications, but stops at juxtaposition so each whitespace-separated
-    /// arg in `(# "op" a b c : ty #)` is captured as a distinct arg.
+    /// IL intrinsic argument (allows `.`, `[]`, and type applications).
+    /// Stops at whitespace so arguments in `(# "op" a b c : ty #)` are parsed separately.
     let refExprILArg = FSRefParser<Expr<SyntaxToken>>()

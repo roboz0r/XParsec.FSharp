@@ -318,7 +318,7 @@ module TypeSignature =
                 let! ext = TypeExtensionElementsSignature.parse
                 return TypeSignature.TypeExtension(typeName, ext)
             elif next2.Token <> Token.OpEquality then
-                // No `=` — opaque sig (e.g. `[<Measure>] type kg`, `type T`)
+                // Opaque / abstract type without '=' (e.g. `type T` or `[<Measure>] type kg`)
                 return TypeSignature.AbstractType(typeName)
             else
                 let! equals = pEquals
@@ -331,12 +331,10 @@ module TypeSignature =
                     return TypeSignature.Struct(typeName, equals, str, elems, endTok)
 
                 | Token.KWInterface ->
-                    // Two forms share the `interface` keyword after `=`:
-                    //   1. Explicit body: `type IFoo = interface <members> end`
-                    //   2. Implicit class: `type Unit = interface IComparable` (interface as first member).
-                    // Disambiguate by peeking the token AFTER `interface`: a member-start or `end`
-                    // means the explicit body form; anything else (a type-start ident, `'a`, etc.)
-                    // means the implicit-class form.
+                    // Disambiguate between:
+                    // 1. Explicit interface definition: `type IFoo = interface <members> end`
+                    // 2. Implicit class implementing an interface first: `type Foo = interface IBar`
+                    // Peeking a member keyword or 'end' indicates an explicit interface body.
                     let! isExplicitInterface =
                         lookAhead (
                             parser {
@@ -384,22 +382,12 @@ module TypeSignature =
                     return TypeSignature.Delegate(typeName, equals, d)
 
                 | Token.KWExtern ->
-                    // `type int = extern` — intrinsic primitive (no Vesper representation).
-                    // Optional `with member … / interface …` publishes the capability
-                    // surface a later extractor consumes; parsed unconditionally here —
-                    // the opt-in gate lives at the extractor, not the parser.
+                    // External / intrinsic types (e.g. `type int = extern`)
                     let! ext = pExtern
 
-                    // Optional `class` / `interface` tag: `type Attribute = extern class`
-                    // marks a HERITABLE external reference base (type id extracted from the
-                    // paired `.fs`'s `(# class "…" #)`); `type disposable = extern interface
-                    // with …` marks a capability INTERFACE (an all-abstract surface published
-                    // as an `IntrinsicInterface`). The tag introduces the type BODY, so
-                    // `interface` is admitted only when `with` follows it: a bare
-                    // `interface <Type> …` capability MEMBER (an interface implementation)
-                    // below always carries a type name where the tag has `with`, so it is
-                    // never mis-eaten. `choiceL` rewinds on the failed branch, leaving such
-                    // a member for `parseOpt`.
+                    // Optional kind tag: `extern class` or `extern interface with ...`
+                    // Note: 'interface' is only treated as a kind tag if immediately followed by 'with'
+                    // to prevent consuming an interface implementation member like `interface IFoo with ...`.
                     let! kindTag =
                         opt (
                             choiceL
@@ -419,9 +407,7 @@ module TypeSignature =
                     return TypeSignature.Extern(typeName, equals, ext, kindTag, members)
 
                 | _ when isImplicitClassStart next ->
-                    // Implicit anonymous body: no explicit class/struct/begin keyword.
-                    // Synthesize virtual begin/end and use offside rule (OffsideContext.Type)
-                    // to delimit the body. Mirrors parseAbbrevOrImplicitClass in TypeDefnParsing.fs.
+                    // Implicit class body without explicit 'class'/'begin' keywords (delimited by indentation).
                     let! beginTok = nextSyntaxTokenVirtualIfNot Token.KWBegin
                     let! elems = withContext OffsideContext.Type TypeElementsSignature.parseMany
                     let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
@@ -472,8 +458,7 @@ module TypeSignature =
                                 }
                                 parser {
                                     let! t = TypeDefn.parseAbbrevRhs
-                                    // An abbreviation's augmentation needs an explicit `with`:
-                                    // `type Shown = int` followed by a bare `member` is invalid.
+                                    // Type abbreviations require an explicit 'with' to define members (e.g. `type T = int with member ...`).
                                     let! ext = opt TypeExtensionElementsSignature.parse
                                     return TypeSignature.Abbrev(typeName, equals, t, ext)
                                 }
