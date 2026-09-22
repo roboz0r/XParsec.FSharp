@@ -15,8 +15,9 @@ TypeDefn.Anon:
         Text         'default'         StringFragment      tok=  23  pos=  52
                      '"'               StringClose         tok=  24  pos=  59
       with           'with'            KWWith              tok=  26  pos=  61
-      accessor       'get'             Identifier          tok=  28  pos=  66
-      accessor       'set'             Identifier          tok=  31  pos=  71
+      get            'get'             Identifier          tok=  28  pos=  66
+      ,              ','               OpComma             tok=  29  pos=  69
+      set            'set'             Identifier          tok=  31  pos=  71
     member           'member'          KWMember            tok=  34  pos=  79
     val              'val'             KWVal               tok=  36  pos=  86
     ident            'Count'           Identifier          tok=  38  pos=  90
@@ -26,8 +27,9 @@ TypeDefn.Anon:
     =                '='               OpEquality          tok=  43  pos= 101
       Const          '0'               NumInt32            tok=  45  pos= 103
       with           'with'            KWWith              tok=  47  pos= 105
-      accessor       'get'             Identifier          tok=  49  pos= 110
-      accessor       'set'             Identifier          tok=  52  pos= 115
+      get            'get'             Identifier          tok=  49  pos= 110
+      ,              ','               OpComma             tok=  50  pos= 113
+      set            'set'             Identifier          tok=  52  pos= 115
     member           'member'          KWMember            tok=  55  pos= 123
     val              'val'             KWVal               tok=  57  pos= 130
     ident            'Items'           Identifier          tok=  59  pos= 134
@@ -41,8 +43,9 @@ TypeDefn.Anon:
       Array          '[|'              KWLArrayBracket     tok=  68  pos= 149
                      '|]'              KWRArrayBracket     tok=  69  pos= 151
       with           'with'            KWWith              tok=  71  pos= 154
-      accessor       'get'             Identifier          tok=  73  pos= 159
-      accessor       'set'             Identifier          tok=  76  pos= 164
+      get            'get'             Identifier          tok=  73  pos= 159
+      ,              ','               OpComma             tok=  74  pos= 162
+      set            'set'             Identifier          tok=  76  pos= 164
     member           'member'          KWMember            tok=  80  pos= 173
     self             'this'            Identifier          tok=  82  pos= 180
     Pat.NamedSimple  'Total'           Identifier          tok=  84  pos= 185

@@ -80,6 +80,7 @@ module StaticTypars =
     let parse = choiceL [ pOrList; pSingle ] "Static Type Parameters"
 
 [<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module WithClause =
     // Parses property accessor clauses: `with get`, `with set`, `with get, set`, or `with set, get`
 
@@ -89,69 +90,53 @@ module WithClause =
     let private errExpectedSet: ErrorType<PositionedToken, ParseState> =
         Message "Expected 'set'"
 
-    let private pGet =
+    /// Parses one accessor: an optional access modifier followed by the identifier `name`
+    /// (either `get` or `set`).
+    let private pAccessorNamed name err =
         parser {
-            let! getTok = nextSyntaxTokenIsLMsg Token.Identifier "get"
+            let! access = opt Access.parse
+            let! tok = nextSyntaxTokenIsLMsg Token.Identifier name
             let! state = getUserState
 
-            if tokenStringIs "get" getTok state then
-                return getTok
+            if tokenStringIs name tok state then
+                return Accessor(access, tok)
             else
-                return! fail errExpectedGet
+                return! fail err
         }
 
-    let private pSet =
-        parser {
-            let! setTok = nextSyntaxTokenIsLMsg Token.Identifier "set"
-            let! state = getUserState
+    let private pGet = pAccessorNamed "get" errExpectedGet
 
-            if tokenStringIs "set" setTok state then
-                return setTok
-            else
-                return! fail errExpectedSet
-        }
+    let private pSet = pAccessorNamed "set" errExpectedSet
 
-    let private pGetSet =
-        choiceL
-            [
-                parser {
-                    let! getTok = pGet
-
-                    let! maybeSet =
-                        opt (
-                            parser {
-                                let! comma = pComma
-                                let! setTok = pSet
-                                return setTok
-                            }
-                        )
-
-                    return getTok, maybeSet
-                }
-                parser {
-                    let! setTok = pSet
-
-                    let! maybeGet =
-                        opt (
-                            parser {
-                                let! comma = pComma
-                                let! getTok = pGet
-                                return getTok
-                            }
-                        )
-
-                    return setTok, maybeGet
-                }
-            ]
-            ""
+    let private pTrailing accessor =
+        opt (
+            parser {
+                let! comma = pComma
+                let! acc = accessor
+                return TrailingAccessor(comma, acc)
+            }
+        )
 
     /// Parses `with get` / `with set` / `with get,set` / `with set,get`.
-    /// Returns struct (withToken, (firstAccessor, optional second accessor)).
     let parse =
         parser {
             let! withTok = pWith
-            let! getSet = pGetSet
-            return struct (withTok, getSet)
+
+            return!
+                choiceL
+                    [
+                        parser {
+                            let! getter = pGet
+                            let! setter = pTrailing pSet
+                            return WithClause.GetFirst(withTok, getter, setter)
+                        }
+                        parser {
+                            let! setter = pSet
+                            let! getter = pTrailing pGet
+                            return WithClause.SetFirst(withTok, setter, getter)
+                        }
+                    ]
+                    ""
         }
 
 [<RequireQualifiedAccess>]
@@ -185,7 +170,7 @@ module Constraint =
             let! withClause = opt WithClause.parse
 
             match withClause with
-            | ValueSome(withTok, getSet) -> return MemberSig.PropSig(ident, ValueNone, colon, sign, withTok, getSet)
+            | ValueSome clause -> return MemberSig.PropSig(ident, ValueNone, colon, sign, clause)
             | ValueNone -> return MemberSig.MethodOrPropSig(ident, ValueNone, colon, sign)
         }
 

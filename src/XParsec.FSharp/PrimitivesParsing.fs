@@ -241,16 +241,25 @@ module LongIdent =
 
 [<RequireQualifiedAccess>]
 module Access =
-    let parse: FSReader -> ParseResult<Access<SyntaxToken>, PositionedToken, ParseState> =
-        nextSyntaxTokenSatisfiesLMsg
-            (fun t ->
-                t.Token = Token.KWPrivate
-                || t.Token = Token.KWInternal
-                || t.Token = Token.KWPublic
-            )
-            "Access modifier"
-        |>> function
-            | t when t.Token = Token.KWPrivate -> Access.Private t
-            | t when t.Token = Token.KWInternal -> Access.Internal t
-            | t when t.Token = Token.KWPublic -> Access.Public t
-            | _ -> failwith "Unreachable"
+    let private errExpectedAccess: ErrorType<PositionedToken, ParseState> =
+        Message "Expected access modifier (private, public or internal)"
+
+    let private failAccess = fail errExpectedAccess
+
+    let ofToken (t: SyntaxToken) : Access<SyntaxToken> voption =
+        match t.Token with
+        | Token.KWPrivate -> ValueSome(Access.Private t)
+        | Token.KWInternal -> ValueSome(Access.Internal t)
+        | Token.KWPublic -> ValueSome(Access.Public t)
+        | _ -> ValueNone
+
+    let parse =
+        parser {
+            let! token = peekNextSyntaxToken
+
+            match ofToken token with
+            | ValueSome access ->
+                let! _ = consumePeeked token
+                return access
+            | ValueNone -> return! failAccess
+        }

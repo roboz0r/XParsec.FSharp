@@ -34,7 +34,7 @@ Type:
         NamedType:
           Ident   'int'             Identifier          tok=  36  pos=  98
         with      'with'            KWWith              tok=  38  pos= 102
-        get/set   'get'             Identifier          tok=  40  pos= 107
+        get       'get'             Identifier          tok=  40  pos= 107
       Member:
         member    'member'          KWMember            tok=  43  pos= 115
         Ident     'Add'             Identifier          tok=  45  pos= 122

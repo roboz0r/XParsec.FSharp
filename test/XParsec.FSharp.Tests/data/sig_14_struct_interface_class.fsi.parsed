@@ -60,7 +60,7 @@ Type:
         NamedType:
           Ident   'int'             Identifier          tok=  87  pos= 255
         with      'with'            KWWith              tok=  89  pos= 259
-        get/set   'get'             Identifier          tok=  91  pos= 264
+        get       'get'             Identifier          tok=  91  pos= 264
     end           'end'             KWEnd               tok=  94  pos= 272
 Type:
   type            'type'            KWType              tok=  97  pos= 277

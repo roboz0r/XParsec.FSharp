@@ -75,11 +75,13 @@ type TypeSignature<'T> =
     | Abbrev of
         typeName: TypeName<'T> *
         equals: 'T *
+        accessModifier: Access<'T> voption *
         typ: Type<'T> *
         extensions: TypeExtensionElementsSignature<'T> voption
     | Record of
         typeName: TypeName<'T> *
         equals: 'T *
+        accessModifier: Access<'T> voption *
         lBrace: 'T *
         fields: RecordFields<'T> *
         rBrace: 'T *
@@ -87,6 +89,7 @@ type TypeSignature<'T> =
     | Union of
         typeName: TypeName<'T> *
         equals: 'T *
+        accessModifier: Access<'T> voption *
         cases: UnionTypeCases<'T> *
         extensions: TypeExtensionElementsSignature<'T> voption
     | Anon of typeName: TypeName<'T> * equals: 'T * beginToken: 'T * elements: TypeElementsSignature<'T> * endToken: 'T
@@ -103,7 +106,7 @@ type TypeSignature<'T> =
         interfaceToken: 'T *
         elements: TypeElementsSignature<'T> *
         endToken: 'T
-    | Enum of typeName: TypeName<'T> * equals: 'T * cases: EnumTypeCases<'T>
+    | Enum of typeName: TypeName<'T> * equals: 'T * accessModifier: Access<'T> voption * cases: EnumTypeCases<'T>
     | Delegate of typeName: TypeName<'T> * equals: 'T * signature: DelegateSig<'T>
     | TypeExtension of typeName: TypeName<'T> * elements: TypeExtensionElementsSignature<'T>
 

@@ -17,7 +17,7 @@ module PrimaryConstrArgs =
     let parse: Parser<PrimaryConstrArgs<SyntaxToken>, _, _, _> =
         parser {
             let! attrs = opt Attributes.parse
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! lParen = pLParen
             let! pat = opt Pat.parse
             let! rParen = pRParen
@@ -45,7 +45,7 @@ module TypeName =
     /// Parses a TypeName using pre-parsed attributes (from before the `type` keyword).
     let parseWithAttrs (attrs: Attributes<SyntaxToken> voption) : Parser<TypeName<SyntaxToken>, _, _, _> =
         parser {
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! prefixTypars = opt pPrefixTypars
             let! ident = LongIdent.parse
             let! typars = opt TyparDefns.parse
@@ -159,7 +159,7 @@ member-sig :=
             let! withClause = opt WithClause.parse
 
             match withClause with
-            | ValueSome(withTok, getSet) -> return MemberSig.PropSig(ident, typars, colon, sigType, withTok, getSet)
+            | ValueSome clause -> return MemberSig.PropSig(ident, typars, colon, sigType, clause)
             | ValueNone -> return MemberSig.MethodOrPropSig(ident, typars, colon, sigType)
         }
 
@@ -198,13 +198,22 @@ module MethodOrPropDefn =
             expr = Expr.Missing
         }
 
+    /// Peeks past an optional access modifier to the `get`/`set` token that begins an accessor binding.
+    let private peekAccessorName =
+        lookAhead (
+            parser {
+                let! _ = opt Access.parse
+                return! peekNextSyntaxToken
+            }
+        )
+
     /// `member x.P with get … and set …`. A property written without a `with`
     /// clause is an implicit get, so a third name is rejected here and the tree carries
     /// only `get` and `set` in that position.
     let private pGetSetBinding (propIdent: SyntaxToken) attrs : FSParser<Binding<SyntaxToken>> =
         parser {
             let! state = getUserState
-            let! next = peekNextSyntaxToken
+            let! next = peekAccessorName
 
             if tokenStringIs "get" next state || tokenStringIs "set" next state then
                 return! Binding.parse attrs
@@ -615,7 +624,7 @@ module AutoPropDefn =
     let parse: Parser<MethodOrPropDefn<SyntaxToken>, _, _, _> =
         parser {
             let! valTok = pVal
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! ident = pIdent
 
             let! returnType =
@@ -645,20 +654,7 @@ module AutoPropDefn =
                 | _ -> preturn expr
 
             let! withClause = opt WithClause.parse
-
-            return
-                match withClause with
-                | ValueSome struct (withTok, (acc1, acc2)) ->
-                    MethodOrPropDefn.AutoProperty(
-                        valTok,
-                        access,
-                        ident,
-                        returnType,
-                        eq,
-                        expr,
-                        ValueSome struct (withTok, acc1, acc2)
-                    )
-                | ValueNone -> MethodOrPropDefn.AutoProperty(valTok, access, ident, returnType, eq, expr, ValueNone)
+            return MethodOrPropDefn.AutoProperty(valTok, access, ident, returnType, eq, expr, withClause)
         }
 
 [<RequireQualifiedAccess>]
@@ -696,7 +692,7 @@ module MemberDefn =
                             )
                         )
                 | _ ->
-                    let! access = opt pAccessModifier
+                    let! access = opt Access.parse
                     let! defn = MethodOrPropDefn.parse
 
                     return
@@ -713,7 +709,7 @@ module MemberDefn =
             | Token.KWAbstract ->
                 let! abstractTok = consumePeeked t
                 let! memTok = opt pMember
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! sigDef = MemberSig.parse
 
                 return
@@ -730,7 +726,7 @@ module MemberDefn =
             | Token.KWVal ->
                 let! valTok = consumePeeked t
                 let! mut = opt pMutable
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! ident = pIdent
                 let! colon = pColon
                 let! typ = Type.parse
@@ -754,7 +750,7 @@ module MemberDefn =
                         MemberDefn.Member(attrs, ValueNone, MemberKeyword.Member memberTok, inlineTok, ValueNone, defn)
                     )
             | _ ->
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! defn = MethodOrPropDefn.parse
 
                 return
@@ -767,7 +763,7 @@ module MemberDefn =
         parser {
             let! abstractTok = pAbstract
             let! memTok = opt pMember
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! sigDef = MemberSig.parse
 
             return
@@ -803,7 +799,7 @@ module MemberDefn =
                         )
                     )
             | _ ->
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! defn = MethodOrPropDefn.parse
 
                 return
@@ -839,7 +835,7 @@ module MemberDefn =
                         )
                     )
             | _ ->
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! defn = MethodOrPropDefn.parse
 
                 return
@@ -852,7 +848,7 @@ module MemberDefn =
         parser {
             let! valTok = pVal
             let! mut = opt pMutable
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! ident = pIdent
             let! colon = pColon
             let! typ = Type.parse
@@ -862,7 +858,7 @@ module MemberDefn =
 
     let private pAdditionalConstrDefn =
         parser {
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! newTok = pNew
             let! pat = Pat.parse
             let! asDefn = opt AsDefn.parse
@@ -1221,7 +1217,7 @@ module RecordField =
         parser {
             let! attrs = opt Attributes.parse
             let! mut = opt pMutable
-            let! acc = opt pAccessModifier
+            let! acc = opt Access.parse
             let! id = pIdent
             let! col = pColon
             let! t = Type.parse
@@ -1348,12 +1344,38 @@ module TypeDefn =
         parser {
             let! attrs = opt Attributes.parse
             let! mut = opt pMutable
-            let! acc = opt pAccessModifier
+            let! acc = opt Access.parse
             let! id = pIdent
             let! col = pColon
             let! t = withContext OffsideContext.SeqBlock Type.parse
             let! _ = opt pSemi
             return RecordField.RecordField(attrs, mut, acc, id, col, t)
+        }
+
+    /// Parses the optional access modifier on a type representation (e.g. `type R = private { ... }`).
+    let pRepresentationAccess = opt Access.parse
+
+    /// Peeks the token that selects which type body follows the `=`.
+    ///
+    /// Record and union representations may carry their own access modifier, so for those
+    /// the token past the modifier is returned. Other forms return the modifier token itself,
+    /// which the abbreviation branch then consumes and diagnoses.
+    let pBodyStart: FSParser<SyntaxToken> =
+        parser {
+            let! atModifier = peekNextSyntaxToken
+
+            let! pastModifier =
+                lookAhead (
+                    parser {
+                        let! _ = opt Access.parse
+                        return! peekNextSyntaxToken
+                    }
+                )
+
+            match pastModifier.Token with
+            | Token.KWLBrace
+            | Token.OpBar -> return pastModifier
+            | _ -> return atModifier
         }
 
     /// Disambiguates between an implicit class definition (e.g., `type Foo() = member ...`)
@@ -1405,7 +1427,8 @@ module TypeDefn =
                 let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
                 return TypeDefn.Anon(typeName, primaryConstr, asDefn, equals, beginTok, body, endTok)
             | ValueNone ->
-                // Type abbreviation: `type Name = TargetType [with type-extensions]`
+                // Type abbreviation: `type Name = [access] TargetType [with type-extensions]`
+                let! representationAccess = pRepresentationAccess
                 let! anchor = peekNextSyntaxToken
 
                 let! t =
@@ -1417,7 +1440,7 @@ module TypeDefn =
 
                 let! ext = TypeExtensionElements.parseOptAt anchor
 
-                return TypeDefn.Abbrev(typeName, equals, t, ext)
+                return TypeDefn.Abbrev(typeName, equals, representationAccess, t, ext)
         }
 
     /// Parses a type definition body after consuming the leading `type` or `and` keyword.
@@ -1446,7 +1469,7 @@ module TypeDefn =
                 let! equals = pEquals
 
                 // 4. Branch based on type kind
-                let! next = peekNextSyntaxToken
+                let! next = pBodyStart
 
                 match next.Token with
                 | Token.KWStruct ->
@@ -1493,20 +1516,23 @@ module TypeDefn =
                     return TypeDefn.Delegate(typeName, equals, delSig)
 
                 | Token.KWLBrace ->
-                    // Record: `type R = { field: int }`
+                    // Record: `type R = [access] { field: int }`
                     // Note: SeqBlock prevents field type parsing from consuming the next field name.
+                    let! representationAccess = pRepresentationAccess
                     let! lBrace = pLBrace
                     let! fields = many1 pRecordField
                     let! rBrace = pRBrace
 
                     let! ext = TypeExtensionElements.parseOptAt next
 
-                    return TypeDefn.Record(typeName, equals, lBrace, fields, rBrace, ext)
+                    return TypeDefn.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext)
 
                 | Token.OpBar ->
                     // Leading `|`: Try enum first (`| Case = 1`), fallback to union (`| Case of int`).
                     // Note: SeqBlock aligned at `|` prevents case type suffixes from consuming
                     // subsequent top-level declarations on following lines.
+                    let! representationAccess = pRepresentationAccess
+
                     return!
                         withContext
                             OffsideContext.SeqBlock
@@ -1514,12 +1540,12 @@ module TypeDefn =
                                 [
                                     parser {
                                         let! cases, bars = EnumTypeCases.parse
-                                        return TypeDefn.Enum(typeName, equals, cases, bars)
+                                        return TypeDefn.Enum(typeName, equals, representationAccess, cases, bars)
                                     }
                                     parser {
                                         let! cases, bars = UnionTypeCases.parse
                                         let! ext = TypeExtensionElements.parseOptAt next
-                                        return TypeDefn.Union(typeName, equals, cases, bars, ext)
+                                        return TypeDefn.Union(typeName, equals, representationAccess, cases, bars, ext)
                                     }
                                 ]
                                 "Union or Enum")
@@ -1532,6 +1558,7 @@ module TypeDefn =
                         choiceL
                             [
                                 parser {
+                                    let! representationAccess = pRepresentationAccess
                                     let! cases, bars = UnionTypeCases.parse
 
                                     match cases.Length with
@@ -1543,7 +1570,7 @@ module TypeDefn =
                                         return! fail errSingleNullaryUnionCaseIsAbbrev
                                     | _ ->
                                         let! ext = TypeExtensionElements.parseOptAt next
-                                        return TypeDefn.Union(typeName, equals, cases, bars, ext)
+                                        return TypeDefn.Union(typeName, equals, representationAccess, cases, bars, ext)
                                 }
                                 parseAbbrevOrImplicitClass typeName primaryConstr asDefn equals
                             ]

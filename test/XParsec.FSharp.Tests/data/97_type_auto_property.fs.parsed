@@ -19,8 +19,9 @@ TypeDefn.Class:
     =                '='               OpEquality          tok=  38  pos= 112
       Const          '0'               NumInt32            tok=  40  pos= 114
       with           'with'            KWWith              tok=  42  pos= 116
-      accessor       'get'             Identifier          tok=  44  pos= 121
-      accessor       'set'             Identifier          tok=  47  pos= 126
+      get            'get'             Identifier          tok=  44  pos= 121
+      ,              ','               OpComma             tok=  45  pos= 124
+      set            'set'             Identifier          tok=  47  pos= 126
     member           'member'          KWMember            tok=  50  pos= 138
     val              'val'             KWVal               tok=  52  pos= 145
     access           'internal'        KWInternal          tok=  54  pos= 149
@@ -28,5 +29,5 @@ TypeDefn.Class:
     =                '='               OpEquality          tok=  58  pos= 167
       Const          '42'              NumInt32            tok=  60  pos= 169
       with           'with'            KWWith              tok=  62  pos= 172
-      accessor       'get'             Identifier          tok=  64  pos= 177
+      get            'get'             Identifier          tok=  64  pos= 177
   end                'end'             KWEnd               tok=  67  pos= 185

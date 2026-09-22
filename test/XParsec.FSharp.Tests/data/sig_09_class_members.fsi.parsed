@@ -79,8 +79,9 @@ namespace            'namespace'       KWNamespace         tok=   0  pos=   0
           NamedType:
             Ident    'int'             Identifier          tok=  95  pos= 264
           with       'with'            KWWith              tok=  97  pos= 268
-          get/set    'get'             Identifier          tok=  99  pos= 273
-          set/get    'set'             Identifier          tok= 102  pos= 278
+          get        'get'             Identifier          tok=  99  pos= 273
+          ,          ','               OpComma             tok= 100  pos= 276
+          set        'set'             Identifier          tok= 102  pos= 278
         InterfaceSpec:
           interface  'interface'       KWInterface         tok= 106  pos= 287
           NamedType:

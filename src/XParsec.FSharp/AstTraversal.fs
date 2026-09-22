@@ -50,6 +50,28 @@ let inline walkAccessOpt (visitor: AstVisitor<'T>) (access: Access<'T> voption) 
     | ValueSome a -> walkAccess visitor a
     | ValueNone -> ()
 
+let walkAccessor (visitor: AstVisitor<'T>) (label: string) (Accessor(access, accessorToken)) : unit =
+    walkAccessOpt visitor access
+    visitor.VisitToken label accessorToken
+
+let walkTrailingAccessorOpt (visitor: AstVisitor<'T>) (label: string) (trailing: TrailingAccessor<'T> voption) : unit =
+    match trailing with
+    | ValueSome(TrailingAccessor(comma, accessor)) ->
+        visitor.VisitToken "," comma
+        walkAccessor visitor label accessor
+    | ValueNone -> ()
+
+let walkWithClause (visitor: AstVisitor<'T>) (clause: WithClause<'T>) : unit =
+    match clause with
+    | WithClause.GetFirst(withToken = withTok; getter = getter; setter = setter) ->
+        visitor.VisitToken "with" withTok
+        walkAccessor visitor "get" getter
+        walkTrailingAccessorOpt visitor "set" setter
+    | WithClause.SetFirst(withToken = withTok; setter = setter; getter = getter) ->
+        visitor.VisitToken "with" withTok
+        walkAccessor visitor "set" setter
+        walkTrailingAccessorOpt visitor "get" getter
+
 let parenKind lParen =
     match lParen with
     | ParenKind.Paren t -> "ParenBlock", t
@@ -764,7 +786,7 @@ and walkBinding (visitor: AstVisitor<'T>) (binding: Binding<'T>) : unit =
     // declaration wrapper and on the binding record.
     visitTokenOpt visitor "inline" binding.inlineToken
     visitTokenOpt visitor "mutable" binding.mutableToken
-    visitTokenOpt visitor "access" binding.access
+    walkAccessOpt visitor binding.access
 
     walkPat visitor binding.pattern
 
@@ -1695,14 +1717,11 @@ and walkMemberSig (visitor: AstVisitor<'T>) (sign: MemberSig<'T>) : unit =
         walkIdentOrOp visitor ident
         visitor.VisitToken ":" colon
         walkCurriedSig visitor sigType
-    | MemberSig.PropSig(ident, _, colon, sigType, withTok, (first, second)) ->
+    | MemberSig.PropSig(ident, _, colon, sigType, withClause) ->
         walkIdentOrOp visitor ident
         visitor.VisitToken ":" colon
         walkCurriedSig visitor sigType
-        visitor.VisitToken "with" withTok
-        visitor.VisitToken "get/set" first
-
-        visitTokenOpt visitor "set/get" second
+        walkWithClause visitor withClause
 
 and walkMethodOrPropDefn (visitor: AstVisitor<'T>) (defn: MethodOrPropDefn<'T>) : unit =
     match defn with
@@ -1726,7 +1745,7 @@ and walkMethodOrPropDefn (visitor: AstVisitor<'T>) (defn: MethodOrPropDefn<'T>) 
             walkBinding visitor binding
     | MethodOrPropDefn.AutoProperty(valTok, access, ident, returnType, eq, expr, withClause) ->
         visitor.VisitToken "val" valTok
-        visitTokenOpt visitor "access" access
+        walkAccessOpt visitor access
         visitor.VisitToken "ident" ident
 
         match returnType with
@@ -1740,11 +1759,7 @@ and walkMethodOrPropDefn (visitor: AstVisitor<'T>) (defn: MethodOrPropDefn<'T>) 
         walkExpr visitor expr
 
         match withClause with
-        | ValueSome struct (withTok, acc1, acc2) ->
-            visitor.VisitToken "with" withTok
-            visitor.VisitToken "accessor" acc1
-
-            visitTokenOpt visitor "accessor" acc2
+        | ValueSome clause -> walkWithClause visitor clause
         | ValueNone -> ()
 
         visitor.ExitSection ""
@@ -1895,7 +1910,7 @@ let walkTypeName (visitor: AstVisitor<'T>) (typeName: TypeName<'T>) : unit =
         typeName
 
     walkAttributesOpt visitor attrs
-    visitTokenOpt visitor "access" access
+    walkAccessOpt visitor access
 
     match prefixTypars with
     | ValueSome(PrefixTypars.Single typar) ->
@@ -2031,10 +2046,11 @@ let walkObjectModelBody (visitor: AstVisitor<'T>) (body: ObjectModelBody<'T>) : 
 
 let walkTypeDefn (visitor: AstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
     match typeDefn with
-    | TypeDefn.Abbrev(typeName, equals, typ, ext) ->
+    | TypeDefn.Abbrev(typeName, equals, representationAccess, typ, ext) ->
         visitor.EnterSection "TypeDefn.Abbrev"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.EnterSection ""
         walkType visitor typ
         visitor.ExitSection ""
@@ -2052,10 +2068,11 @@ let walkTypeDefn (visitor: AstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
         | ValueNone -> ()
 
         visitor.ExitSection "TypeDefn.Abbrev"
-    | TypeDefn.Union(typeName, equals, cases, _, ext) ->
+    | TypeDefn.Union(typeName, equals, representationAccess, cases, _, ext) ->
         visitor.EnterSection "TypeDefn.Union"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.EnterSection ""
 
         for (UnionTypeCase(attrs, data)) in cases do
@@ -2101,10 +2118,11 @@ let walkTypeDefn (visitor: AstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
         | ValueNone -> ()
 
         visitor.ExitSection "TypeDefn.Union"
-    | TypeDefn.Record(typeName, equals, lBrace, fields, rBrace, ext) ->
+    | TypeDefn.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext) ->
         visitor.EnterSection "TypeDefn.Record"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.VisitToken "{" lBrace
         visitor.EnterSection ""
 
@@ -2112,7 +2130,7 @@ let walkTypeDefn (visitor: AstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
             visitor.EnterSection "Field"
             walkAttributesOpt visitor attrs
             visitTokenOpt visitor "mutable" mutableTok
-            visitTokenOpt visitor "access" access
+            walkAccessOpt visitor access
             visitor.VisitToken "ident" id
             visitor.VisitToken ":" colon
             walkType visitor typ
@@ -2134,10 +2152,11 @@ let walkTypeDefn (visitor: AstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
         | ValueNone -> ()
 
         visitor.ExitSection "TypeDefn.Record"
-    | TypeDefn.Enum(typeName, equals, cases, _) ->
+    | TypeDefn.Enum(typeName, equals, representationAccess, cases, _) ->
         visitor.EnterSection "TypeDefn.Enum"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.EnterSection ""
 
         for (EnumTypeCase(attrs, id, eq, value)) in cases do
@@ -2505,10 +2524,11 @@ let walkTypeExtensionElementsSignature (visitor: AstVisitor<'T>) (ext: TypeExten
 
 let walkTypeSignature (visitor: AstVisitor<'T>) (typeSig: TypeSignature<'T>) : unit =
     match typeSig with
-    | TypeSignature.Abbrev(typeName, equals, typ, ext) ->
+    | TypeSignature.Abbrev(typeName, equals, representationAccess, typ, ext) ->
         visitor.EnterSection "TypeSig.Abbrev"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.EnterSection ""
         walkType visitor typ
         visitor.ExitSection ""
@@ -2518,10 +2538,11 @@ let walkTypeSignature (visitor: AstVisitor<'T>) (typeSig: TypeSignature<'T>) : u
         | ValueNone -> ()
 
         visitor.ExitSection "TypeSig.Abbrev"
-    | TypeSignature.Union(typeName, equals, cases, ext) ->
+    | TypeSignature.Union(typeName, equals, representationAccess, cases, ext) ->
         visitor.EnterSection "TypeSig.Union"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.EnterSection ""
 
         for (UnionTypeCase(attrs, data)) in cases do
@@ -2537,10 +2558,11 @@ let walkTypeSignature (visitor: AstVisitor<'T>) (typeSig: TypeSignature<'T>) : u
         | ValueNone -> ()
 
         visitor.ExitSection "TypeSig.Union"
-    | TypeSignature.Record(typeName, equals, lBrace, fields, rBrace, ext) ->
+    | TypeSignature.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext) ->
         visitor.EnterSection "TypeSig.Record"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.VisitToken "{" lBrace
         visitor.EnterSection ""
 
@@ -2548,7 +2570,7 @@ let walkTypeSignature (visitor: AstVisitor<'T>) (typeSig: TypeSignature<'T>) : u
             visitor.EnterSection "Field"
             walkAttributesOpt visitor attrs
             visitTokenOpt visitor "mutable" mutableTok
-            visitTokenOpt visitor "access" access
+            walkAccessOpt visitor access
             visitor.VisitToken "ident" id
             visitor.VisitToken ":" colon
             walkType visitor typ
@@ -2562,10 +2584,11 @@ let walkTypeSignature (visitor: AstVisitor<'T>) (typeSig: TypeSignature<'T>) : u
         | ValueNone -> ()
 
         visitor.ExitSection "TypeSig.Record"
-    | TypeSignature.Enum(typeName, equals, cases) ->
+    | TypeSignature.Enum(typeName, equals, representationAccess, cases) ->
         visitor.EnterSection "TypeSig.Enum"
         walkTypeName visitor typeName
         visitor.VisitToken "=" equals
+        walkAccessOpt visitor representationAccess
         visitor.EnterSection ""
 
         for (EnumTypeCase(attrs, id, eq, value)) in cases do

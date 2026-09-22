@@ -27,7 +27,7 @@ TypeDefn.Anon:
     =                '='               OpEquality          tok=  47  pos= 228
       Const          '42'              NumInt32            tok=  49  pos= 230
       with           'with'            KWWith              tok=  51  pos= 233
-      accessor       'get'             Identifier          tok=  53  pos= 238
+      get            'get'             Identifier          tok=  53  pos= 238
   end                <virt>            KWEnd               tok=virt  pos= 306
 TypeDefn.Anon:
   TypeName           'D3'              Identifier          tok=  60  pos= 311
@@ -41,8 +41,9 @@ TypeDefn.Anon:
     =                '='               OpEquality          tok=  73  pos= 336
       Const          '0'               NumInt32            tok=  75  pos= 338
       with           'with'            KWWith              tok=  77  pos= 340
-      accessor       'get'             Identifier          tok=  79  pos= 345
-      accessor       'set'             Identifier          tok=  82  pos= 350
+      get            'get'             Identifier          tok=  79  pos= 345
+      ,              ','               OpComma             tok=  80  pos= 348
+      set            'set'             Identifier          tok=  82  pos= 350
   end                <virt>            KWEnd               tok=virt  pos= 404
 TypeDefn.Anon:
   TypeName           'D4'              Identifier          tok=  89  pos= 409
@@ -56,8 +57,9 @@ TypeDefn.Anon:
     =                '='               OpEquality          tok= 102  pos= 434
       Const          '0'               NumInt32            tok= 104  pos= 436
       with           'with'            KWWith              tok= 106  pos= 438
-      accessor       'set'             Identifier          tok= 108  pos= 443
-      accessor       'get'             Identifier          tok= 111  pos= 448
+      set            'set'             Identifier          tok= 108  pos= 443
+      ,              ','               OpComma             tok= 109  pos= 446
+      get            'get'             Identifier          tok= 111  pos= 448
   end                <virt>            KWEnd               tok=virt  pos= 482
 TypeDefn.Anon:
   TypeName           'D5'              Identifier          tok= 118  pos= 487
@@ -72,8 +74,9 @@ TypeDefn.Anon:
     =                '='               OpEquality          tok= 133  pos= 519
       Const          '0'               NumInt32            tok= 135  pos= 521
       with           'with'            KWWith              tok= 137  pos= 523
-      accessor       'get'             Identifier          tok= 139  pos= 528
-      accessor       'set'             Identifier          tok= 142  pos= 533
+      get            'get'             Identifier          tok= 139  pos= 528
+      ,              ','               OpComma             tok= 140  pos= 531
+      set            'set'             Identifier          tok= 142  pos= 533
   end                <virt>            KWEnd               tok=virt  pos= 588
 TypeDefn.Anon:
   TypeName           'Base'            Identifier          tok= 149  pos= 593
@@ -87,8 +90,9 @@ TypeDefn.Anon:
     NamedType:
       Ident          'string'          Identifier          tok= 161  pos= 618
     with             'with'            KWWith              tok= 163  pos= 625
-    get/set          'get'             Identifier          tok= 165  pos= 630
-    set/get          'set'             Identifier          tok= 168  pos= 635
+    get              'get'             Identifier          tok= 165  pos= 630
+    ,                ','               OpComma             tok= 166  pos= 633
+    set              'set'             Identifier          tok= 168  pos= 635
     default          'default'         KWDefault           tok= 171  pos= 643
     val              'val'             KWVal               tok= 173  pos= 651
     ident            'P'               Identifier          tok= 175  pos= 655
@@ -98,8 +102,9 @@ TypeDefn.Anon:
         Text         'base'            StringFragment      tok= 180  pos= 660
                      '"'               StringClose         tok= 181  pos= 664
       with           'with'            KWWith              tok= 183  pos= 666
-      accessor       'get'             Identifier          tok= 185  pos= 671
-      accessor       'set'             Identifier          tok= 188  pos= 676
+      get            'get'             Identifier          tok= 185  pos= 671
+      ,              ','               OpComma             tok= 186  pos= 674
+      set            'set'             Identifier          tok= 188  pos= 676
   end                <virt>            KWEnd               tok=virt  pos= 733
 TypeDefn.Anon:
   TypeName           'Derived'         Identifier          tok= 195  pos= 738
@@ -121,6 +126,7 @@ TypeDefn.Anon:
         Text         'derived'         StringFragment      tok= 218  pos= 791
                      '"'               StringClose         tok= 219  pos= 798
       with           'with'            KWWith              tok= 221  pos= 800
-      accessor       'get'             Identifier          tok= 223  pos= 805
-      accessor       'set'             Identifier          tok= 226  pos= 810
+      get            'get'             Identifier          tok= 223  pos= 805
+      ,              ','               OpComma             tok= 224  pos= 808
+      set            'set'             Identifier          tok= 226  pos= 810
   end                <virt>            KWEnd               tok=virt  pos= 814

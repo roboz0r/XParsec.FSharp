@@ -284,7 +284,7 @@ module TypeSignature =
         parser {
             let! attrs = opt Attributes.parse
             let! mut = opt pMutable
-            let! acc = opt pAccessModifier
+            let! acc = opt Access.parse
             let! id = pIdent
             let! col = pColon
             let! t = withContext OffsideContext.SeqBlock Type.parse
@@ -322,7 +322,8 @@ module TypeSignature =
                 return TypeSignature.AbstractType(typeName)
             else
                 let! equals = pEquals
-                let! next = peekNextSyntaxToken
+
+                let! next = TypeDefn.pBodyStart
 
                 match next.Token with
                 | Token.KWStruct ->
@@ -414,26 +415,29 @@ module TypeSignature =
                     return TypeSignature.Anon(typeName, equals, beginTok, elems, endTok)
 
                 | Token.KWLBrace ->
+                    let! representationAccess = TypeDefn.pRepresentationAccess
                     let! lBrace = pLBrace
                     let! fields = many1 pRecordField
                     let! rBrace = pRBrace
 
                     let! ext = TypeExtensionElementsSignature.parseOptAt next
 
-                    return TypeSignature.Record(typeName, equals, lBrace, fields, rBrace, ext)
+                    return TypeSignature.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext)
 
                 | Token.OpBar ->
+                    let! representationAccess = TypeDefn.pRepresentationAccess
+
                     return!
                         choiceL
                             [
                                 parser {
                                     let! cases, _bars = EnumTypeCases.parse
-                                    return TypeSignature.Enum(typeName, equals, cases)
+                                    return TypeSignature.Enum(typeName, equals, representationAccess, cases)
                                 }
                                 parser {
                                     let! cases, _bars = UnionTypeCases.parse
                                     let! ext = TypeExtensionElementsSignature.parseOptAt next
-                                    return TypeSignature.Union(typeName, equals, cases, ext)
+                                    return TypeSignature.Union(typeName, equals, representationAccess, cases, ext)
                                 }
                             ]
                             "Union or Enum signature"
@@ -443,6 +447,7 @@ module TypeSignature =
                         choiceL
                             [
                                 parser {
+                                    let! representationAccess = TypeDefn.pRepresentationAccess
                                     let! cases, _bars = UnionTypeCases.parse
 
                                     match cases.Length with
@@ -454,13 +459,15 @@ module TypeSignature =
                                         return! fail errSingleNullaryUnionCaseIsAbbrev
                                     | _ ->
                                         let! ext = TypeExtensionElementsSignature.parseOptAt next
-                                        return TypeSignature.Union(typeName, equals, cases, ext)
+                                        return TypeSignature.Union(typeName, equals, representationAccess, cases, ext)
                                 }
                                 parser {
+                                    // Abbreviation: `type T = [access] TargetType`
+                                    let! representationAccess = TypeDefn.pRepresentationAccess
                                     let! t = TypeDefn.parseAbbrevRhs
                                     // Type abbreviations require an explicit 'with' to define members (e.g. `type T = int with member ...`).
                                     let! ext = opt TypeExtensionElementsSignature.parse
-                                    return TypeSignature.Abbrev(typeName, equals, t, ext)
+                                    return TypeSignature.Abbrev(typeName, equals, representationAccess, t, ext)
                                 }
                             ]
                             "Union or Type abbreviation"

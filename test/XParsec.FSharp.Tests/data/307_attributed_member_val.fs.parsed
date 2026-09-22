@@ -35,14 +35,16 @@ TypeDefn.Anon:
       Array     '[|'              KWLArrayBracket     tok=  56  pos= 231
                 '|]'              KWRArrayBracket     tok=  57  pos= 233
       with      'with'            KWWith              tok=  59  pos= 236
-      accessor  'get'             Identifier          tok=  61  pos= 241
-      accessor  'set'             Identifier          tok=  64  pos= 246
+      get       'get'             Identifier          tok=  61  pos= 241
+      ,         ','               OpComma             tok=  62  pos= 244
+      set       'set'             Identifier          tok=  64  pos= 246
     member      'member'          KWMember            tok=  68  pos= 255
     val         'val'             KWVal               tok=  70  pos= 262
     ident       'Determinis...'   Identifier          tok=  72  pos= 266
     =           '='               OpEquality          tok=  74  pos= 280
       Const     'false'           KWFalse             tok=  76  pos= 282
       with      'with'            KWWith              tok=  78  pos= 288
-      accessor  'get'             Identifier          tok=  80  pos= 293
-      accessor  'set'             Identifier          tok=  83  pos= 298
+      get       'get'             Identifier          tok=  80  pos= 293
+      ,         ','               OpComma             tok=  81  pos= 296
+      set       'set'             Identifier          tok=  83  pos= 298
   end           <virt>            KWEnd               tok=virt  pos= 302

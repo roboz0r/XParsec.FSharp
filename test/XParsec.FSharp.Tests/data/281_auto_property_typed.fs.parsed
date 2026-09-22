@@ -21,8 +21,9 @@ TypeDefn.Anon:
                      '['               KWLBracket          tok=  27  pos=  58
                      ']'               KWRBracket          tok=  28  pos=  59
       with           'with'            KWWith              tok=  30  pos=  61
-      accessor       'get'             Identifier          tok=  32  pos=  66
-      accessor       'set'             Identifier          tok=  35  pos=  71
+      get            'get'             Identifier          tok=  32  pos=  66
+      ,              ','               OpComma             tok=  33  pos=  69
+      set            'set'             Identifier          tok=  35  pos=  71
     member           'member'          KWMember            tok=  38  pos=  79
     val              'val'             KWVal               tok=  40  pos=  86
     ident            'Name'            Identifier          tok=  42  pos=  90
@@ -30,8 +31,9 @@ TypeDefn.Anon:
       StringLiteral  '"'               StringOpen          tok=  46  pos=  97
                      '"'               StringClose         tok=  47  pos=  98
       with           'with'            KWWith              tok=  49  pos= 100
-      accessor       'get'             Identifier          tok=  51  pos= 105
-      accessor       'set'             Identifier          tok=  54  pos= 110
+      get            'get'             Identifier          tok=  51  pos= 105
+      ,              ','               OpComma             tok=  52  pos= 108
+      set            'set'             Identifier          tok=  54  pos= 110
     member           'member'          KWMember            tok=  57  pos= 118
     self             '_'               Wildcard            tok=  59  pos= 125
     Pat.NamedSimple  'Bar'             Identifier          tok=  61  pos= 127

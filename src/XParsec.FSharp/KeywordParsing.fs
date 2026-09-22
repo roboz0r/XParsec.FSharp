@@ -27,13 +27,6 @@ module internal Keywords =
         let err: ErrorType<PositionedToken, ParseState> = Message msg
         nextSyntaxIdentifierL err
 
-    let isAccessModifier (token: SyntaxToken) =
-        match token.Token with
-        | Token.KWPrivate
-        | Token.KWPublic
-        | Token.KWInternal -> true
-        | _ -> false
-
     let pMutable: KWParser = mkKW Token.KWMutable "Expected 'mutable' keyword"
 
     let pWith: KWParser = mkKW Token.KWWith "Expected 'with' keyword"
@@ -43,9 +36,6 @@ module internal Keywords =
     let pElse: KWParser = mkKW Token.KWElse "Expected 'else' keyword"
 
     let pDo: KWParser = mkKW Token.KWDo "Expected 'do' keyword"
-
-    let pAccessModifier: KWParser =
-        mkKWPred isAccessModifier "Expected access modifier (private, public or internal)"
 
     let pEquals: KWParser = mkKW Token.OpEquality "Expected '=' symbol"
 

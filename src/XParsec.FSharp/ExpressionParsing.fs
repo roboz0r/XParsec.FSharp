@@ -245,7 +245,7 @@ module Binding =
 
         parser {
             let! inlineTok = opt pInline
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! identOrOp = IdentOrOp.parse
             do! notFollowedByL pNamedFieldCtorPatStart "named-field destructure"
             let! typarDefns = opt TyparDefns.parse
@@ -282,7 +282,7 @@ module Binding =
 
         parser {
             let! mut = opt pMutableTok
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! pat = Pat.parseHead
             let! typarDefns = opt TyparDefns.parse
             let! returnType = opt ReturnType.parse

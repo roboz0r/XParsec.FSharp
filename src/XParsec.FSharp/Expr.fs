@@ -2,6 +2,13 @@ namespace rec XParsec.FSharp.Parser
 
 open XParsec.FSharp
 
+// Represents: access := private | internal | public
+[<RequireQualifiedAccess>]
+type Access<'T> =
+    | Private of privateToken: 'T
+    | Internal of internalToken: 'T
+    | Public of publicToken: 'T
+
 // 13. Custom Attributes and Reflection
 // Represents: attribute-target
 [<RequireQualifiedAccess>]
@@ -210,7 +217,7 @@ type Binding<'T> =
         attributes: Attributes<'T> voption
         inlineToken: 'T voption
         mutableToken: 'T voption
-        access: 'T voption
+        access: Access<'T> voption
         /// For values: the binding pattern (Pat.NamedSimple, Pat.Tuple, etc.)
         /// For functions with a plain name: Pat.NamedSimple
         /// For functions with an operator name: Pat.Op
@@ -510,7 +517,7 @@ and Rules<'T> = | Rules of leadingBar: 'T voption * rules: ImArr<Rule<'T>> * bar
 type PrimaryConstrArgs<'T> =
     | PrimaryConstrArgs of
         attributes: Attributes<'T> voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         lParen: 'T *
         // Should be simple-pat, but we allow full patterns here for better error recovery and to simplify the parser; the compiler will report an error if the pattern is not simple.
         pat: Pat<'T> voption *
@@ -526,7 +533,7 @@ type PrefixTypars<'T> =
 type TypeName<'T> =
     | TypeName of
         attributes: Attributes<'T> voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         prefixTypars: PrefixTypars<'T> voption *
         ident: LongIdent<'T> *
         typarDefns: TyparDefns<'T> voption *
@@ -545,6 +552,19 @@ type CurriedSig<'T> = | CurriedSig of args: ImArr<struct (ArgsSpec<'T> * 'T)> * 
 
 type UncurriedSig<'T> = | UncurriedSig of args: ArgsSpec<'T> * arrow: 'T * returnType: Type<'T>
 
+/// A `get` or `set` accessor with its optional access modifier (e.g. `private set`).
+type Accessor<'T> = | Accessor of access: Access<'T> voption * accessorToken: 'T
+
+/// The second accessor in a `with get, set` clause, together with its separating comma.
+type TrailingAccessor<'T> = | TrailingAccessor of comma: 'T * accessor: Accessor<'T>
+
+/// A property's accessor clause: `with get`, `with set`, `with get, set`, or `with set, get`.
+/// The case records which accessor was written first; the trailing accessor holds the other.
+[<RequireQualifiedAccess>]
+type WithClause<'T> =
+    | GetFirst of withToken: 'T * getter: Accessor<'T> * setter: TrailingAccessor<'T> voption
+    | SetFirst of withToken: 'T * setter: Accessor<'T> * getter: TrailingAccessor<'T> voption
+
 [<RequireQualifiedAccess>]
 type MemberSig<'T> =
     // `ident` is IdentOrOp so member/abstract sigs can use operator names: `static member (+): T * T -> T`.
@@ -554,8 +574,7 @@ type MemberSig<'T> =
         typarDefns: TyparDefns<'T> voption *
         colon: 'T *
         sign: CurriedSig<'T> *
-        withToken: 'T *
-        getSet: ('T * 'T voption) // (get, option<set>) or (set, option<get>)
+        withClause: WithClause<'T>
 
 // Represents: method-or-prop-defn
 [<RequireQualifiedAccess>]
@@ -570,12 +589,12 @@ type MethodOrPropDefn<'T> =
         ands: ImArr<'T>
     | AutoProperty of
         valToken: 'T *
-        access: 'T voption *
+        access: Access<'T> voption *
         ident: 'T *
         returnType: ReturnType<'T> voption *
         equals: 'T *
         expr: Expr<'T> *
-        withClause: struct ('T * 'T * 'T voption) voption // with, get/set, optional comma and other get/set
+        withClause: WithClause<'T> voption
     | AbstractSignature of sign: MemberSig<'T>
 
 [<RequireQualifiedAccess>]
@@ -622,20 +641,20 @@ type MemberDefn<'T> =
         staticToken: 'T voption *
         keyword: MemberKeyword<'T> *
         inlineToken: 'T voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         defn: MethodOrPropDefn<'T>
     | Value of
         attributes: Attributes<'T> voption *
         staticToken: 'T voption *
         valToken: 'T *
         mutableToken: 'T voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         ident: 'T *
         colon: 'T *
         typ: Type<'T>
     | AdditionalConstructor of
         attributes: Attributes<'T> voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         newToken: 'T *
         pat: Pat<'T> *
         asDefn: AsDefn<'T> voption *
@@ -696,7 +715,7 @@ type RecordField<'T> =
     | RecordField of
         attributes: Attributes<'T> voption *
         mutableToken: 'T voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         ident: 'T *
         colon: 'T *
         typ: Type<'T>
@@ -734,10 +753,16 @@ type DelegateSig<'T> = | DelegateSig of delegateToken: 'T * ofToken: 'T * sign: 
 // Represents: type-defn, the top-level definition
 [<RequireQualifiedAccess>]
 type TypeDefn<'T> =
-    | Abbrev of typeName: TypeName<'T> * equals: 'T * typ: Type<'T> * extensions: TypeExtensionElements<'T> voption
+    | Abbrev of
+        typeName: TypeName<'T> *
+        equals: 'T *
+        representationAccess: Access<'T> voption *
+        typ: Type<'T> *
+        extensions: TypeExtensionElements<'T> voption
     | Record of
         typeName: TypeName<'T> *
         equals: 'T *
+        representationAccess: Access<'T> voption *
         lBrace: 'T *
         fields: RecordFields<'T> *
         rBrace: 'T *
@@ -745,6 +770,7 @@ type TypeDefn<'T> =
     | Union of
         typeName: TypeName<'T> *
         equals: 'T *
+        representationAccess: Access<'T> voption *
         cases: UnionTypeCases<'T> *
         bars: ImArr<'T> *
         extensions: TypeExtensionElements<'T> voption
@@ -773,7 +799,12 @@ type TypeDefn<'T> =
         body: ObjectModelBody<'T> *
         endToken: 'T
     | Interface of typeName: TypeName<'T> * equals: 'T * interfaceToken: 'T * body: ObjectModelBody<'T> * endToken: 'T
-    | Enum of typeName: TypeName<'T> * equals: 'T * cases: EnumTypeCases<'T> * bars: ImArr<'T>
+    | Enum of
+        typeName: TypeName<'T> *
+        equals: 'T *
+        representationAccess: Access<'T> voption *
+        cases: EnumTypeCases<'T> *
+        bars: ImArr<'T>
     | Delegate of typeName: TypeName<'T> * equals: 'T * sign: DelegateSig<'T>
     | TypeExtension of typeName: TypeName<'T> * elements: TypeExtensionElements<'T>
     | AbstractType of typeName: TypeName<'T>
