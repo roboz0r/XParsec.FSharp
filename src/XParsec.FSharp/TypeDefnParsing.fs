@@ -420,20 +420,38 @@ module AdditionalConstrExpr =
         parser {
             let! lBrace = pLBrace
 
-            // Optional base constructor call: `inherit Type(...)`
-            let! inherits =
-                opt (
-                    parser {
-                        let! inh = pInherit
-                        let! t = Type.parse
-                        let! e = opt Expr.parseAtomic
-                        return ClassInheritsDecl.ClassInheritsDecl(inh, t, e)
-                    }
-                )
+            // Optional base constructor call: `inherit Type(...)`. The clause opens the body's
+            // block, so a field initializer on the next line at the same indent is a block
+            // item rather than a postfix type suffix (`B x`).
+            let pInherits =
+                parser {
+                    let! inh = pInherit
+                    let! t = Type.parse
+
+                    // The argument is a high-precedence application (`B(9)`, no whitespace),
+                    // as fsc reads it, so a token on the next line is a field initializer.
+                    let! e =
+                        fun (reader: Reader<PositionedToken, ParseState, _>) ->
+                            match reader.Peek() with
+                            | ValueSome pt when pt.Token = Token.KWLParen -> opt Expr.parseAtomic reader
+                            | _ -> preturn ValueNone reader
+
+                    // `{ inherit B(9); x = 1 }`: the `;` between the clause and the first initializer.
+                    let! _sep = opt pSemi
+                    return ClassInheritsDecl.ClassInheritsDecl(inh, t, e)
+                }
 
             // Parses 0 or more field initializers (`field = expr`) separated by `;` or newlines.
             // Using 0+ matches allows inherit-only blocks like `{ inherit Base() }`.
-            let! inits, _seps = withContext OffsideContext.SeqBlock (sepBy FieldInitializer.parse pCtorSepVirt)
+            let! inherits, (inits, _seps) =
+                withContext
+                    OffsideContext.SeqBlock
+                    (parser {
+                        let! inherits = opt pInherits
+                        let! inits = sepBy FieldInitializer.parse pCtorSepVirt
+                        return inherits, inits
+                    })
+
             let! _trailingSep = opt pCtorSepVirt
             let! rBrace = pRBrace
             return AdditionalConstrInitExpr.Explicit(lBrace, inherits, inits, rBrace)
