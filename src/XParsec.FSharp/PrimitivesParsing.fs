@@ -241,6 +241,13 @@ module LongIdent =
 
 [<RequireQualifiedAccess>]
 module Access =
+
+    let tokenOf (access: Access<'T>) : 'T =
+        match access with
+        | Access.Private t
+        | Access.Internal t
+        | Access.Public t -> t
+
     let private errExpectedAccess: ErrorType<PositionedToken, ParseState> =
         Message "Expected access modifier (private, public or internal)"
 
