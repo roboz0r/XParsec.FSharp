@@ -227,7 +227,7 @@ let tests =
                             let lexed = lexString prefix
                             let tokens = List.ofSeq lexed.Tokens
 
-                            Expect.equal lexed.Input prefix "the stream carries the source it was built from"
+                            Expect.equal lexed.Input prefix "the stream retains the source it was built from"
 
                             match tokens with
                             | [] -> failtestf "%A lexed to no tokens, not even EOF" prefix

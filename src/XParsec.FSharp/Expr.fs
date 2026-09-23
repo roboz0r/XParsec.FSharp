@@ -107,7 +107,7 @@ type Type<'T> =
     | SkipsTokens of skippedTokens: ImArr<'T>
 
 // The species keyword on an external type declaration: `class` or `interface`,
-// carried on both `Type.ILIntrinsic` (`(# class "…" #)`) and `TypeSignature.Extern`
+// stored on both `Type.ILIntrinsic` (`(# class "…" #)`) and `TypeSignature.Extern`
 // (`type X = extern class` / `type X = extern interface with …`). A two-case tag
 // (rather than a bare token) so consumers dispatch on the species by construction
 // instead of re-reading the token kind. On `TypeSignature.Extern`, `Interface`
@@ -844,7 +844,7 @@ type Constant<'T> =
     /// e.g., `10<kg>` or `9.8<m/s^2>`
     | MeasuredLiteral of value: 'T * lAngle: 'T * measure: Measure<'T> * rAngle: 'T
 
-/// The kind of string literal, carrying the opening token.
+/// The kind of string literal, with the opening token as its payload.
 and [<RequireQualifiedAccess>] StringKind<'T> =
     /// Regular string: "..."
     | String of 'T

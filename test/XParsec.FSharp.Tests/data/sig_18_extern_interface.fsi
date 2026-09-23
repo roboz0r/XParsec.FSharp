@@ -11,9 +11,9 @@ type disposable = extern interface with
 type equatable<'T> = extern interface with
     abstract member Equals: 'T -> bool
 
-// Disambiguation: a bare `extern with interface <Type>` carries an interface-
+// Disambiguation: a bare `extern with interface <Type>` holds an interface-
 // implementation MEMBER (the `interface` has a type name), NOT an `extern interface`
-// tag — so it stays an untagged `extern`.
+// tag — so it remains an untagged `extern`.
 type Iterable<'T> = extern with
     interface System.Collections.Generic.IEnumerable<'T>
     member GetEnumerator: unit -> System.Collections.Generic.IEnumerator<'T>

@@ -87,7 +87,7 @@ module Parsing =
             else
                 lexed.Tokens.LengthM - 1<_> // EOF, will be handled gracefully by nextSyntaxToken
 
-        // Create a slice of just the #if directive line, carrying the absolute start index
+        // Create a slice of just the #if directive line, retaining the absolute start index
         // so the IfExpr parser can compute absolute token indices for symbol name extraction.
         let sliceLen = (nextLineTokenIndex * 1< / token>) - reader.Index
         let sliceReader = reader.Slice(0, sliceLen, { AbsoluteStart = reader.Index })
@@ -787,7 +787,7 @@ module Parsing =
             | ValueNone -> ()
 
             // The substitute stands where `diagToken` does; past end of input that is
-            // offset 0, which is what `nowhere` carries.
+            // offset 0, which is the offset of `nowhere`.
             let pt = mkVirtualPT t diagToken.StartIndex
 
             ParseState.ifTrace reader.State (fun tc -> tc.VirtualToken(pt.Token, pt.StartIndex))
@@ -889,7 +889,7 @@ module Parsing =
         | Token.VerbatimEscapeQuote -> StringPart.Text t
         | Token.FormatPlaceholder -> StringPart.FormatSpecifier t
         // A malformed `%` (or run of `%`) in a plain / IL-intrinsic string is not a
-        // valid placeholder, so it is literal text — carried verbatim, NOT an error.
+        // valid placeholder, so it is literal text — kept verbatim, NOT an error.
         // The lexer scans `%` in every string flavor, so this is the one place to
         // keep it; only a printf-family consumer would interpret format validity.
         | Token.InvalidFormatPlaceholder
@@ -1208,7 +1208,7 @@ module Parsing =
             | _ -> false
 
     /// THE placeholder shape `recoverWith` hands back: the node's own "missing" case when
-    /// the skip swallowed nothing, and its token-carrying case when it swallowed something,
+    /// the skip swallowed nothing, and its case holding the skipped tokens when it swallowed something,
     /// so the skipped tokens survive into the tree instead of vanishing from it.
     let missingOrSkipped (missing: 'Parsed) (skipsTokens: ImArr<SyntaxToken> -> 'Parsed) (toks: ImArr<SyntaxToken>) =
         match toks.Length with

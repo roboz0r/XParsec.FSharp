@@ -127,7 +127,7 @@ type TypeSignature<'T> =
         members: TypeExtensionElementsSignature<'T> voption
 
 // Represents: type-signatures := type-signature ... and ... type-signature
-// The first item has no preceding 'and'; subsequent items each carry their 'and' token.
+// The first item has no preceding 'and'; subsequent items each have their 'and' token.
 type TypeSignatures<'T> = | TypeSignatures of first: TypeSignature<'T> * rest: ImArr<'T (* 'and' *) * TypeSignature<'T>>
 
 // Represents: module-signature-element

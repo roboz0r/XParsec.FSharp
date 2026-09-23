@@ -182,7 +182,7 @@ module MethodOrPropDefn =
     // member x.M args = ... (Method)
     // member x.P with get ... (PropWithGetSet)
 
-    /// The placeholder a rejected `get` / `set` binding leaves behind, carrying the tokens
+    /// The placeholder a rejected `get` / `set` binding leaves behind, holding the tokens
     /// skipped past it.
     let private skippedGetSetBinding (at: SyntaxToken) (skipped: ImArr<SyntaxToken>) : Binding<SyntaxToken> =
         {
@@ -208,7 +208,7 @@ module MethodOrPropDefn =
         )
 
     /// `member x.P with get … and set …`. A property written without a `with`
-    /// clause is an implicit get, so a third name is rejected here and the tree carries
+    /// clause is an implicit get, so a third name is rejected here and the tree has
     /// only `get` and `set` in that position.
     let private pGetSetBinding (propIdent: SyntaxToken) attrs : FSParser<Binding<SyntaxToken>> =
         parser {
@@ -1357,7 +1357,7 @@ module TypeDefn =
 
     /// Peeks the token that selects which type body follows the `=`.
     ///
-    /// Record and union representations may carry their own access modifier, so for those
+    /// Record and union representations may have their own access modifier, so for those
     /// the token past the modifier is returned. Other forms return the modifier token itself,
     /// which the abbreviation branch then consumes and diagnoses.
     let pBodyStart: FSParser<SyntaxToken> =

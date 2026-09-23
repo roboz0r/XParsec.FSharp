@@ -189,7 +189,7 @@ type Lexed =
     /// Token `i`'s text, with a backtick-escaped identifier read as the NAME it spells
     /// (`` ``my value`` `` ⇒ `my value`); every other token comes back verbatim, so this
     /// serves wherever `GetTokenString` does. F# emits the bare name to metadata, so a
-    /// consumer that reads a name through this one cannot carry the escape into an identity.
+    /// consumer that reads a name through this one never includes the escape in an identity.
     member this.GetTokenName(i: int<token>) : string =
         let tokens = this.Tokens
 
@@ -2626,7 +2626,7 @@ module Lexing =
         // on `LexBuilder` (token index -> FormatPlaceholder) so semantic
         // analysis / codegen can read the structured spec without re-parsing
         // via `parseFormatSpecifier`. Deferred deliberately: re-parsing a few
-        // short specifier strings on demand is plausibly cheaper than carrying
+        // short specifier strings on demand is plausibly cheaper than storing
         // these records on every lexed token — measure before adding the table.
         // NOTE: any side-table indexed in lockstep with `Tokens` must also be fed by
         // `pFormatSpecifierTokens` below, whose local `addToken` bypasses `appendI`.

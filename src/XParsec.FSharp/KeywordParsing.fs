@@ -96,7 +96,7 @@ module internal Keywords =
     let pDot: KWParser = mkKW Token.OpDot "."
     let pBar: KWParser = mkKW Token.OpBar "|"
 
-    // `<` and `>` carry unique family-ID bits in the Token enum, so the value
+    // `<` and `>` have unique family-ID bits in the Token enum, so the value
     // alone disambiguates them from `<<`, `<=`, `<|`, `>>`, `>=`, etc.
     let pLessThan: KWParser = mkKW Token.OpLessThan "<"
 
