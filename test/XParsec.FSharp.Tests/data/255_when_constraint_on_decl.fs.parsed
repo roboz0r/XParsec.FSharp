@@ -5,6 +5,7 @@ Import:
                      'System'          Identifier          tok=   7  pos=  18
                      'Collection...'   Identifier          tok=   9  pos=  25
                      'Generic'         Identifier          tok=  11  pos=  37
+type                 'type'            KWType              tok=  16  pos=  87
 TypeDefn.Anon:
   TypeName           'MySet'           Identifier          tok=  18  pos=  92
   TyparDefns:

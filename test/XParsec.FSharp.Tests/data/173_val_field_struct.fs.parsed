@@ -1,4 +1,5 @@
 AnonymousModule:
+type                         'type'            KWType              tok=   4  pos=  11
 TypeDefn.Anon:
   [<                         '[<'              KWLAttrBracket      tok=   0  pos=   0
   NamedType:

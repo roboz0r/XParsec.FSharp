@@ -1,5 +1,6 @@
 module         'module'          KWModule            tok=   0  pos=   0
                'Test157'         Identifier          tok=   2  pos=   7
+type           'type'            KWType              tok=   5  pos=  16
 TypeDefn.Union:
   TypeName     'Shape'           Identifier          tok=   7  pos=  21
   =            '='               OpEquality          tok=   9  pos=  27
@@ -35,6 +36,7 @@ TypeDefn.Union:
                'Obsolete'        Identifier          tok=  54  pos= 142
       >]       '>]'              KWRAttrBracket      tok=  55  pos= 150
       Ident    'Point'           Identifier          tok=  57  pos= 153
+type           'type'            KWType              tok=  60  pos= 160
 TypeDefn.Record:
   TypeName     'Config'          Identifier          tok=  62  pos= 165
   =            '='               OpEquality          tok=  64  pos= 172

@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                           'type'            KWType              tok=   8  pos= 219
 TypeDefn.Union:
   TypeName                                     'Repr'            Identifier          tok=  10  pos= 224
   =                                            '='               OpEquality          tok=  12  pos= 229
@@ -19,6 +20,7 @@ TypeDefn.Union:
         NamedType:
           Ident                                'int'             Identifier          tok=  35  pos= 284
         Ident                                  'list'            Identifier          tok=  37  pos= 288
+type                                           'type'            KWType              tok=  39  pos= 293
 TypeDefn.Union:
   TypeName                                     'Defn'            Identifier          tok=  41  pos= 298
   =                                            '='               OpEquality          tok=  43  pos= 303
@@ -35,6 +37,7 @@ TypeDefn.Union:
         NamedType:
           Ident                                'int'             Identifier          tok=  59  pos= 338
         Ident                                  'list'            Identifier          tok=  61  pos= 342
+type                                           'type'            KWType              tok=  63  pos= 347
 TypeDefn.Union:
   TypeName                                     'Decl'            Identifier          tok=  65  pos= 352
   =                                            '='               OpEquality          tok=  67  pos= 357

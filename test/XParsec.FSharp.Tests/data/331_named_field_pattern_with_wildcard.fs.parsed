@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                     'type'            KWType              tok=   7  pos= 177
 TypeDefn.Union:
   TypeName                               'Ctor'            Identifier          tok=   9  pos= 182
   =                                      '='               OpEquality          tok=  11  pos= 187
@@ -56,6 +57,7 @@ FunctionOrValue:
           Arrow                          '->'              OpArrowRight        tok=  79  pos= 299
           Expr:
             Const                        '0'               NumInt32            tok=  81  pos= 302
+type                                     'type'            KWType              tok=  86  pos= 366
 TypeDefn.Union:
   TypeName                               'Wrap'            Identifier          tok=  88  pos= 371
   =                                      '='               OpEquality          tok=  90  pos= 376

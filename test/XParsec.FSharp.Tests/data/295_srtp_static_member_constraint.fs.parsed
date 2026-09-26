@@ -65,6 +65,7 @@ FunctionOrValue:
         Args:
           Ident              'x'               Identifier          tok=  73  pos= 231
           Ident              'y'               Identifier          tok=  75  pos= 233
+type                         'type'            KWType              tok=  78  pos= 236
 TypeDefn.Anon:
   TypeName                   'Comparer'        Identifier          tok=  80  pos= 241
   TyparDefns:

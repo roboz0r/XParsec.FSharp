@@ -40,6 +40,7 @@ Module:
             Const        '1'               NumInt32            tok= 112  pos= 870
                          ']'               KWRBracket          tok= 115  pos= 875
   end                    <virt>            KWEnd               tok=virt  pos= 897
+type                     'type'            KWType              tok= 121  pos= 897
 TypeDefn.Record:
   TypeName               'R'               Identifier          tok= 123  pos= 902
   =                      '='               OpEquality          tok= 125  pos= 904

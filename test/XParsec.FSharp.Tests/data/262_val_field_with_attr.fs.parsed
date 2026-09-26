@@ -5,6 +5,7 @@ Import:
                   'System'          Identifier          tok=   7  pos=  18
                   'Runtime'         Identifier          tok=   9  pos=  25
                   'InteropSer...'   Identifier          tok=  11  pos=  33
+type              'type'            KWType              tok=  26  pos=  96
 TypeDefn.Anon:
   [<              '[<'              KWLAttrBracket      tok=  14  pos=  50
   NamedType:

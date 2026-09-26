@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                                   'type'            KWType              tok=   8  pos= 274
 TypeDefn.Union:
   TypeName                                             'V'               Identifier          tok=  10  pos= 279
   TyparDefns:
@@ -15,6 +16,7 @@ TypeDefn.Union:
       VarType:
         Typar.Named:
                                                        ''T'              TypeParameter       tok=  25  pos= 296
+type                                                   'type'            KWType              tok=  27  pos= 299
 TypeDefn.Record:
   TypeName                                             'R'               Identifier          tok=  29  pos= 304
   =                                                    '='               OpEquality          tok=  31  pos= 306

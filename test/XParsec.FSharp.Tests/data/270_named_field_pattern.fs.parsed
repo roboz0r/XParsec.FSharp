@@ -1,5 +1,6 @@
 module                             'module'          KWModule            tok=   0  pos=   0
                                    'TestNamedF...'   Identifier          tok=   2  pos=   7
+type                               'type'            KWType              tok=   5  pos=  39
 TypeDefn.Union:
   TypeName                         'MyDU'            Identifier          tok=   7  pos=  44
   =                                '='               OpEquality          tok=   9  pos=  49

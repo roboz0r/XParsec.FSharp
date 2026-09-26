@@ -1,11 +1,13 @@
 module       'module'          KWModule            tok=   0  pos=   0
              'MyModule'        Identifier          tok=   2  pos=   7
+type         'type'            KWType              tok=  12  pos= 236
 TypeDefn.Abbrev:
   TypeName   'A'               Identifier          tok=  14  pos= 241
   =          '='               OpEquality          tok=  16  pos= 243
   access     'private'         KWPrivate           tok=  18  pos= 245
     NamedType:
       Ident  'int'             Identifier          tok=  20  pos= 253
+type         'type'            KWType              tok=  23  pos= 258
 TypeDefn.Enum:
   TypeName   'E'               Identifier          tok=  25  pos= 263
   =          '='               OpEquality          tok=  27  pos= 265

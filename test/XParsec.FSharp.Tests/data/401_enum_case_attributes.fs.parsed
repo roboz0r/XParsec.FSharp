@@ -3,6 +3,7 @@ module            'module'          KWModule            tok=   0  pos=   0
 Import:
   open            'open'            KWOpen              tok=   5  pos=  17
                   'System'          Identifier          tok=   7  pos=  22
+type              'type'            KWType              tok=  10  pos=  30
 TypeDefn.Enum:
   TypeName        'Color'           Identifier          tok=  12  pos=  35
   =               '='               OpEquality          tok=  14  pos=  41

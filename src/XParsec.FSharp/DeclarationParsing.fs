@@ -237,12 +237,12 @@ module ModuleElem =
                 [
                     // Type definitions (including mutually recursive types linked by 'and')
                     parser {
-                        let! first = TypeDefn.parse
+                        let! typeToken, first = TypeDefn.parse
                         let! rest = many TypeDefn.parseAndContinuation
                         let builder = ImmutableArray.CreateBuilder(rest.Length + 1)
                         builder.Add(first)
                         builder.AddRange(rest)
-                        return ModuleElem.Type(builder.ToImmutable())
+                        return ModuleElem.Type(typeToken, builder.ToImmutable())
                     }
 
                     ExceptionDefn.parse |>> ModuleElem.Exception

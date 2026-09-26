@@ -27,7 +27,7 @@ type ModuleFunctionOrValueDefn<'T> =
 // Represents: module-elem
 type ModuleElem<'T> =
     | FunctionOrValue of ModuleFunctionOrValueDefn<'T>
-    | Type of ImArr<TypeDefn<'T>>
+    | Type of typeToken: 'T * typeDefns: ImArr<TypeDefn<'T>>
     | Exception of ExceptionDefn<'T>
     | Module of ModuleDefn<'T>
     | ModuleAbbrev of ModuleAbbrev<'T>

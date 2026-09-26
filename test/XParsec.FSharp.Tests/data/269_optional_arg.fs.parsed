@@ -41,6 +41,7 @@ FunctionOrValue:
                 Ident          'symbol'          Identifier          tok=  47  pos= 111
               Ident            'symbol'          Identifier          tok=  49  pos= 118
                                ')'               KWRParen            tok=  50  pos= 124
+type                           'type'            KWType              tok=  53  pos= 127
 TypeDefn.Anon:
   TypeName                     'MyClass'         Identifier          tok=  55  pos= 132
   (                            '('               KWLParen            tok=  56  pos= 139

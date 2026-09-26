@@ -1,5 +1,6 @@
 module          'module'          KWModule            tok=   0  pos=   0
                 'Repro'           Identifier          tok=   2  pos=   7
+type            'type'            KWType              tok=  14  pos= 290
 TypeDefn.Union:
   TypeName      'Option'          Identifier          tok=  16  pos= 295
   TyparDefns:
@@ -30,6 +31,7 @@ TypeDefn.Union:
           Typar.Named:
                 ''T'              TypeParameter       tok=  47  pos= 362
         Ident   'option'          Identifier          tok=  49  pos= 365
+type            'type'            KWType              tok=  52  pos= 373
 TypeDefn.Union:
   TypeName      'Choice'          Identifier          tok=  54  pos= 378
   TyparDefns:

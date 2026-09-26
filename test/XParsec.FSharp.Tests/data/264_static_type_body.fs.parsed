@@ -1,5 +1,6 @@
 module                   'module'          KWModule            tok=   0  pos=   0
                          'TestStatic...'   Identifier          tok=   2  pos=   7
+type                     'type'            KWType              tok=   9  pos=  38
 TypeDefn.Anon:
   [<                     '[<'              KWLAttrBracket      tok=   5  pos=  27
   NamedType:
@@ -57,6 +58,7 @@ TypeDefn.Anon:
           Args:
             Ident        'v'               Identifier          tok=  76  pos= 255
   end                    <virt>            KWEnd               tok=virt  pos= 258
+type                     'type'            KWType              tok=  79  pos= 258
 TypeDefn.Anon:
   TypeName               'StaticOnly'      Identifier          tok=  81  pos= 263
   =                      '='               OpEquality          tok=  83  pos= 274

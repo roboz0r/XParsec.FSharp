@@ -1,5 +1,6 @@
 module                 'module'          KWModule            tok=   0  pos=   0
                        'MyModule'        Identifier          tok=   2  pos=   7
+type                   'type'            KWType              tok=  12  pos= 297
 TypeDefn.Abbrev:
   TypeName             'A'               Identifier          tok=  14  pos= 302
   =                    '='               OpEquality          tok=  16  pos= 304
@@ -11,6 +12,7 @@ TypeDefn.Abbrev:
       (skipped)        'M'               Identifier          tok=  24  pos= 323
       (skipped)        '='               OpEquality          tok=  26  pos= 325
       (skipped)        '1'               NumInt32            tok=  28  pos= 327
+type                   'type'            KWType              tok=  31  pos= 330
 TypeDefn.Anon:
   TypeName             'B'               Identifier          tok=  33  pos= 335
   (                    '('               KWLParen            tok=  34  pos= 336
@@ -36,6 +38,7 @@ FunctionOrValue:
           FormatSpec   '%d'              FormatPlaceholder   tok=  51  pos= 371
                        '"'               StringClose         tok=  52  pos= 373
         Ident          'x'               Identifier          tok=  54  pos= 375
+type                   'type'            KWType              tok=  57  pos= 378
 TypeDefn.Record:
   TypeName             'Good'            Identifier          tok=  59  pos= 383
   =                    '='               OpEquality          tok=  61  pos= 388

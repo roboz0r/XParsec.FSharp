@@ -1,10 +1,12 @@
 AnonymousModule:
+type             'type'            KWType              tok=   4  pos=  12
 TypeDefn.Abstract:
   [<             '[<'              KWLAttrBracket      tok=   0  pos=   0
   NamedType:
     Ident        'Measure'         Identifier          tok=   1  pos=   2
   >]             '>]'              KWRAttrBracket      tok=   2  pos=   9
   TypeName       'second'          Identifier          tok=   6  pos=  17
+type             'type'            KWType              tok=  13  pos=  37
 TypeDefn.Abbrev:
   [<             '[<'              KWLAttrBracket      tok=   9  pos=  25
   NamedType:
@@ -19,6 +21,7 @@ TypeDefn.Abbrev:
                  <virt>            OpConcatenate       tok=virt  pos=  60
                  '-'               OpSubtraction       tok=  20  pos=  61
                  '1'               NumInt32            tok=  21  pos=  62
+type             'type'            KWType              tok=  28  pos=  77
 TypeDefn.Abbrev:
   [<             '[<'              KWLAttrBracket      tok=  24  pos=  65
   NamedType:

@@ -1,5 +1,6 @@
 module              'module'          KWModule            tok=   0  pos=   0
                     'Repro'           Identifier          tok=   2  pos=   7
+type                'type'            KWType              tok=  14  pos= 274
 TypeDefn.Union:
   TypeName          'List'            Identifier          tok=  16  pos= 279
   TyparDefns:

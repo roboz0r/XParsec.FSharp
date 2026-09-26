@@ -2316,7 +2316,9 @@ let rec walkModuleElem (visitor: AstVisitor<'T>) (elem: ModuleElem<'T>) : unit =
         visitor.EnterSection "FunctionOrValue"
         walkModuleFunctionOrValueDefn visitor defn
         visitor.ExitSection "FunctionOrValue"
-    | ModuleElem.Type typeDefns ->
+    | ModuleElem.Type(typeTok, typeDefns) ->
+        visitor.VisitToken "type" typeTok
+
         for typeDefn in typeDefns do
             walkTypeDefn visitor typeDefn
     | ModuleElem.Exception exnDefn -> walkExceptionDefn visitor exnDefn

@@ -1,5 +1,6 @@
 module               'module'          KWModule            tok=   0  pos=   0
                      'AutoPropFo...'   Identifier          tok=   2  pos=   7
+type                 'type'            KWType              tok=   7  pos=  85
 TypeDefn.Anon:
   TypeName           'D1'              Identifier          tok=   9  pos=  90
   (                  '('               KWLParen            tok=  10  pos=  92
@@ -12,6 +13,7 @@ TypeDefn.Anon:
     =                '='               OpEquality          tok=  22  pos= 115
       Const          '0'               NumInt32            tok=  24  pos= 117
   end                <virt>            KWEnd               tok=virt  pos= 193
+type                 'type'            KWType              tok=  29  pos= 193
 TypeDefn.Anon:
   TypeName           'D2'              Identifier          tok=  31  pos= 198
   (                  '('               KWLParen            tok=  32  pos= 200
@@ -29,6 +31,7 @@ TypeDefn.Anon:
       with           'with'            KWWith              tok=  51  pos= 233
       get            'get'             Identifier          tok=  53  pos= 238
   end                <virt>            KWEnd               tok=virt  pos= 306
+type                 'type'            KWType              tok=  58  pos= 306
 TypeDefn.Anon:
   TypeName           'D3'              Identifier          tok=  60  pos= 311
   (                  '('               KWLParen            tok=  61  pos= 313
@@ -45,6 +48,7 @@ TypeDefn.Anon:
       ,              ','               OpComma             tok=  80  pos= 348
       set            'set'             Identifier          tok=  82  pos= 350
   end                <virt>            KWEnd               tok=virt  pos= 404
+type                 'type'            KWType              tok=  87  pos= 404
 TypeDefn.Anon:
   TypeName           'D4'              Identifier          tok=  89  pos= 409
   (                  '('               KWLParen            tok=  90  pos= 411
@@ -61,6 +65,7 @@ TypeDefn.Anon:
       ,              ','               OpComma             tok= 109  pos= 446
       get            'get'             Identifier          tok= 111  pos= 448
   end                <virt>            KWEnd               tok=virt  pos= 482
+type                 'type'            KWType              tok= 116  pos= 482
 TypeDefn.Anon:
   TypeName           'D5'              Identifier          tok= 118  pos= 487
   (                  '('               KWLParen            tok= 119  pos= 489
@@ -78,6 +83,7 @@ TypeDefn.Anon:
       ,              ','               OpComma             tok= 140  pos= 531
       set            'set'             Identifier          tok= 142  pos= 533
   end                <virt>            KWEnd               tok=virt  pos= 588
+type                 'type'            KWType              tok= 147  pos= 588
 TypeDefn.Anon:
   TypeName           'Base'            Identifier          tok= 149  pos= 593
   (                  '('               KWLParen            tok= 150  pos= 597
@@ -106,6 +112,7 @@ TypeDefn.Anon:
       ,              ','               OpComma             tok= 186  pos= 674
       set            'set'             Identifier          tok= 188  pos= 676
   end                <virt>            KWEnd               tok=virt  pos= 733
+type                 'type'            KWType              tok= 193  pos= 733
 TypeDefn.Anon:
   TypeName           'Derived'         Identifier          tok= 195  pos= 738
   (                  '('               KWLParen            tok= 196  pos= 745

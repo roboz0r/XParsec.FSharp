@@ -287,6 +287,7 @@ FunctionOrValue:
             Parts:
               Text            'b'               StringFragment      tok= 372  pos= 807
                               '"'               StringClose         tok= 373  pos= 808
+type                          'type'            KWType              tok= 378  pos= 863
 TypeDefn.Record:
   TypeName                    'R'               Identifier          tok= 380  pos= 868
   =                           '='               OpEquality          tok= 382  pos= 870

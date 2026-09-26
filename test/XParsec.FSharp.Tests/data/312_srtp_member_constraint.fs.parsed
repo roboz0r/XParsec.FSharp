@@ -102,6 +102,7 @@ FunctionOrValue:
         )                    ')'               KWRParen            tok= 122  pos= 390
         Ident                'awaiter'         Identifier          tok= 124  pos= 392
         )                    ')'               KWRParen            tok= 125  pos= 399
+type                         'type'            KWType              tok= 130  pos= 457
 TypeDefn.Anon:
   TypeName                   'Query'           Identifier          tok= 132  pos= 462
   (                          '('               KWLParen            tok= 133  pos= 467

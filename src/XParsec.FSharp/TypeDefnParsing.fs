@@ -1577,11 +1577,11 @@ module TypeDefn =
                             "Union or Type body"
         }
 
-    /// Parses a primary type definition starting with 'type'.
-    let parse: Parser<TypeDefn<SyntaxToken>, _, _, _> =
+    /// Parses a primary type definition starting with 'type', returning the `type` keyword with it.
+    let parse: Parser<SyntaxToken * TypeDefn<SyntaxToken>, _, _, _> =
         parser {
             let! attrs = opt Attributes.parse
-            let! _ = pType
+            let! typeToken = pType
             // Attributes can appear before or after 'type' (e.g. `[<A>] type [<B>] T = ...`)
             let! attrsAfterType = opt Attributes.parse
 
@@ -1592,7 +1592,8 @@ module TypeDefn =
                 | ValueNone, ValueSome a -> ValueSome a
                 | ValueSome a1, ValueSome a2 -> ValueSome(a1.AddRange(a2))
 
-            return! parseBody mergedAttrs
+            let! defn = parseBody mergedAttrs
+            return typeToken, defn
         }
 
     /// Parses a mutually recursive type definition continuation starting with 'and' (e.g., `and [<Attr>] T = ...`).

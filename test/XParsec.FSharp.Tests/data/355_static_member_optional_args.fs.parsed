@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                     'type'            KWType              tok=  10  pos= 275
 TypeDefn.Anon:
   TypeName                               'FsiEvaluat...'   Identifier          tok=  12  pos= 280
   (                                      '('               KWLParen            tok=  13  pos= 310
@@ -11,6 +12,7 @@ TypeDefn.Anon:
     NamedType:
       Ident                              'obj'             Identifier          tok=  24  pos= 344
   end                                    <virt>            KWEnd               tok=virt  pos= 349
+type                                     'type'            KWType              tok=  27  pos= 349
 TypeDefn.Anon:
   TypeName                               'FsiEvaluat...'   Identifier          tok=  29  pos= 354
   (                                      '('               KWLParen            tok=  30  pos= 374

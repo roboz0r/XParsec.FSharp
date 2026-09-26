@@ -24,6 +24,7 @@ Module:
         =                '='               OpEquality          tok=  34  pos=  98
           Const          '1us'             NumUInt16           tok=  36  pos= 100
   end                    <virt>            KWEnd               tok=virt  pos= 105
+type                     'type'            KWType              tok=  39  pos= 105
 TypeDefn.Enum:
   TypeName               'Token'           Identifier          tok=  41  pos= 110
   =                      '='               OpEquality          tok=  43  pos= 116

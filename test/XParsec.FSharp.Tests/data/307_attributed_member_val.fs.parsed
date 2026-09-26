@@ -5,6 +5,7 @@ Import:
                 'Microsoft'       Identifier          tok=   7  pos=  18
                 'Build'           Identifier          tok=   9  pos=  28
                 'Framework'       Identifier          tok=  11  pos=  34
+type            'type'            KWType              tok=  19  pos= 133
 TypeDefn.Anon:
   TypeName      'MyTask'          Identifier          tok=  21  pos= 138
   (             '('               KWLParen            tok=  22  pos= 144
