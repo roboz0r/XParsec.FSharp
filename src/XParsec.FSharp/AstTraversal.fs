@@ -326,6 +326,18 @@ and walkAttributesOpt (visitor: AstVisitor<'T>) (attrs: Attributes<'T> voption) 
     | ValueSome a -> walkAttributes visitor a
     | ValueNone -> ()
 
+and walkModuleHeaderPrefix
+    (visitor: AstVisitor<'T>)
+    (attrs: Attributes<'T> voption)
+    (moduleToken: 'T)
+    (access: Access<'T> voption)
+    (isRec: 'T voption)
+    : unit =
+    walkAttributesOpt visitor attrs
+    visitor.VisitToken "module" moduleToken
+    walkAccessOpt visitor access
+    visitTokenOpt visitor "rec" isRec
+
 and walkPat (visitor: AstVisitor<'T>) (pat: Pat<'T>) : unit =
     match pat with
     | Pat.Const value -> walkConstant visitor "Pat.Const" value
@@ -2352,10 +2364,7 @@ and walkModuleDefn (visitor: AstVisitor<'T>) (defn: ModuleDefn<'T>) : unit =
     let (ModuleDefn.ModuleDefn(attrs, moduleToken, access, isRec, ident, equals, body)) =
         defn
 
-    walkAttributesOpt visitor attrs
-    visitor.VisitToken "module" moduleToken
-    walkAccessOpt visitor access
-    visitTokenOpt visitor "rec" isRec
+    walkModuleHeaderPrefix visitor attrs moduleToken access isRec
 
     visitor.VisitToken "ident" ident
     visitor.VisitToken "=" equals
@@ -2403,10 +2412,7 @@ let walkImplementationFile (visitor: AstVisitor<'T>) (file: ImplementationFile<'
         let (NamedModule.NamedModule(attrs, modTok, access, isRec, longIdent, elems)) =
             namedModule
 
-        walkAttributesOpt visitor attrs
-        visitor.VisitToken "module" modTok
-        walkAccessOpt visitor access
-        visitTokenOpt visitor "rec" isRec
+        walkModuleHeaderPrefix visitor attrs modTok access isRec
 
         for id in longIdent.Idents do
             visitor.VisitToken "" id
@@ -2745,10 +2751,7 @@ and walkModuleSignature (visitor: AstVisitor<'T>) (modSig: ModuleSignature<'T>) 
     let (ModuleSignature.ModuleSignature(attrs, moduleTok, access, isRec, ident, equals, body)) =
         modSig
 
-    walkAttributesOpt visitor attrs
-    visitor.VisitToken "module" moduleTok
-    walkAccessOpt visitor access
-    visitTokenOpt visitor "rec" isRec
+    walkModuleHeaderPrefix visitor attrs moduleTok access isRec
     visitor.VisitToken "ident" ident
     visitor.VisitToken "=" equals
     let (ModuleSignatureBody(beginTok, elems, endTok)) = body
@@ -2786,10 +2789,7 @@ let walkSignatureFile (visitor: AstVisitor<'T>) (file: SignatureFile<'T>) : unit
         let (NamedModuleSignature.NamedModuleSignature(attrs, modTok, access, isRec, longIdent, elems)) =
             namedModule
 
-        walkAttributesOpt visitor attrs
-        visitor.VisitToken "module" modTok
-        walkAccessOpt visitor access
-        visitTokenOpt visitor "rec" isRec
+        walkModuleHeaderPrefix visitor attrs modTok access isRec
 
         for id in longIdent.Idents do
             visitor.VisitToken "" id
