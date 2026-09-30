@@ -382,6 +382,14 @@ module NumericLiterals =
                 | ValueNone ->
 
                     match kind with
+                    // A hexadecimal, octal or binary float literal (`0x3f800000lf`, `0x3FF0000000000000LF`)
+                    // spells the IEEE bit pattern of its value.
+                    | NumericKind.IEEE64 when numBase <> NumericBase.Decimal ->
+                        let bits = Convert.ToUInt64(intDigits numBase (stripSuffix "LF" text), radix)
+                        Ok(NumericLiteralValue.Float(BitConverter.Int64BitsToDouble(int64 bits)))
+                    | NumericKind.IEEE32 when numBase <> NumericBase.Decimal ->
+                        let bits = Convert.ToUInt32(intDigits numBase (stripSuffix "lf" text), radix)
+                        Ok(NumericLiteralValue.Float32(BitConverter.Int32BitsToSingle(int32 bits)))
                     | NumericKind.IEEE64 ->
                         Ok(NumericLiteralValue.Float(Double.Parse(text, CultureInfo.InvariantCulture)))
                     | NumericKind.IEEE32 ->
