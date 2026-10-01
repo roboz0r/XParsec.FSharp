@@ -8,7 +8,7 @@
 10, InterpolatedStringFragment
 18, EscapeLBrace
 20, InterpolatedStringFragment
-27, EscapeRBrace
+25, EscapeRBrace
 27, InterpolatedStringClose
 28, Newline
 29, KWLet
@@ -25,7 +25,7 @@
 50, Identifier
 51, InterpolatedExpressionClose
 52, InterpolatedStringFragment
-61, EscapeRBrace
+59, EscapeRBrace
 61, InterpolatedStringClose
 62, Newline
 63, EOF

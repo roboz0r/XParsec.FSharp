@@ -1892,10 +1892,9 @@ module Lexing =
 
                     while count > 1 do
                         // }} is an escape sequence for '}'
-                        // TODO: Investigate order of imperative operations in a while loop
+                        state <- LexBuilder.appendI Token.EscapeRBrace idx CtxOp.NoOp state
                         idx <- idx + 2
                         count <- count - 2
-                        state <- LexBuilder.appendI Token.EscapeRBrace idx CtxOp.NoOp state
 
                     state
                 )

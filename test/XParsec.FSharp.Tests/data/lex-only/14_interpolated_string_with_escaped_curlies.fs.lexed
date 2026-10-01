@@ -18,7 +18,7 @@
 89, InterpolatedStringFragment
 115, EscapeLBrace
 117, InterpolatedStringFragment
-135, EscapeRBrace
+133, EscapeRBrace
 135, InterpolatedStringFragment
 150, InterpolatedExpressionOpen
 151, Identifier
