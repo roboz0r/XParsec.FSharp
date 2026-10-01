@@ -314,9 +314,14 @@ let tests =
                             "U+1F600 is two UTF-16 code units"
                     }
 
-                    test "A surrogate code point decodes to U+FFFD, as fsc's string context does" {
-                        Expect.equal (decodeStringEscape "\\uD800") (DecodedEscape.Text "\uFFFD") "\\uD800"
-                        Expect.equal (decodeStringEscape "\\U0000DFFF") (DecodedEscape.Text "\uFFFD") "\\U0000DFFF"
+                    test "A surrogate code point decodes to its half, which the literal pairs or replaces" {
+                        Expect.equal (decodeStringEscape "\\uD800") (DecodedEscape.Surrogate '\uD800') "\\uD800"
+                        Expect.equal (decodeStringEscape "\\U0000DFFF") (DecodedEscape.Surrogate '\uDFFF') "\\U0000DFFF"
+                    }
+
+                    test "A line continuation decodes to no text" {
+                        for raw in [ "\\\n"; "\\\n    "; "\\\r\n\t " ] do
+                            Expect.equal (decodeStringEscape raw) (DecodedEscape.Text "") $"%A{raw}"
                     }
 
                     test "An unknown or truncated escape stays raw text verbatim" {

@@ -1363,27 +1363,30 @@ module Lexing =
                 | _ -> EscapeCode.Malformed
             | _ -> EscapeCode.Malformed
 
-    /// One string-context escape token, decoded. `Text` is the only case a well-formed
-    /// program produces; the other two denote no character and exist for the caller to
-    /// diagnose at the token.
+    /// One string-context escape token, decoded. `Text` and `Surrogate` are the cases a
+    /// well-formed program produces; the other two denote no character and exist for the
+    /// caller to diagnose at the token.
     [<RequireQualifiedAccess>]
     type DecodedEscape =
         /// The replacement text: the decoded character, a surrogate pair for an astral
-        /// `\UXXXXXXXX`, U+FFFD for a `\u`/`\U` in the surrogate range, or the raw text
-        /// verbatim for a malformed escape fsc keeps literally (`\q`, a truncated `\u12`).
+        /// `\UXXXXXXXX`, nothing for a line continuation, or the raw text verbatim for a
+        /// malformed escape fsc keeps literally (`\q`, a truncated `\u12`).
         | Text of text: string
+        /// A `\u`/`\U` in the surrogate range. It denotes `half` when the escape beside it in
+        /// the literal's decoded text supplies the other half of a pair, and U+FFFD otherwise.
+        | Surrogate of half: char
         /// `\DDD` above 255.
         | TrigraphOutOfRange
         /// `\UXXXXXXXX` above 0x10FFFF: fsc's error FS1245.
         | NotUnicodeScalar
 
     /// Decode one string-context escape token's text. Matches fsc's string-literal decoding
-    /// except for the two non-`Text` cases, which fsc wraps (FS1252) or refuses (FS1245).
+    /// except for the two error cases, which fsc wraps (FS1252) or refuses (FS1245).
     let decodeStringEscape (raw: string) : DecodedEscape =
         match decodeEscapeCode raw with
+        | _ when raw.Length >= 2 && raw.[0] = '\\' && (raw.[1] = '\n' || raw.[1] = '\r') -> DecodedEscape.Text ""
         | EscapeCode.Char c -> DecodedEscape.Text(string c)
-        // fsc substitutes U+FFFD for a lone surrogate in a string literal.
-        | EscapeCode.LoneSurrogate _ -> DecodedEscape.Text "\uFFFD"
+        | EscapeCode.LoneSurrogate c -> DecodedEscape.Surrogate c
         | EscapeCode.Astral codePoint -> DecodedEscape.Text(Char.ConvertFromUtf32 codePoint)
         | EscapeCode.TrigraphOutOfRange -> DecodedEscape.TrigraphOutOfRange
         | EscapeCode.NotUnicodeScalar -> DecodedEscape.NotUnicodeScalar
@@ -1525,6 +1528,30 @@ module Lexing =
             | 'f'
             | 'v' ->
                 reader.SkipN(2)
+                updateUserState (LexBuilder.append Token.EscapeSequence pos CtxOp.NoOp) reader
+            | '\n'
+            | '\r' ->
+                // A line continuation: the backslash, the line break and the leading spaces and tabs
+                // of the next line, which together denote no character.
+                let full = reader.PeekN(3)
+
+                let breakLength =
+                    if c1 = '\r' && full.Length = 3 && full.[2] = '\n' then
+                        3
+                    else
+                        2
+
+                reader.SkipN(breakLength)
+                let mutable indented = true
+
+                while indented do
+                    let next = reader.PeekN(1)
+
+                    if next.Length = 1 && (next.[0] = ' ' || next.[0] = '\t') then
+                        reader.Skip()
+                    else
+                        indented <- false
+
                 updateUserState (LexBuilder.append Token.EscapeSequence pos CtxOp.NoOp) reader
             | 'u' ->
                 // \uXXXX — consume when 4 hex digits follow, else the 2-char unknown-escape form
