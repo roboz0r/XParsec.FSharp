@@ -5,6 +5,7 @@ open System.IO
 
 open Expecto
 open FsCheck
+open FsCheck.FSharp
 
 open XParsec
 open XParsec.Parsers
@@ -99,7 +100,10 @@ type LexerSource = | LexerSource of string
 /// Generates from `lexemes` and shrinks as an ordinary string, so a counterexample reduces to
 /// the shortest text that still reproduces it whether or not that text is a whole lexeme.
 let private arbLexerSource =
-    Arb.fromGenShrink (Gen.listOf (Gen.elements lexemes) |> Gen.map (String.concat ""), Arb.shrink)
+    Arb.fromGenShrink (
+        Gen.listOf (Gen.elements lexemes) |> Gen.map (String.concat ""),
+        ArbMap.defaults |> ArbMap.arbitrary<string> |> Arb.toShrink
+    )
     |> Arb.convert LexerSource (fun (LexerSource source) -> source)
 
 /// FsCheck discovers registered generators by reflecting over public static members.
