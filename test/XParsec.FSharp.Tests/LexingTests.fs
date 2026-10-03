@@ -282,6 +282,54 @@ let tests =
                 testLexed snippet expected
             }
 
+            // F# starts an identifier with a letter (Lu, Ll, Lt, Lm, Lo, Nl) or `_`, and continues it
+            // with those, `'`, digits (Nd), connectors (Pc), combining marks (Mn, Mc) and format
+            // characters (Cf).
+            testList
+                "UnicodeIdentifiers"
+                [
+                    // fsi accepts `let <name> = 1` and reads the value back for each.
+                    test "Format, connector and combining characters continue an identifier" {
+                        for name in
+                            [
+                                "a\u00ADb"
+                                "a\u200Bb"
+                                "a\u200Db"
+                                "a\uFEFFb"
+                                "a\u00AD'"
+                                "i\u203Fj"
+                                "k\u0301"
+                                "k\u0903"
+                                "\u216Bab"
+                                "\u02B0ab"
+                            ] do
+                            testLexed
+                                name
+                                ([ 0, Token.Identifier; name.Length, Token.EOF ]
+                                 |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos)))
+                    }
+
+                    // fsi accepts `let k\u0663 = 8` (an Arabic-Indic digit, Nd) and reads back `8`.
+                    ptest
+                        "GAP (an identifier continues with ASCII digits only): a decimal digit continues an identifier" {
+                        testLexed
+                            "k\u0663"
+                            ([ 0, Token.Identifier; 2, Token.EOF ]
+                             |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos)))
+                    }
+
+                    // fsi: FS0010 "Unexpected character" at the first character of each.
+                    test "Format, connector and combining characters do not start an identifier" {
+                        for name in [ "\u00ADab"; "\u200Dab"; "\u203Fab"; "\u0301ab"; "\u0903ab" ] do
+                            let first = (lexString name).Tokens |> Seq.head
+
+                            Expect.notEqual
+                                first.TokenWithoutCommentFlags
+                                Token.Identifier
+                                $"%A{name} starts no identifier"
+                    }
+                ]
+
             testList
                 "EscapeDecoding"
                 [
