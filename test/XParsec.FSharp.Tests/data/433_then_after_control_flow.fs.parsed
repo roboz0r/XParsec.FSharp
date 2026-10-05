@@ -1,0 +1,115 @@
+module                             'module'          KWModule            tok=   0  pos=   0
+                                   'MyModule'        Identifier          tok=   2  pos=   7
+FunctionOrValue:
+  let                              'let'             KWLet               tok=  10  pos= 169
+    Pat.NamedSimple                'f'               Identifier          tok=  12  pos= 173
+    =                              '='               OpEquality          tok=  14  pos= 175
+      App:
+        Func:
+          Ident                    'seq'             Identifier          tok=  16  pos= 177
+        Args:
+          ComputationBlock         '{'               KWLBrace            tok=  18  pos= 181
+            SequentialThen:
+              yield                'yield'           KWYield             tok=  20  pos= 183
+              Yield:
+                Const              '1'               NumInt32            tok=  22  pos= 189
+              then                 'then'            KWThen              tok=  24  pos= 191
+              yield                'yield'           KWYield             tok=  26  pos= 196
+              Yield:
+                Const              '2'               NumInt32            tok=  28  pos= 202
+                                   '}'               KWRBrace            tok=  30  pos= 204
+FunctionOrValue:
+  let                              'let'             KWLet               tok=  33  pos= 207
+    Pat.NamedSimple                'g'               Identifier          tok=  35  pos= 211
+    =                              '='               OpEquality          tok=  37  pos= 213
+      App:
+        Func:
+          Ident                    'async'           Identifier          tok=  39  pos= 215
+        Args:
+          ComputationBlock         '{'               KWLBrace            tok=  41  pos= 221
+            SequentialThen:
+              return               'return'          KWReturn            tok=  43  pos= 223
+              Return:
+                Const              '1'               NumInt32            tok=  45  pos= 230
+              then                 'then'            KWThen              tok=  47  pos= 232
+              App:
+                Func:
+                  Ident            'printfn'         Identifier          tok=  49  pos= 237
+                Args:
+                  StringLiteral    '"'               StringOpen          tok=  51  pos= 245
+                  Parts:
+                    Text           'a'               StringFragment      tok=  52  pos= 246
+                                   '"'               StringClose         tok=  53  pos= 247
+                                   '}'               KWRBrace            tok=  55  pos= 249
+FunctionOrValue:
+  let                              'let'             KWLet               tok=  58  pos= 252
+    Pat.NamedSimple                'h'               Identifier          tok=  60  pos= 256
+    =                              '='               OpEquality          tok=  62  pos= 258
+      App:
+        Func:
+          Ident                    'async'           Identifier          tok=  64  pos= 260
+        Args:
+          ComputationBlock         '{'               KWLBrace            tok=  66  pos= 266
+            do                     'do'              KWDo                tok=  68  pos= 268
+            Do:
+              SequentialThen:
+                App:
+                  Func:
+                    Ident          'printfn'         Identifier          tok=  70  pos= 271
+                  Args:
+                    StringLiteral  '"'               StringOpen          tok=  72  pos= 279
+                    Parts:
+                      Text         'a'               StringFragment      tok=  73  pos= 280
+                                   '"'               StringClose         tok=  74  pos= 281
+                then               'then'            KWThen              tok=  76  pos= 283
+                App:
+                  Func:
+                    Ident          'printfn'         Identifier          tok=  78  pos= 288
+                  Args:
+                    StringLiteral  '"'               StringOpen          tok=  80  pos= 296
+                    Parts:
+                      Text         'b'               StringFragment      tok=  81  pos= 297
+                                   '"'               StringClose         tok=  82  pos= 298
+                                   '}'               KWRBrace            tok=  84  pos= 300
+FunctionOrValue:
+  let                              'let'             KWLet               tok=  87  pos= 303
+    Pat.NamedSimple                'k'               Identifier          tok=  89  pos= 307
+    =                              '='               OpEquality          tok=  91  pos= 309
+      App:
+        Func:
+          Ident                    'async'           Identifier          tok=  93  pos= 311
+        Args:
+          ComputationBlock         '{'               KWLBrace            tok=  95  pos= 317
+            do!                    'do!'             KWDoBang            tok=  97  pos= 319
+            DoBang:
+              SequentialThen:
+                HighPrecedenceApp:
+                  Func:
+                    LongIdentOrOp:
+                      LongIdent:
+                                   'async'           Identifier          tok=  99  pos= 323
+                                   'Return'          Identifier          tok= 101  pos= 329
+                  (                '('               KWLParen            tok= 102  pos= 335
+                  Arg:
+                    ParenBlock     '('               KWLParen            tok= 102  pos= 335
+                                   ')'               KWRParen            tok= 103  pos= 336
+                                   ')'               KWRParen            tok= 103  pos= 336
+                then               'then'            KWThen              tok= 105  pos= 338
+                ParenBlock         '('               KWLParen            tok= 107  pos= 343
+                                   ')'               KWRParen            tok= 108  pos= 344
+                                   '}'               KWRBrace            tok= 110  pos= 346
+FunctionOrValue:
+  let                              'let'             KWLet               tok= 113  pos= 349
+    Pat.NamedSimple                'm'               Identifier          tok= 115  pos= 353
+    Pats:
+      ParenBlock                   '('               KWLParen            tok= 117  pos= 355
+                                   ')'               KWRParen            tok= 118  pos= 356
+    =                              '='               OpEquality          tok= 120  pos= 358
+      do                           'do'              KWDo                tok= 122  pos= 360
+      Do:
+        SequentialThen:
+          ParenBlock               '('               KWLParen            tok= 124  pos= 363
+                                   ')'               KWRParen            tok= 125  pos= 364
+          then                     'then'            KWThen              tok= 127  pos= 366
+          ParenBlock               '('               KWLParen            tok= 129  pos= 371
+                                   ')'               KWRParen            tok= 130  pos= 372

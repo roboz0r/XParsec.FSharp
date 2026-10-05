@@ -22,9 +22,11 @@ TypeDefn.Class:
             Ident          'int'             Identifier          tok=  30  pos=  84
                            ')'               KWRParen            tok=  31  pos=  87
       =                    '='               OpEquality          tok=  33  pos=  89
-      {                    '{'               KWLBrace            tok=  35  pos=  91
-      Ident                'x'               Identifier          tok=  37  pos=  93
-      =                    '='               OpEquality          tok=  39  pos=  95
-      Ident                'n'               Identifier          tok=  41  pos=  97
-      }                    '}'               KWRBrace            tok=  43  pos=  99
+      Record               '{'               KWLBrace            tok=  35  pos=  91
+        Field:
+          Ident            'x'               Identifier          tok=  37  pos=  93
+          =                '='               OpEquality          tok=  39  pos=  95
+          Expr:
+            Ident          'n'               Identifier          tok=  41  pos=  97
+                           '}'               KWRBrace            tok=  43  pos=  99
   end                      'end'             KWEnd               tok=  46  pos= 105

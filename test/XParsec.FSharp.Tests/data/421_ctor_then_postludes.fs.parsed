@@ -1,0 +1,380 @@
+module                         'module'          KWModule            tok=   0  pos=   0
+                               'MyModule'        Identifier          tok=   2  pos=   7
+type                           'type'            KWType              tok=   8  pos= 114
+TypeDefn.Anon:
+  TypeName                     'B'               Identifier          tok=  10  pos= 119
+  (                            '('               KWLParen            tok=  11  pos= 120
+  Pat.Typed:
+    Pat.NamedSimple            'x'               Identifier          tok=  12  pos= 121
+    Colon                      ':'               OpColon             tok=  13  pos= 122
+    NamedType:
+      Ident                    'int'             Identifier          tok=  15  pos= 124
+  )                            ')'               KWRParen            tok=  16  pos= 127
+  =                            '='               OpEquality          tok=  18  pos= 129
+  begin                        <virt>            KWBegin             tok=virt  pos= 135
+    member                     'member'          KWMember            tok=  21  pos= 135
+    self                       '_'               Wildcard            tok=  23  pos= 142
+    Pat.NamedSimple            'X'               Identifier          tok=  25  pos= 144
+    =                          '='               OpEquality          tok=  27  pos= 146
+      Ident                    'x'               Identifier          tok=  29  pos= 148
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok=  32  pos= 154
+      ParenBlock               '('               KWLParen            tok=  33  pos= 157
+                               ')'               KWRParen            tok=  34  pos= 158
+      =                        '='               OpEquality          tok=  36  pos= 160
+      HighPrecedenceApp:
+        Func:
+          Ident                'B'               Identifier          tok=  38  pos= 162
+        (                      '('               KWLParen            tok=  39  pos= 163
+        Arg:
+          Const                '0'               NumInt32            tok=  40  pos= 164
+                               ')'               KWRParen            tok=  41  pos= 165
+  end                          <virt>            KWEnd               tok=virt  pos= 168
+type                           'type'            KWType              tok=  44  pos= 168
+TypeDefn.Anon:
+  TypeName                     'D'               Identifier          tok=  46  pos= 173
+  =                            '='               OpEquality          tok=  48  pos= 175
+  begin                        <virt>            KWBegin             tok=virt  pos= 181
+    inherit                    'inherit'         KWInherit           tok=  51  pos= 181
+    NamedType:
+      Ident                    'B'               Identifier          tok=  53  pos= 189
+    Val:
+      val                      'val'             KWVal               tok=  56  pos= 195
+      ident                    'Y'               Identifier          tok=  58  pos= 199
+      :                        ':'               OpColon             tok=  59  pos= 200
+      NamedType:
+        Ident                  'int'             Identifier          tok=  61  pos= 202
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok=  65  pos= 211
+      ParenBlock               '('               KWLParen            tok=  66  pos= 214
+        Pat.Typed:
+          Pat.NamedSimple      'n'               Identifier          tok=  67  pos= 215
+          Colon                ':'               OpColon             tok=  68  pos= 216
+          NamedType:
+            Ident              'int'             Identifier          tok=  70  pos= 218
+                               ')'               KWRParen            tok=  71  pos= 221
+      =                        '='               OpEquality          tok=  73  pos= 223
+      IfThenElse:
+        IfToken                'if'              KWIf                tok=  76  pos= 233
+        Condition:
+          InfixApp             '='               OpEquality          tok=  80  pos= 238
+            Ident              'n'               Identifier          tok=  78  pos= 236
+            Const              '0'               NumInt32            tok=  82  pos= 240
+        ThenToken              'then'            KWThen              tok=  84  pos= 242
+        ThenExpr:
+          SequentialThen:
+            Record             '{'               KWLBrace            tok=  87  pos= 259
+              inherit          'inherit'         KWInherit           tok=  89  pos= 261
+              NamedType:
+                Ident          'B'               Identifier          tok=  91  pos= 269
+              ParenBlock       '('               KWLParen            tok=  92  pos= 270
+                Const          '1'               NumInt32            tok=  93  pos= 271
+                               ')'               KWRParen            tok=  94  pos= 272
+              ;                ';'               OpSemicolon         tok=  95  pos= 273
+              Field:
+                Ident          'Y'               Identifier          tok=  97  pos= 275
+                =              '='               OpEquality          tok=  99  pos= 277
+                Expr:
+                  Const        '1'               NumInt32            tok= 101  pos= 279
+                               '}'               KWRBrace            tok= 103  pos= 281
+            then               'then'            KWThen              tok= 105  pos= 283
+            App:
+              Func:
+                Ident          'printfn'         Identifier          tok= 107  pos= 288
+              Args:
+                StringLiteral  '"'               StringOpen          tok= 109  pos= 296
+                Parts:
+                  Text         'inner'           StringFragment      tok= 110  pos= 297
+                               '"'               StringClose         tok= 111  pos= 302
+        ElseToken              'else'            KWElse              tok= 114  pos= 312
+        ElseExpr:
+          Record               '{'               KWLBrace            tok= 117  pos= 329
+            inherit            'inherit'         KWInherit           tok= 119  pos= 331
+            NamedType:
+              Ident            'B'               Identifier          tok= 121  pos= 339
+            ParenBlock         '('               KWLParen            tok= 122  pos= 340
+              Const            '2'               NumInt32            tok= 123  pos= 341
+                               ')'               KWRParen            tok= 124  pos= 342
+            ;                  ';'               OpSemicolon         tok= 125  pos= 343
+            Field:
+              Ident            'Y'               Identifier          tok= 127  pos= 345
+              =                '='               OpEquality          tok= 129  pos= 347
+              Expr:
+                Const          '2'               NumInt32            tok= 131  pos= 349
+                               '}'               KWRBrace            tok= 133  pos= 351
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok= 137  pos= 358
+      ParenBlock               '('               KWLParen            tok= 138  pos= 361
+        Pat.Typed:
+          Pat.NamedSimple      'n'               Identifier          tok= 139  pos= 362
+          Colon                ':'               OpColon             tok= 140  pos= 363
+          NamedType:
+            Ident              'string'          Identifier          tok= 142  pos= 365
+                               ')'               KWRParen            tok= 143  pos= 371
+      =                        '='               OpEquality          tok= 145  pos= 373
+      SequentialThen:
+        Record                 '{'               KWLBrace            tok= 148  pos= 383
+          inherit              'inherit'         KWInherit           tok= 150  pos= 385
+          NamedType:
+            Ident              'B'               Identifier          tok= 152  pos= 393
+          ParenBlock           '('               KWLParen            tok= 153  pos= 394
+            Const              '1'               NumInt32            tok= 154  pos= 395
+                               ')'               KWRParen            tok= 155  pos= 396
+          ;                    ';'               OpSemicolon         tok= 156  pos= 397
+          Field:
+            Ident              'Y'               Identifier          tok= 158  pos= 399
+            =                  '='               OpEquality          tok= 160  pos= 401
+            Expr:
+              Const            '0'               NumInt32            tok= 162  pos= 403
+                               '}'               KWRBrace            tok= 164  pos= 405
+        then                   'then'            KWThen              tok= 167  pos= 415
+        App:
+          Func:
+            Ident              'printfn'         Identifier          tok= 170  pos= 432
+          Args:
+            StringLiteral      '"'               StringOpen          tok= 172  pos= 440
+            Parts:
+              Text             'a'               StringFragment      tok= 173  pos= 441
+                               '"'               StringClose         tok= 174  pos= 442
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok= 178  pos= 449
+      ParenBlock               '('               KWLParen            tok= 179  pos= 452
+        Pat.Typed:
+          Pat.NamedSimple      'n'               Identifier          tok= 180  pos= 453
+          Colon                ':'               OpColon             tok= 181  pos= 454
+          NamedType:
+            Ident              'float'           Identifier          tok= 183  pos= 456
+                               ')'               KWRParen            tok= 184  pos= 461
+      =                        '='               OpEquality          tok= 186  pos= 463
+      SequentialThen:
+        Record                 '{'               KWLBrace            tok= 189  pos= 473
+          inherit              'inherit'         KWInherit           tok= 191  pos= 475
+          NamedType:
+            Ident              'B'               Identifier          tok= 193  pos= 483
+          ParenBlock           '('               KWLParen            tok= 194  pos= 484
+            Const              '1'               NumInt32            tok= 195  pos= 485
+                               ')'               KWRParen            tok= 196  pos= 486
+          ;                    ';'               OpSemicolon         tok= 197  pos= 487
+          Field:
+            Ident              'Y'               Identifier          tok= 199  pos= 489
+            =                  '='               OpEquality          tok= 201  pos= 491
+            Expr:
+              Const            '0'               NumInt32            tok= 203  pos= 493
+                               '}'               KWRBrace            tok= 205  pos= 495
+        then                   'then'            KWThen              tok= 208  pos= 505
+        Sequential:
+          App:
+            Func:
+              Ident            'printfn'         Identifier          tok= 210  pos= 510
+            Args:
+              StringLiteral    '"'               StringOpen          tok= 212  pos= 518
+              Parts:
+                Text           'a'               StringFragment      tok= 213  pos= 519
+                               '"'               StringClose         tok= 214  pos= 520
+          App:
+            Func:
+              Ident            'printfn'         Identifier          tok= 217  pos= 535
+            Args:
+              StringLiteral    '"'               StringOpen          tok= 219  pos= 543
+              Parts:
+                Text           'b'               StringFragment      tok= 220  pos= 544
+                               '"'               StringClose         tok= 221  pos= 545
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok= 225  pos= 552
+      ParenBlock               '('               KWLParen            tok= 226  pos= 555
+        Pat.Typed:
+          Pat.NamedSimple      'n'               Identifier          tok= 227  pos= 556
+          Colon                ':'               OpColon             tok= 228  pos= 557
+          NamedType:
+            Ident              'bool'            Identifier          tok= 230  pos= 559
+                               ')'               KWRParen            tok= 231  pos= 563
+      =                        '='               OpEquality          tok= 233  pos= 565
+      SequentialThen:
+        Record                 '{'               KWLBrace            tok= 236  pos= 575
+          inherit              'inherit'         KWInherit           tok= 238  pos= 577
+          NamedType:
+            Ident              'B'               Identifier          tok= 240  pos= 585
+          ParenBlock           '('               KWLParen            tok= 241  pos= 586
+            Const              '1'               NumInt32            tok= 242  pos= 587
+                               ')'               KWRParen            tok= 243  pos= 588
+          ;                    ';'               OpSemicolon         tok= 244  pos= 589
+          Field:
+            Ident              'Y'               Identifier          tok= 246  pos= 591
+            =                  '='               OpEquality          tok= 248  pos= 593
+            Expr:
+              Const            '0'               NumInt32            tok= 250  pos= 595
+                               '}'               KWRBrace            tok= 252  pos= 597
+        then                   'then'            KWThen              tok= 254  pos= 599
+        App:
+          Func:
+            Ident              'printfn'         Identifier          tok= 257  pos= 612
+          Args:
+            StringLiteral      '"'               StringOpen          tok= 259  pos= 620
+            Parts:
+              Text             'a'               StringFragment      tok= 260  pos= 621
+                               '"'               StringClose         tok= 261  pos= 622
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok= 265  pos= 629
+      ParenBlock               '('               KWLParen            tok= 266  pos= 632
+        Pat.Typed:
+          Pat.NamedSimple      'n'               Identifier          tok= 267  pos= 633
+          Colon                ':'               OpColon             tok= 268  pos= 634
+          NamedType:
+            Ident              'char'            Identifier          tok= 270  pos= 636
+                               ')'               KWRParen            tok= 271  pos= 640
+      =                        '='               OpEquality          tok= 273  pos= 642
+      Sequential:
+        App:
+          Func:
+            Ident              'printfn'         Identifier          tok= 276  pos= 652
+          Args:
+            StringLiteral      '"'               StringOpen          tok= 278  pos= 660
+            Parts:
+              Text             'x'               StringFragment      tok= 279  pos= 661
+                               '"'               StringClose         tok= 280  pos= 662
+        SequentialThen:
+          Record               '{'               KWLBrace            tok= 283  pos= 665
+            inherit            'inherit'         KWInherit           tok= 285  pos= 667
+            NamedType:
+              Ident            'B'               Identifier          tok= 287  pos= 675
+            ParenBlock         '('               KWLParen            tok= 288  pos= 676
+              Const            '1'               NumInt32            tok= 289  pos= 677
+                               ')'               KWRParen            tok= 290  pos= 678
+            ;                  ';'               OpSemicolon         tok= 291  pos= 679
+            Field:
+              Ident            'Y'               Identifier          tok= 293  pos= 681
+              =                '='               OpEquality          tok= 295  pos= 683
+              Expr:
+                Const          '1'               NumInt32            tok= 297  pos= 685
+                               '}'               KWRBrace            tok= 299  pos= 687
+          then                 'then'            KWThen              tok= 301  pos= 689
+          Sequential:
+            App:
+              Func:
+                Ident          'printfn'         Identifier          tok= 303  pos= 694
+              Args:
+                StringLiteral  '"'               StringOpen          tok= 305  pos= 702
+                Parts:
+                  Text         'inner'           StringFragment      tok= 306  pos= 703
+                               '"'               StringClose         tok= 307  pos= 708
+            App:
+              Func:
+                Ident          'printfn'         Identifier          tok= 310  pos= 711
+              Args:
+                StringLiteral  '"'               StringOpen          tok= 312  pos= 719
+                Parts:
+                  Text         'z'               StringFragment      tok= 313  pos= 720
+                               '"'               StringClose         tok= 314  pos= 721
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok= 318  pos= 728
+      ParenBlock               '('               KWLParen            tok= 319  pos= 731
+        Pat.Tuple:
+          Pat.Typed:
+            Pat.NamedSimple    'n'               Identifier          tok= 320  pos= 732
+            Colon              ':'               OpColon             tok= 321  pos= 733
+            NamedType:
+              Ident            'int'             Identifier          tok= 323  pos= 735
+          ,                    ','               OpComma             tok= 324  pos= 738
+          Pat.Typed:
+            Pat.NamedSimple    'm'               Identifier          tok= 326  pos= 740
+            Colon              ':'               OpColon             tok= 327  pos= 741
+            NamedType:
+              Ident            'int'             Identifier          tok= 329  pos= 743
+                               ')'               KWRParen            tok= 330  pos= 746
+      =                        '='               OpEquality          tok= 332  pos= 748
+      SequentialThen:
+        IfThenElse:
+          IfToken              'if'              KWIf                tok= 335  pos= 758
+          Condition:
+            InfixApp           '='               OpEquality          tok= 339  pos= 763
+              Ident            'n'               Identifier          tok= 337  pos= 761
+              Ident            'm'               Identifier          tok= 341  pos= 765
+          ThenToken            'then'            KWThen              tok= 343  pos= 767
+          ThenExpr:
+            Record             '{'               KWLBrace            tok= 345  pos= 772
+              inherit          'inherit'         KWInherit           tok= 347  pos= 774
+              NamedType:
+                Ident          'B'               Identifier          tok= 349  pos= 782
+              ParenBlock       '('               KWLParen            tok= 350  pos= 783
+                Const          '1'               NumInt32            tok= 351  pos= 784
+                               ')'               KWRParen            tok= 352  pos= 785
+              ;                ';'               OpSemicolon         tok= 353  pos= 786
+              Field:
+                Ident          'Y'               Identifier          tok= 355  pos= 788
+                =              '='               OpEquality          tok= 357  pos= 790
+                Expr:
+                  Ident        'n'               Identifier          tok= 359  pos= 792
+                               '}'               KWRBrace            tok= 361  pos= 794
+          ElseToken            'else'            KWElse              tok= 363  pos= 796
+          ElseExpr:
+            Record             '{'               KWLBrace            tok= 365  pos= 801
+              inherit          'inherit'         KWInherit           tok= 367  pos= 803
+              NamedType:
+                Ident          'B'               Identifier          tok= 369  pos= 811
+              ParenBlock       '('               KWLParen            tok= 370  pos= 812
+                Const          '2'               NumInt32            tok= 371  pos= 813
+                               ')'               KWRParen            tok= 372  pos= 814
+              ;                ';'               OpSemicolon         tok= 373  pos= 815
+              Field:
+                Ident          'Y'               Identifier          tok= 375  pos= 817
+                =              '='               OpEquality          tok= 377  pos= 819
+                Expr:
+                  Ident        'm'               Identifier          tok= 379  pos= 821
+                               '}'               KWRBrace            tok= 381  pos= 823
+        then                   'then'            KWThen              tok= 384  pos= 833
+        App:
+          Func:
+            Ident              'printfn'         Identifier          tok= 386  pos= 838
+          Args:
+            StringLiteral      '"'               StringOpen          tok= 388  pos= 846
+            Parts:
+              Text             'a'               StringFragment      tok= 389  pos= 847
+                               '"'               StringClose         tok= 390  pos= 848
+    AdditionalConstructor:
+      new                      'new'             KWNew               tok= 394  pos= 855
+      ParenBlock               '('               KWLParen            tok= 395  pos= 858
+        Pat.Tuple:
+          Pat.Typed:
+            Pat.NamedSimple    'n'               Identifier          tok= 396  pos= 859
+            Colon              ':'               OpColon             tok= 397  pos= 860
+            NamedType:
+              Ident            'int'             Identifier          tok= 399  pos= 862
+          ,                    ','               OpComma             tok= 400  pos= 865
+          Pat.Typed:
+            Pat.NamedSimple    'm'               Identifier          tok= 402  pos= 867
+            Colon              ':'               OpColon             tok= 403  pos= 868
+            NamedType:
+              Ident            'string'          Identifier          tok= 405  pos= 870
+                               ')'               KWRParen            tok= 406  pos= 876
+      =                        '='               OpEquality          tok= 408  pos= 878
+      Let                      'let'             KWLet               tok= 411  pos= 888
+        Pat.NamedSimple        'x'               Identifier          tok= 413  pos= 892
+        =                      '='               OpEquality          tok= 415  pos= 894
+          Ident                'n'               Identifier          tok= 417  pos= 896
+      in                       <virt>            KWIn                tok=virt  pos= 906
+      Body:
+        SequentialThen:
+          Record               '{'               KWLBrace            tok= 420  pos= 906
+            inherit            'inherit'         KWInherit           tok= 422  pos= 908
+            NamedType:
+              Ident            'B'               Identifier          tok= 424  pos= 916
+            ParenBlock         '('               KWLParen            tok= 425  pos= 917
+              Ident            'x'               Identifier          tok= 426  pos= 918
+                               ')'               KWRParen            tok= 427  pos= 919
+            ;                  ';'               OpSemicolon         tok= 428  pos= 920
+            Field:
+              Ident            'Y'               Identifier          tok= 430  pos= 922
+              =                '='               OpEquality          tok= 432  pos= 924
+              Expr:
+                Ident          'x'               Identifier          tok= 434  pos= 926
+                               '}'               KWRBrace            tok= 436  pos= 928
+          then                 'then'            KWThen              tok= 439  pos= 938
+          App:
+            Func:
+              Ident            'printfn'         Identifier          tok= 441  pos= 943
+            Args:
+              StringLiteral    '"'               StringOpen          tok= 443  pos= 951
+              Parts:
+                Text           'a'               StringFragment      tok= 444  pos= 952
+                               '"'               StringClose         tok= 445  pos= 953
+  end                          <virt>            KWEnd               tok=virt  pos= 955

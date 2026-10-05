@@ -37,17 +37,20 @@ TypeDefn.Anon:
       ParenBlock             '('               KWLParen            tok=  50  pos= 102
                              ')'               KWRParen            tok=  51  pos= 103
       =                      '='               OpEquality          tok=  53  pos= 105
-      {                      '{'               KWLBrace            tok=  55  pos= 107
-      inherit                'inherit'         KWInherit           tok=  57  pos= 109
-      NamedType:
-        Ident                'B'               Identifier          tok=  59  pos= 117
-      ParenBlock             '('               KWLParen            tok=  60  pos= 118
-        Const                '9'               NumInt32            tok=  61  pos= 119
+      Record                 '{'               KWLBrace            tok=  55  pos= 107
+        inherit              'inherit'         KWInherit           tok=  57  pos= 109
+        NamedType:
+          Ident              'B'               Identifier          tok=  59  pos= 117
+        ParenBlock           '('               KWLParen            tok=  60  pos= 118
+          Const              '9'               NumInt32            tok=  61  pos= 119
                              ')'               KWRParen            tok=  62  pos= 120
-      Ident                  'x'               Identifier          tok=  65  pos= 123
-      =                      '='               OpEquality          tok=  67  pos= 125
-      Const                  '1'               NumInt32            tok=  69  pos= 127
-      }                      '}'               KWRBrace            tok=  71  pos= 129
+        ;                    ';'               OpSemicolon         tok=  63  pos= 121
+        Field:
+          Ident              'x'               Identifier          tok=  65  pos= 123
+          =                  '='               OpEquality          tok=  67  pos= 125
+          Expr:
+            Const            '1'               NumInt32            tok=  69  pos= 127
+                             '}'               KWRBrace            tok=  71  pos= 129
     AdditionalConstructor:
       new                    'new'             KWNew               tok=  74  pos= 135
       ParenBlock             '('               KWLParen            tok=  75  pos= 138
@@ -58,14 +61,17 @@ TypeDefn.Anon:
             Ident            'int'             Identifier          tok=  79  pos= 142
                              ')'               KWRParen            tok=  80  pos= 145
       =                      '='               OpEquality          tok=  82  pos= 147
-      {                      '{'               KWLBrace            tok=  84  pos= 149
-      inherit                'inherit'         KWInherit           tok=  86  pos= 151
-      NamedType:
-        Ident                'B'               Identifier          tok=  88  pos= 159
-      Ident                  'x'               Identifier          tok=  91  pos= 162
-      =                      '='               OpEquality          tok=  93  pos= 164
-      Ident                  'k'               Identifier          tok=  95  pos= 166
-      }                      '}'               KWRBrace            tok=  97  pos= 168
+      Record                 '{'               KWLBrace            tok=  84  pos= 149
+        inherit              'inherit'         KWInherit           tok=  86  pos= 151
+        NamedType:
+          Ident              'B'               Identifier          tok=  88  pos= 159
+        ;                    ';'               OpSemicolon         tok=  89  pos= 160
+        Field:
+          Ident              'x'               Identifier          tok=  91  pos= 162
+          =                  '='               OpEquality          tok=  93  pos= 164
+          Expr:
+            Ident            'k'               Identifier          tok=  95  pos= 166
+                             '}'               KWRBrace            tok=  97  pos= 168
     AdditionalConstructor:
       new                    'new'             KWNew               tok= 100  pos= 174
       ParenBlock             '('               KWLParen            tok= 101  pos= 177
@@ -83,14 +89,17 @@ TypeDefn.Anon:
               Ident          'int'             Identifier          tok= 111  pos= 189
                              ')'               KWRParen            tok= 112  pos= 192
       =                      '='               OpEquality          tok= 114  pos= 194
-      {                      '{'               KWLBrace            tok= 117  pos= 204
-      inherit                'inherit'         KWInherit           tok= 119  pos= 206
-      NamedType:
-        Ident                'B'               Identifier          tok= 121  pos= 214
-      Ident                  'x'               Identifier          tok= 124  pos= 226
-      =                      '='               OpEquality          tok= 126  pos= 228
-      InfixApp               '+'               op_Addition         tok= 130  pos= 232
-        Ident                'k'               Identifier          tok= 128  pos= 230
-        Ident                'm'               Identifier          tok= 132  pos= 234
-      }                      '}'               KWRBrace            tok= 134  pos= 236
+      Record                 '{'               KWLBrace            tok= 117  pos= 204
+        inherit              'inherit'         KWInherit           tok= 119  pos= 206
+        NamedType:
+          Ident              'B'               Identifier          tok= 121  pos= 214
+        ;                    <virt>            OpSemicolon         tok=virt  pos= 226
+        Field:
+          Ident              'x'               Identifier          tok= 124  pos= 226
+          =                  '='               OpEquality          tok= 126  pos= 228
+          Expr:
+            InfixApp         '+'               op_Addition         tok= 130  pos= 232
+              Ident          'k'               Identifier          tok= 128  pos= 230
+              Ident          'm'               Identifier          tok= 132  pos= 234
+                             '}'               KWRBrace            tok= 134  pos= 236
   end                        <virt>            KWEnd               tok=virt  pos= 238

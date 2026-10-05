@@ -21,6 +21,7 @@
     <Compile Include="TypeDefnPatterns.fs" />
     <Compile Include="CstTypeWalk.fs" />
     <Compile Include="CstWalk.fs" />
+    <Compile Include="ConstructorBody.fs" />
     <Compile Include="ExprPatterns.fs" />
     <Compile Include="Preprocessing.fs" />
     <Compile Include="ParsingHelpers.fs" />

@@ -1,0 +1,96 @@
+module                     'module'          KWModule            tok=   0  pos=   0
+                           'MyModule'        Identifier          tok=   2  pos=   7
+type                       'type'            KWType              tok=   5  pos=  17
+TypeDefn.Anon:
+  TypeName                 'B'               Identifier          tok=   7  pos=  22
+  (                        '('               KWLParen            tok=   8  pos=  23
+  Pat.Typed:
+    Pat.NamedSimple        'x'               Identifier          tok=   9  pos=  24
+    Colon                  ':'               OpColon             tok=  10  pos=  25
+    NamedType:
+      Ident                'int'             Identifier          tok=  12  pos=  27
+  )                        ')'               KWRParen            tok=  13  pos=  30
+  =                        '='               OpEquality          tok=  15  pos=  32
+  begin                    <virt>            KWBegin             tok=virt  pos=  38
+    member                 'member'          KWMember            tok=  18  pos=  38
+    self                   '_'               Wildcard            tok=  20  pos=  45
+    Pat.NamedSimple        'X'               Identifier          tok=  22  pos=  47
+    =                      '='               OpEquality          tok=  24  pos=  49
+      Ident                'x'               Identifier          tok=  26  pos=  51
+    AdditionalConstructor:
+      new                  'new'             KWNew               tok=  29  pos=  57
+      ParenBlock           '('               KWLParen            tok=  30  pos=  60
+                           ')'               KWRParen            tok=  31  pos=  61
+      =                    '='               OpEquality          tok=  33  pos=  63
+      HighPrecedenceApp:
+        Func:
+          Ident            'B'               Identifier          tok=  35  pos=  65
+        (                  '('               KWLParen            tok=  36  pos=  66
+        Arg:
+          Const            '0'               NumInt32            tok=  37  pos=  67
+                           ')'               KWRParen            tok=  38  pos=  68
+  end                      <virt>            KWEnd               tok=virt  pos=  71
+type                       'type'            KWType              tok=  41  pos=  71
+TypeDefn.Anon:
+  TypeName                 'D'               Identifier          tok=  43  pos=  76
+  =                        '='               OpEquality          tok=  45  pos=  78
+  begin                    <virt>            KWBegin             tok=virt  pos=  84
+    inherit                'inherit'         KWInherit           tok=  48  pos=  84
+    NamedType:
+      Ident                'B'               Identifier          tok=  50  pos=  92
+    Val:
+      val                  'val'             KWVal               tok=  53  pos=  98
+      ident                'Y'               Identifier          tok=  55  pos= 102
+      :                    ':'               OpColon             tok=  56  pos= 103
+      NamedType:
+        Ident              'int'             Identifier          tok=  58  pos= 105
+    AdditionalConstructor:
+      new                  'new'             KWNew               tok=  62  pos= 114
+      ParenBlock           '('               KWLParen            tok=  63  pos= 117
+        Pat.Typed:
+          Pat.NamedSimple  'n'               Identifier          tok=  64  pos= 118
+          Colon            ':'               OpColon             tok=  65  pos= 119
+          NamedType:
+            Ident          'int'             Identifier          tok=  67  pos= 121
+                           ')'               KWRParen            tok=  68  pos= 124
+      =                    '='               OpEquality          tok=  70  pos= 126
+      Record               '{'               KWLBrace            tok=  72  pos= 128
+        inherit            'inherit'         KWInherit           tok=  74  pos= 130
+        NamedType:
+          Ident            'B'               Identifier          tok=  76  pos= 138
+        ParenBlock         '('               KWLParen            tok=  77  pos= 139
+          Const            '1'               NumInt32            tok=  78  pos= 140
+                           ')'               KWRParen            tok=  79  pos= 141
+        ;                  ';'               OpSemicolon         tok=  80  pos= 142
+        Field:
+          Ident            'Y'               Identifier          tok=  82  pos= 144
+          =                '='               OpEquality          tok=  84  pos= 146
+          Expr:
+            Ident          'n'               Identifier          tok=  86  pos= 148
+                           '}'               KWRBrace            tok=  88  pos= 150
+    AdditionalConstructor:
+      new                  'new'             KWNew               tok=  95  pos= 243
+      ParenBlock           '('               KWLParen            tok=  96  pos= 246
+        Pat.Typed:
+          Pat.NamedSimple  'n'               Identifier          tok=  97  pos= 247
+          Colon            ':'               OpColon             tok=  98  pos= 248
+          NamedType:
+            Ident          'string'          Identifier          tok= 100  pos= 250
+                           ')'               KWRParen            tok= 101  pos= 256
+      =                    '='               OpEquality          tok= 103  pos= 258
+      SkipsTokens:
+        (skipped)          'new'             KWNew               tok= 105  pos= 260
+        (skipped)          'D'               Identifier          tok= 107  pos= 264
+        (skipped)          'n'               Identifier          tok= 109  pos= 266
+    member                 'member'          KWMember            tok= 113  pos= 273
+    self                   '_'               Wildcard            tok= 115  pos= 280
+    Pat.NamedSimple        'Z'               Identifier          tok= 117  pos= 282
+    =                      '='               OpEquality          tok= 119  pos= 284
+      Const                '1'               NumInt32            tok= 121  pos= 286
+  end                      <virt>            KWEnd               tok=virt  pos= 288
+---
+Diagnostics:
+  MissingExpression at 260 (Ln 14, Col 22)
+        member _.Z =
+        ^ At index 273 (Ln 16, Col 5)
+    Offside

@@ -936,6 +936,7 @@ and walkExpr (visitor: AstVisitor<'T>) (expr: Expr<'T>) : unit =
     | Expr.OptionalArgExpr(qmark, ident) -> walkExprOptionalArgExpr visitor qmark ident
     | Expr.DynamicLookup(inner, qmark, ident) -> walkExprDynamicLookup visitor inner qmark ident
     | Expr.Sequential(exprs, _) -> walkExprSequential visitor exprs
+    | Expr.SequentialThen(inner, thenToken, thenExpr) -> walkExprSequentialThen visitor inner thenToken thenExpr
     | Expr.Tuple(elements, _) -> walkExprTuple visitor elements
     | Expr.StructTuple(_, _, elements, _, _) -> walkExprStructTuple visitor elements
     | Expr.EnclosedBlock(lParen, inner, r) -> walkExprEnclosedBlock visitor lParen inner r
@@ -964,7 +965,8 @@ and walkExpr (visitor: AstVisitor<'T>) (expr: Expr<'T>) : unit =
     | Expr.Function(functionToken, rules) -> walkExprFunction visitor functionToken rules
     | Expr.New(newToken, typ, newExpr) -> walkExprNew visitor newToken typ newExpr
     | Expr.Assignment(leftExpr, arrow, rightExpr) -> walkExprAssignment visitor leftExpr arrow rightExpr
-    | Expr.Record(lBrace, fieldInitializers, _, rBrace) -> walkExprRecord visitor lBrace fieldInitializers rBrace
+    | Expr.Record(lBrace, inherits, fieldInitializers, _, rBrace) ->
+        walkExprRecord visitor lBrace inherits fieldInitializers rBrace
     | Expr.RecordClone(lBrace, baseExpr, withToken, fieldInitializers, _, rBrace) ->
         walkExprRecordClone visitor lBrace baseExpr withToken fieldInitializers rBrace
     | Expr.IndexedLookup(indexedExpr, dot, lBracket, indexArgExpr, rBracket) ->
@@ -1075,6 +1077,13 @@ and walkExprSequential (visitor: AstVisitor<'T>) (exprs: ImArr<Expr<'T>>) : unit
         walkExpr visitor e
 
     visitor.ExitSection "Sequential"
+
+and walkExprSequentialThen (visitor: AstVisitor<'T>) (expr: Expr<'T>) (thenToken: 'T) (thenExpr: Expr<'T>) : unit =
+    visitor.EnterSection "SequentialThen"
+    walkExpr visitor expr
+    visitor.VisitToken "then" thenToken
+    walkExpr visitor thenExpr
+    visitor.ExitSection "SequentialThen"
 
 and walkExprTuple (visitor: AstVisitor<'T>) (elements: ImArr<Expr<'T>>) : unit =
     visitor.EnterSection "Tuple"
@@ -1374,6 +1383,7 @@ and walkExprAssignment (visitor: AstVisitor<'T>) (leftExpr: Expr<'T>) (arrow: 'T
 and walkExprRecord
     (visitor: AstVisitor<'T>)
     (lBrace: ParenKind<'T>)
+    (inherits: RecordInherit<'T> voption)
     (fieldInitializers: ImArr<FieldInitializer<'T>>)
     (rBrace: 'T)
     : unit =
@@ -1385,6 +1395,14 @@ and walkExprRecord
 
     visitor.VisitToken label lTok
     visitor.EnterSection ""
+
+    match inherits with
+    | ValueSome(RecordInherit(ClassInheritsDecl(inhTok, typ, arg), sep)) ->
+        visitor.VisitToken "inherit" inhTok
+        walkType visitor typ
+        ValueOption.iter (walkExpr visitor) arg
+        visitTokenOpt visitor ";" sep
+    | ValueNone -> ()
 
     for fi in fieldInitializers do
         walkFieldInitializer visitor fi
@@ -1804,7 +1822,7 @@ and walkMemberDefn (visitor: AstVisitor<'T>) (memberDefn: MemberDefn<'T>) : unit
         visitTokenOpt visitor "inline" inlineTok
 
         walkMethodOrPropDefn visitor defn
-    | MemberDefn.AdditionalConstructor(attrs, _, newTok, pat, _, eq, body) ->
+    | MemberDefn.AdditionalConstructor(attrs, _, newTok, pat, _, eq, body, _) ->
         visitor.EnterSection "AdditionalConstructor"
         walkAttributesOpt visitor attrs
 
@@ -1812,70 +1830,9 @@ and walkMemberDefn (visitor: AstVisitor<'T>) (memberDefn: MemberDefn<'T>) : unit
         walkPat visitor pat
         visitor.VisitToken "=" eq
 
-        walkAdditionalConstrExpr visitor body
+        walkExpr visitor body
 
         visitor.ExitSection "AdditionalConstructor"
-
-and walkAdditionalConstrExpr (visitor: AstVisitor<'T>) (body: AdditionalConstrExpr<'T>) : unit =
-    match body with
-    | AdditionalConstrExpr.Init initExpr ->
-        match initExpr with
-        | AdditionalConstrInitExpr.Explicit(lBrace, inherits, inits, rBrace) ->
-            visitor.VisitToken "{" lBrace
-
-            match inherits with
-            | ValueSome(ClassInheritsDecl(inhTok, typ, expr)) ->
-                visitor.VisitToken "inherit" inhTok
-                walkType visitor typ
-
-                match expr with
-                | ValueSome e -> walkExpr visitor e
-                | ValueNone -> ()
-            | ValueNone -> ()
-
-            for FieldInitializer(longIdent, eq, expr) in inits do
-                walkLongIdentOrOp visitor (LongIdentOrOp.LongIdent longIdent)
-                visitor.VisitToken "=" eq
-                walkExpr visitor expr
-
-            visitor.VisitToken "}" rBrace
-        | AdditionalConstrInitExpr.Delegated(newTok2, typ, expr) ->
-            visitor.VisitToken "new" newTok2
-            walkType visitor typ
-            walkExpr visitor expr
-        | AdditionalConstrInitExpr.Expression(expr) -> walkExpr visitor expr
-    | AdditionalConstrExpr.SequenceBefore(before, thenToken, expr) ->
-        walkAdditionalConstrExpr visitor before
-        visitor.VisitToken "then" thenToken
-        walkExpr visitor expr
-    | AdditionalConstrExpr.SequenceAfter(stmt, semicolon, rest) ->
-        walkExpr visitor stmt
-        visitor.VisitToken ";" semicolon
-        walkAdditionalConstrExpr visitor rest
-    | AdditionalConstrExpr.LetIn(letToken, binding, inToken, body) ->
-        visitor.VisitToken "Let" letToken
-        visitor.EnterSection ""
-        walkBinding visitor binding
-        visitor.ExitSection ""
-        visitor.VisitToken "in" inToken
-        visitor.EnterSection "Body"
-        walkAdditionalConstrExpr visitor body
-        visitor.ExitSection "Body"
-    | AdditionalConstrExpr.Conditional(ifToken, cond, thenToken, thenBranch, elseToken, elseBranch) ->
-        visitor.EnterSection "IfThenElse"
-        visitor.VisitToken "IfToken" ifToken
-        visitor.EnterSection "Condition"
-        walkExpr visitor cond
-        visitor.ExitSection "Condition"
-        visitor.VisitToken "ThenToken" thenToken
-        visitor.EnterSection "ThenExpr"
-        walkAdditionalConstrExpr visitor thenBranch
-        visitor.ExitSection "ThenExpr"
-        visitor.VisitToken "ElseToken" elseToken
-        visitor.EnterSection "ElseExpr"
-        walkAdditionalConstrExpr visitor elseBranch
-        visitor.ExitSection "ElseExpr"
-        visitor.ExitSection "IfThenElse"
 
 let walkUncurriedSig (visitor: AstVisitor<'T>) (sign: UncurriedSig<'T>) : unit =
     let (UncurriedSig(argsSpec, arrow, retType)) = sign

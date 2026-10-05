@@ -193,7 +193,8 @@ module CstWalk =
                 yield ChildExpr(env, fn)
                 yield ChildExpr(env, arg)
             | Expr.InfixApp(leftExpr = left; rightExpr = right)
-            | Expr.Assignment(leftExpr = left; rightExpr = right) ->
+            | Expr.Assignment(leftExpr = left; rightExpr = right)
+            | Expr.SequentialThen(expr = left; thenExpr = right) ->
                 yield ChildExpr(env, left)
                 yield ChildExpr(env, right)
             | Expr.IndexedLookup(expr = inner; indexExpr = idx) ->
@@ -314,7 +315,11 @@ module CstWalk =
                     yield MatchArm(env, rule)
             | Expr.Object(baseCall = baseCall; members = members; interfaceImpls = interfaceImpls) ->
                 yield! objectExprWork env baseCall members interfaceImpls
-            | Expr.Record(fieldInitializers = inits) ->
+            | Expr.Record(inherits = inherits; fieldInitializers = inits) ->
+                match inherits with
+                | ValueSome(RecordInherit(decl = ClassInheritsDecl(expr = ValueSome arg))) -> yield ChildExpr(env, arg)
+                | _ -> ()
+
                 for FieldInitializer(expr = inner) in inits do
                     yield ChildExpr(env, inner)
             | Expr.RecordClone(expr = source; fieldInitializers = inits) ->
@@ -460,6 +465,7 @@ module CstWalk =
         | Expr.Tuple _
         | Expr.StructTuple _
         | Expr.Sequential _
+        | Expr.SequentialThen _
         | Expr.TryFinally _
         | Expr.Range _
         | Expr.SliceFromTo _
@@ -472,9 +478,11 @@ module CstWalk =
         | Expr.Match _
         | Expr.Function _
         | Expr.TryWith _
-        | Expr.Record _
+        | Expr.Record(inherits = ValueNone)
         | Expr.RecordClone _
         | Expr.Pat _ -> ()
+
+        | Expr.Record(inherits = ValueSome(RecordInherit(decl = ClassInheritsDecl(typ = t)))) -> onType t
 
         | Expr.New(typ = t)
         | Expr.TypeAnnotation(typ = t)

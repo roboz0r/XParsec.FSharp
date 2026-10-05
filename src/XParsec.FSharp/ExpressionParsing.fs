@@ -355,10 +355,43 @@ module FieldInitializer =
 
     let parseSepBySemi1 = sepBy1 parse pSemi
 
+/// pars.fsy `atomicExprAfterType`: the argument after the type of `new T arg`, `inherit T arg`, an
+/// object expression's `new T arg` and an attribute `[<T arg>]`.
+[<RequireQualifiedAccess>]
+module AtomicExprAfterType =
+    let private errExpectedArgumentAfterType: ErrorType<PositionedToken, ParseState> =
+        Message "Expected a constructor argument after the type"
+
+    /// Whether `token` starts the argument: a constant, a string, or a parenthesised, braced or array
+    /// expression.
+    let private starts (token: Token) =
+        match token with
+        | Token.KWLParen
+        | Token.KWLBrace
+        | Token.KWLBraceBar
+        | Token.KWLArrayBracket
+        | Token.KWBegin
+        | Token.KWNull
+        | Token.KWTrue
+        | Token.KWFalse
+        | Token.StringOpen
+        | Token.VerbatimStringOpen
+        | Token.String3Open
+        | Token.InterpolatedStringOpen
+        | Token.VerbatimInterpolatedStringOpen
+        | Token.Interpolated3StringOpen
+        | Token.OpQuotationTypedLeft
+        | Token.OpQuotationUntypedLeft -> true
+        | _ -> TokenInfo.isLiteral token
+
+    let parse (reader: Reader<PositionedToken, ParseState, _>) =
+        match peekNextSyntaxToken reader with
+        | Ok t when starts t.Token -> refExprAtomic.Parser reader
+        | Ok _ -> fail errExpectedArgumentAfterType reader
+        | Error e -> Error e
+
 [<RequireQualifiedAccess>]
 module ObjectConstruction =
-    let private errNoConstructorArguments: ErrorType<PositionedToken, ParseState> =
-        Message "No constructor arguments"
 
     // Explicit initialization hook for static references
     let mutable private x = 0
@@ -368,25 +401,7 @@ module ObjectConstruction =
         parser {
             let! typ = Type.parse
 
-            // Look ahead for constructor arguments (e.g., `[<Attr "str">]` or `[<Attr(args)>]`)
-            let! argExpr =
-                opt (
-                    parser {
-                        let! token = lookAhead nextSyntaxToken
-
-                        if
-                            token.Token = Token.KWLParen
-                            || TokenInfo.isLiteral token.Token
-                            || token.Token = Token.StringOpen
-                            || token.Token = Token.VerbatimStringOpen
-                            || token.Token = Token.String3Open
-                        then
-                            // Inside `[< … >]`, semicolons separate multiple attributes
-                            return! refExprNoSeq.Parser
-                        else
-                            return! fail errNoConstructorArguments
-                    }
-                )
+            let! argExpr = opt AtomicExprAfterType.parse
 
             match argExpr with
             | ValueSome expr -> return ObjectConstruction.ObjectConstruction(typ, expr)
@@ -487,6 +502,12 @@ module Expr =
     let private errNotPrefixOp: ErrorType<PositionedToken, ParseState> =
         Message "Not a prefix operator"
 
+    let private errNextBlockItem: ErrorType<PositionedToken, ParseState> =
+        Message "The next item of the block follows the inherit clause"
+
+    let private errNotInheritRecord: ErrorType<PositionedToken, ParseState> =
+        Message "Not an empty record or a record expression opening with 'inherit'"
+
     let private errNotCEBody: ErrorType<PositionedToken, ParseState> =
         Message "Not a computation expression body"
 
@@ -497,8 +518,12 @@ module Expr =
 
     let private refExprRange = FSRefParser<Expr<SyntaxToken>>()
 
-    // Parses `seqExpr [':' type]`, enforcing offside context on the type annotation.
-    let pTypedSeqExprBlock =
+    /// A sequence block that ends before a `then` continuation: the operand of `yield` and `return`,
+    /// whose `then` continues the enclosing block.
+    let private refSeqBlockOperand = FSRefParser<Expr<SyntaxToken>>()
+
+    // Parses `seqExpr [':' type]` with `pSeqBlock`, enforcing offside context on the type annotation.
+    let private pTypedSeqExprBlockWith (pSeqBlock: FSParser<Expr<SyntaxToken>>) =
         let pColonPeek (reader: FSReader) =
             match peekNextSyntaxToken reader with
             | Ok t when t.Token = Token.OpColon ->
@@ -511,7 +536,7 @@ module Expr =
             | Error e -> Error e
 
         parser {
-            let! expr = refExprSeqBlock.Parser
+            let! expr = pSeqBlock
             let! maybeColon = opt pColonPeek
 
             match maybeColon with
@@ -521,6 +546,8 @@ module Expr =
                 return Expr.TypeAnnotation(expr, colon, typ)
             | ValueNone -> return expr
         }
+
+    let pTypedSeqExprBlock = pTypedSeqExprBlockWith refExprSeqBlock.Parser
 
     /// Functions that assemble AST Expr nodes from parsed operators and operands.
     module private Complete =
@@ -1109,14 +1136,14 @@ module Expr =
                     let result = buildNestedLetOrUse bindings body
                     preturn (ExprAux.KeywordExpr(fun _opTok -> result)) reader
 
-        let pYieldReturnDoBody =
-            // Grammar: YIELD|RETURN typedSeqExprBlock (and DO typedSeqExprBlock in CE context)
+        /// The operand of `yield`, `return` or `do` and their bang forms, parsed by `pOperand`.
+        let private pControlFlowBody (pOperand: FSParser<Expr<SyntaxToken>>) =
             let pBody =
                 recoverWith
                     StoppingTokens.afterExpr
                     DiagnosticCode.MissingExpression
                     (missingOrSkipped Expr.Missing Expr.SkipsTokens)
-                    refTypedSeqExprBlock.Parser
+                    pOperand
 
             parser {
                 let! expr = pBody
@@ -1136,6 +1163,13 @@ module Expr =
                         Expr.ControlFlow(kw, expr)
                     )
             }
+
+        // Grammar: YIELD|RETURN typedSeqExprBlock, whose `then` continues the enclosing block.
+        let pYieldReturnBody =
+            pControlFlowBody (pTypedSeqExprBlockWith refSeqBlockOperand.Parser)
+
+        // Grammar: DO typedSeqExprBlock, whose `then` continues the operand.
+        let pDoBody = pControlFlowBody refTypedSeqExprBlock.Parser
 
     /// High-precedence operators that bind tighter than whitespace application: `f(x)`, `f[i]`, and `f<T>`.
     module private HighPrec =
@@ -1704,19 +1738,19 @@ module Expr =
                 struct (Token.KWMatch, kwPrefixNoConsume KWBody.pMatchExpr Complete.forE)
                 struct (Token.KWIf, kwPrefixNoConsume KWBody.pIfExpr Complete.forE)
                 struct (Token.KWFun, kwPrefixNoConsume KWBody.pFunExpr Complete.forE)
-                struct (Token.KWDo, kwPrefixConsume KWBody.pYieldReturnDoBody Complete.keyword)
+                struct (Token.KWDo, kwPrefixConsume KWBody.pDoBody Complete.keyword)
                 struct (Token.KWFor, kwPrefixNoConsume KWBody.pForExpr Complete.forE)
-                struct (Token.KWYieldBang, kwPrefixConsume KWBody.pYieldReturnDoBody Complete.keyword)
-                struct (Token.KWYield, kwPrefixConsume KWBody.pYieldReturnDoBody Complete.keyword)
-                struct (Token.KWReturn, kwPrefixConsume KWBody.pYieldReturnDoBody Complete.keyword)
+                struct (Token.KWYieldBang, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
+                struct (Token.KWYield, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
+                struct (Token.KWReturn, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
                 struct (Token.KWTry, kwPrefixNoConsume KWBody.pTryExpr Complete.forE)
                 struct (Token.KWFunction, kwPrefixNoConsume KWBody.pFunctionExpr Complete.forE)
                 struct (Token.KWUse, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
                 struct (Token.KWLetBang, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
-                struct (Token.KWDoBang, kwPrefixConsume KWBody.pYieldReturnDoBody Complete.keyword)
+                struct (Token.KWDoBang, kwPrefixConsume KWBody.pDoBody Complete.keyword)
                 struct (Token.KWWhile, kwPrefixNoConsume KWBody.pWhileExpr Complete.forE)
                 struct (Token.KWWhileBang, kwPrefixNoConsume KWBody.pWhileExpr Complete.forE)
-                struct (Token.KWReturnBang, kwPrefixConsume KWBody.pYieldReturnDoBody Complete.keyword)
+                struct (Token.KWReturnBang, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
                 struct (Token.KWMatchBang, kwPrefixNoConsume KWBody.pMatchExpr Complete.forE)
                 struct (Token.KWUseBang, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
 
@@ -2090,7 +2124,7 @@ module Expr =
         parser {
             let! newTok = pNew
             let! typ = Type.parse
-            let! argExpr = pParen
+            let! argExpr = AtomicExprAfterType.parse
             return Expr.New(newTok, typ, argExpr)
         }
 
@@ -2130,6 +2164,61 @@ module Expr =
             return struct (fields, seps, rClose)
         }
 
+    /// The argument of an `inherit` clause (pars.fsy `atomicExprAfterType`). A token at the column of
+    /// the enclosing block starts the next item of the block instead.
+    let parseInheritArg (reader: Reader<PositionedToken, ParseState, _>) =
+        match peekNextSyntaxToken reader with
+        | Ok t ->
+            let atBlockColumn =
+                match t.Index, reader.State.Context with
+                | TokenIndex.Regular iT, { Indent = ctxIndent } :: _ -> ParseState.getIndent reader.State iT = ctxIndent
+                | _ -> false
+
+            match atBlockColumn with
+            | true -> fail errNextBlockItem reader
+            | false -> AtomicExprAfterType.parse reader
+        | Error e -> Error e
+
+    /// `inherit Base [arg] [sep]` opening a record expression (pars.fsy `recdExpr: INHERIT ...`).
+    /// The separator is a `;` or a virtual one before a field initialiser on the next line.
+    let private pRecordInherit =
+        parser {
+            let! inh = pInherit
+            let! typ = Type.parse
+            let! arg = opt parseInheritArg
+            let! sep = opt pRecordFieldSep
+            return RecordInherit(ClassInheritsDecl.ClassInheritsDecl(inh, typ, arg), sep)
+        }
+
+    /// Parses the field initialisers of a record literal opening with an `inherit` clause, which
+    /// may have none, and consumes the close delimiter.
+    let private pInheritRecordFieldsAndClose (openTok: SyntaxToken) =
+        parser {
+            let! inherits, (fields, seps) =
+                withContext
+                    OffsideContext.SeqBlock
+                    (parser {
+                        let! inherits = pRecordInherit
+
+                        match inherits with
+                        | RecordInherit(separator = ValueSome _) ->
+                            let! fieldsAndSeps = sepBy FieldInitializer.parse pRecordFieldSep
+                            return inherits, fieldsAndSeps
+                        | RecordInherit(separator = ValueNone) ->
+                            return inherits, (ImmutableArray.Empty, ImmutableArray.Empty)
+                    })
+
+            let! trailingSep = opt pSemi
+
+            let seps =
+                match trailingSep with
+                | ValueSome sep -> seps.Add(sep)
+                | ValueNone -> seps
+
+            let! rClose = pRecordClose openTok Token.KWRBrace Token.KWRBraceBar
+            return Expr.Record(ParenKind.Brace openTok, ValueSome inherits, fields, seps, rClose)
+        }
+
     /// Parses the inner content of a record or anonymous record expression.
     let private pRecordInner
         (lParen: ParenKind<SyntaxToken>)
@@ -2152,7 +2241,7 @@ module Expr =
                 parser {
                     let! struct (fields, seps, rClose) = pRecordFieldsAndClose openTok expectedClose mismatchedClose
 
-                    return Expr.Record(lParen, fields, seps, rClose)
+                    return Expr.Record(lParen, ValueNone, fields, seps, rClose)
                 }
             ]
             "Record fields"
@@ -2298,6 +2387,25 @@ module Expr =
                             let! rBrace = nextSyntaxTokenVirtualWithDiagnostic (ValueSome lBrace) Token.KWRBrace
 
                             return Expr.Object(lBrace, ValueSome newTok, baseCall, objMembers, interfaceImpls, rBrace)
+                        }
+                        // `{}`, a record of no fields (pars.fsy `braceExpr`), and a record literal opening
+                        // with `inherit Base(args)`
+                        parser {
+                            match! peekNextSyntaxToken with
+                            | t when t.Token = Token.KWRBrace ->
+                                let! rBrace = consumePeeked t
+                                let fields = ImmutableArray<FieldInitializer<SyntaxToken>>.Empty
+
+                                return
+                                    Expr.Record(
+                                        ParenKind.Brace lBrace,
+                                        ValueNone,
+                                        fields,
+                                        ImmutableArray.Empty,
+                                        rBrace
+                                    )
+                            | t when t.Token = Token.KWInherit -> return! pInheritRecordFieldsAndClose lBrace
+                            | _ -> return! fail errNotInheritRecord
                         }
                         // Record literal or clone
                         pRecordInner (ParenKind.Brace lBrace) lBrace Token.KWRBrace Token.KWRBraceBar
@@ -2459,8 +2567,53 @@ module Expr =
 
     let parse = Operator.parser parseAtomic operators
 
+    /// Whether the `then` token `thenTok` continues the sequence block on top of the context stack
+    /// as `expr then thenExpr` (pars.fsy `declExpr THEN seqExpr`). A `then` offside of the block, or
+    /// one closing the condition of an enclosing `if` or `elif`, ends the block.
+    let private continuesWithThen (state: ParseState) (thenTok: SyntaxToken) =
+        let rec outsideCondition (frames: Offside list) =
+            match frames with
+            | [] -> true
+            | frame :: rest ->
+                match frame.Context with
+                | OffsideContext.If -> false
+                | OffsideContext.Paren
+                | OffsideContext.Bracket
+                | OffsideContext.Brace
+                | OffsideContext.BracketBar
+                | OffsideContext.BraceBar
+                | OffsideContext.Begin
+                | OffsideContext.Quote -> true
+                | _ -> outsideCondition rest
+
+        match thenTok.Index, state.Context with
+        | TokenIndex.Regular iT, block :: _ ->
+            ParseState.getIndent state iT >= block.Indent && outsideCondition state.Context
+        | _ -> false
+
+    /// `expr then thenExpr`, where `expr` is the last item of a sequence: `a; b then c` is
+    /// `a; (b then c)`, as in pars.fsy.
+    let private sequentialThen (expr: Expr<SyntaxToken>) (thenTok: SyntaxToken) (thenExpr: Expr<SyntaxToken>) =
+        match expr with
+        | Expr.Sequential(exprs, seps) ->
+            let last = exprs.Length - 1
+            Expr.Sequential(exprs.SetItem(last, Expr.SequentialThen(exprs[last], thenTok, thenExpr)), seps)
+        | _ -> Expr.SequentialThen(expr, thenTok, thenExpr)
+
+    /// Parses an optional `then thenExpr` continuing `expr`.
+    let private pThenContinuation (expr: Expr<SyntaxToken>) (reader: Reader<PositionedToken, ParseState, _>) =
+        match peekNextSyntaxToken reader with
+        | Ok t when t.Token = Token.KWThen && continuesWithThen reader.State t ->
+            match consumePeeked t reader with
+            | Ok thenTok ->
+                match refTypedSeqExprBlock.Parser reader with
+                | Ok thenExpr -> Ok(sequentialThen expr thenTok thenExpr)
+                | Error e -> Error e
+            | Error e -> Error e
+        | _ -> Ok expr
+
     let parseSeqBlock =
-        withContext OffsideContext.SeqBlock parse
+        withContext OffsideContext.SeqBlock (parse >>= pThenContinuation)
         |> recoverWith
             StoppingTokens.afterExpr
             DiagnosticCode.MissingExpression
@@ -2471,6 +2624,7 @@ module Expr =
         refExpr.Set parse
         refExprSeqBlock.Set parseSeqBlock
         refTypedSeqExprBlock.Set pTypedSeqExprBlock
+        refSeqBlockOperand.Set(withContext OffsideContext.SeqBlock parse)
 
         // Non-sequential expressions (e.g. while conditions) where keywords like 'do' must not be consumed
         refExprNoSeq.Set(

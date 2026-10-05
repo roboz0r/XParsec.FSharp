@@ -443,11 +443,12 @@ module Type =
             ]
             "Atomic Type"
 
+    // Array type rank delimiters are `[` and `]`; `[|` always opens an array expression.
     let private pArrayOpenBracket =
-        nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.KWLArrayBracket || t.Token = Token.KWLBracket) "["
+        nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.KWLBracket) "["
 
     let private pArrayCloseBracket =
-        nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.KWRArrayBracket || t.Token = Token.KWRBracket) "]"
+        nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.KWRBracket) "]"
 
     let private errExpectedDot: ErrorType<PositionedToken, ParseState> =
         Message "Expected '.'"
@@ -468,7 +469,7 @@ module Type =
             ]
             "."
 
-    // Postfix array rank continuation: `[]`, `[,]`, or `[|]`
+    // Postfix array rank continuation: `[]` or `[,]`
     let private pPostfixArrayCont =
         parser {
             let! l = pArrayOpenBracket
@@ -515,8 +516,7 @@ module Type =
                             | Error e -> errOpt <- ValueSome e
                         else
                             match peeked.Token with
-                            | Token.KWLBracket
-                            | Token.KWLArrayBracket ->
+                            | Token.KWLBracket ->
                                 match pPostfixArrayCont reader with
                                 | Ok(struct (l, commas, r)) -> acc <- Type.ArrayType(acc, l, commas, r)
                                 | Error e -> errOpt <- ValueSome e

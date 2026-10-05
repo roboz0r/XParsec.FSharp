@@ -385,240 +385,6 @@ module MethodOrPropDefn =
                             "MethodOrPropDefn no ident"
         }
 
-[<AutoOpen>]
-module internal TypeDefnHelpers =
-    // Forward reference for MemberDefn (overriding the one in your stub if needed,
-    // or we use the existing refMemberDefn from your provided MemberHelpers)
-    let refAdditionalConstrExpr = FSRefParser<AdditionalConstrExpr<SyntaxToken>>()
-
-[<RequireQualifiedAccess>]
-module AdditionalConstrExpr =
-
-    // Local virtual-sep parser modeled on ExpressionParsing.pSepVirt: matches `;`
-    // or emits a layout-sensitive VirtualSep when the next token is an expression
-    // starter at the enclosing SeqBlock indent.
-    let private pCtorSepVirt: FSParser<SyntaxToken> =
-        let failSep =
-            fail (Message "Expected ';' or newline at the same indent for constructor body sequencing")
-
-        parser {
-            match! peekNextSyntaxToken with
-            | t when t.Token = Token.EOF -> return! failSep
-            | t when t.Token = Token.OpSemicolon -> return! consumePeeked t
-            | t ->
-                if TokenInfo.canStartExpression t.Token then
-                    let! indent = currentIndent
-                    let! state = getUserState
-
-                    let atContextIndent =
-                        match state.Context with
-                        | { Indent = ctxIndent } :: _ -> indent = ctxIndent
-                        | [] -> indent = 0
-
-                    if atContextIndent then
-                        return virtualToken (PositionedToken.Create(Token.VirtualSep, t.StartIndex))
-                    else
-                        return! failSep
-                else
-                    return! failSep
-        }
-
-    /// Parses secondary constructor initialization blocks in records/classes:
-    /// `{ [inherit Type(args)]; [field1 = expr1; field2 = expr2] }`
-    let private pRecordInit: FSParser<AdditionalConstrInitExpr<SyntaxToken>> =
-        parser {
-            let! lBrace = pLBrace
-
-            // Optional base constructor call: `inherit Type(...)`. The clause opens the body's
-            // block, so a field initializer on the next line at the same indent is a block
-            // item rather than a postfix type suffix (`B x`).
-            let pInherits =
-                parser {
-                    let! inh = pInherit
-                    let! t = Type.parse
-
-                    // The argument is a high-precedence application (`B(9)`, no whitespace),
-                    // as fsc reads it, so a token on the next line is a field initializer.
-                    let! e =
-                        fun (reader: Reader<PositionedToken, ParseState, _>) ->
-                            match reader.Peek() with
-                            | ValueSome pt when pt.Token = Token.KWLParen -> opt Expr.parseAtomic reader
-                            | _ -> preturn ValueNone reader
-
-                    // `{ inherit B(9); x = 1 }`: the `;` between the clause and the first initializer.
-                    let! _sep = opt pSemi
-                    return ClassInheritsDecl.ClassInheritsDecl(inh, t, e)
-                }
-
-            // Parses 0 or more field initializers (`field = expr`) separated by `;` or newlines.
-            // Using 0+ matches allows inherit-only blocks like `{ inherit Base() }`.
-            let! inherits, (inits, _seps) =
-                withContext
-                    OffsideContext.SeqBlock
-                    (parser {
-                        let! inherits = opt pInherits
-                        let! inits = sepBy FieldInitializer.parse pCtorSepVirt
-                        return inherits, inits
-                    })
-
-            let! _trailingSep = opt pCtorSepVirt
-            let! rBrace = pRBrace
-            return AdditionalConstrInitExpr.Explicit(lBrace, inherits, inits, rBrace)
-        }
-
-    let private pDelegatedInit: FSParser<AdditionalConstrInitExpr<SyntaxToken>> =
-        parser {
-            let! newTok = pNew
-            let! t = Type.parse
-            let! e = Expr.parseSeqBlock
-            return AdditionalConstrInitExpr.Delegated(newTok, t, e)
-        }
-
-    // Mirrors ExpressionParsing.pLetOrUseIn: real `in`, or VirtualIn when the next
-    // token sits at the let column or the enclosing context column (offside `in`).
-    let private pCtorLetIn (letIndent: int) (reader: Reader<PositionedToken, ParseState, _>) =
-        match peekNextSyntaxToken reader with
-        | Ok t when t.Token = Token.KWIn -> consumePeeked t reader
-        | Ok t ->
-            let indent = ParseState.getIndent reader.State (reader.Index * 1<token>)
-            let state = reader.State
-
-            let atContextIndent =
-                match state.Context with
-                | { Indent = 0 } :: _ -> true
-                | { Indent = ctxIndent } :: _ -> indent = ctxIndent || indent = letIndent
-                | [] -> indent = 0 || indent = letIndent
-
-            if atContextIndent then
-                Ok(virtualToken (PositionedToken.Create(Token.VirtualIn, t.StartIndex)))
-            else
-                fail (Message "Expected 'in' at let-binding indent in constructor body") reader
-        | Error _ ->
-            let pos = reader.Index * 1<token>
-
-            let startIndex =
-                if pos < reader.State.Lexed.Tokens.Length * 1<token> then
-                    reader.State.Lexed.Tokens[pos].StartIndex
-                else
-                    0
-
-            Ok(virtualToken (PositionedToken.Create(Token.VirtualIn, startIndex)))
-
-    // Recursive driver for additional-constr-expr per F# spec §8.6.3:
-    //   add-constr-expr := stmt ';' add-constr-expr        -- SequenceAfter
-    //                    | if expr then add-constr else add-constr  -- Conditional
-    //                    | let binding in add-constr        -- LetIn
-    //                    | additional-constr-init-expr      -- Init
-    // The top-level `parse` adds the optional `then expr` postlude (SequenceBefore).
-    let rec private pConstrExpr (reader: Reader<PositionedToken, ParseState, _>) =
-        match peekNextSyntaxToken reader with
-        | Error e -> Error e
-        | Ok peeked ->
-            match peeked.Token with
-            | Token.KWLet
-            | Token.KWUse ->
-                match consumePeeked peeked reader with
-                | Error e -> Error e
-                | Ok letTok ->
-                    let letIndent =
-                        match letTok.Index with
-                        | TokenIndex.Regular iT -> ParseState.getIndent reader.State iT
-                        | TokenIndex.Virtual -> 0
-
-                    let pDefn =
-                        withContextAt OffsideContext.Let letIndent letTok.PositionedToken (Binding.parse ValueNone)
-
-                    match pDefn reader with
-                    | Error e -> Error e
-                    | Ok binding ->
-                        match pCtorLetIn letIndent reader with
-                        | Error e -> Error e
-                        | Ok inTok ->
-                            match pConstrExpr reader with
-                            | Error e -> Error e
-                            | Ok body -> Ok(AdditionalConstrExpr.LetIn(letTok, binding, inTok, body))
-            | Token.KWIf ->
-                match consumePeeked peeked reader with
-                | Error e -> Error e
-                | Ok ifTok ->
-                    let ifIndent =
-                        match ifTok.Index with
-                        | TokenIndex.Regular iT -> ParseState.getIndent reader.State iT
-                        | TokenIndex.Virtual -> 0
-
-                    let pCond =
-                        withContextAt OffsideContext.If (ifIndent + 1) ifTok.PositionedToken refExpr.Parser
-
-                    match pCond reader with
-                    | Error e -> Error e
-                    | Ok cond ->
-                        match pThen reader with
-                        | Error e -> Error e
-                        | Ok thenTok ->
-                            match pConstrExpr reader with
-                            | Error e -> Error e
-                            | Ok thenBranch ->
-                                match pElse reader with
-                                | Error e -> Error e
-                                | Ok elseTok ->
-                                    match pConstrExpr reader with
-                                    | Error e -> Error e
-                                    | Ok elseBranch ->
-                                        Ok(
-                                            AdditionalConstrExpr.Conditional(
-                                                ifTok,
-                                                cond,
-                                                thenTok,
-                                                thenBranch,
-                                                elseTok,
-                                                elseBranch
-                                            )
-                                        )
-            | Token.KWLBrace ->
-                match pRecordInit reader with
-                | Error e -> Error e
-                | Ok init -> Ok(AdditionalConstrExpr.Init init)
-            | Token.KWNew ->
-                match pDelegatedInit reader with
-                | Error e -> Error e
-                | Ok init -> Ok(AdditionalConstrExpr.Init init)
-            | _ ->
-                // Default: parse a single (non-Sequential) expression. If followed by
-                // a sequence sep, treat as a `stmt` in a SequenceAfter chain; otherwise
-                // it's the final init expression.
-                match refExprNoSeq.Parser reader with
-                | Error e -> Error e
-                | Ok firstExpr ->
-                    match pCtorSepVirt reader with
-                    | Ok semi ->
-                        match pConstrExpr reader with
-                        | Error e -> Error e
-                        | Ok rest -> Ok(AdditionalConstrExpr.SequenceAfter(firstExpr, semi, rest))
-                    | Error _ -> Ok(AdditionalConstrExpr.Init(AdditionalConstrInitExpr.Expression firstExpr))
-
-    let parse =
-        // SeqBlock context anchors VirtualSep emission for stmt-sequence chains.
-        withContext
-            OffsideContext.SeqBlock
-            (parser {
-                let! body = pConstrExpr
-
-                let! thenClause =
-                    opt (
-                        parser {
-                            let! thenTok = pThen
-                            let! expr = Expr.parseSeqBlock
-                            return (thenTok, expr)
-                        }
-                    )
-
-                match thenClause with
-                | ValueSome(thenTok, expr) -> return AdditionalConstrExpr.SequenceBefore(body, thenTok, expr)
-                | ValueNone -> return body
-            })
-
-    do refAdditionalConstrExpr.Set parse
-
 [<RequireQualifiedAccess>]
 module AutoPropDefn =
     let parse: Parser<MethodOrPropDefn<SyntaxToken>, _, _, _> =
@@ -863,9 +629,12 @@ module MemberDefn =
             let! pat = Pat.parse
             let! asDefn = opt AsDefn.parse
             let! equals = pEquals
-            let! body = refAdditionalConstrExpr.Parser
+            let! body = refTypedSeqExprBlock.Parser
 
-            return (fun attrs -> MemberDefn.AdditionalConstructor(attrs, access, newTok, pat, asDefn, equals, body))
+            let shape = ConstructorBody.ofExpr body
+
+            return
+                (fun attrs -> MemberDefn.AdditionalConstructor(attrs, access, newTok, pat, asDefn, equals, body, shape))
         }
 
     let private memberDefnDispatcher =
@@ -936,7 +705,7 @@ module TypeDefnElement =
                 parser {
                     let! inh = pInherit
                     let! t = Type.parse
-                    let! e = opt Expr.parseAtomic
+                    let! e = opt Expr.parseInheritArg
                     return TypeDefnElement.Inherit(ClassInheritsDecl.ClassInheritsDecl(inh, t, e))
                 }
                 MemberDefn.parse |>> TypeDefnElement.Member
@@ -963,8 +732,7 @@ module ClassInheritsDecl =
         parser {
             let! inh = pInherit
             let! t = Type.parse
-            // Optional constructor args — atomic only (no infix operators, semicolons, or type annotations at top level)
-            let! e = opt Expr.parseAtomic
+            let! e = opt Expr.parseInheritArg
             return ClassInheritsDecl.ClassInheritsDecl(inh, t, e)
         }
 

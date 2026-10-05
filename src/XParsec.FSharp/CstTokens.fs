@@ -103,6 +103,7 @@ module CstTokens =
             match exprs.Length with
             | 0 -> failwithf "CstTokens.firstTokenOfExpr: sequential expression retains no token: %A" e
             | _ -> firstTokenOfExpr exprs.[0]
+        | Expr.SequentialThen(expr = inner) -> firstTokenOfExpr inner
         | Expr.StructTuple(structToken = t) -> t
         | Expr.TypeAnnotation(expr = inner) -> firstTokenOfExpr inner
         | Expr.StaticUpcast(colonGreaterThan = t) -> t

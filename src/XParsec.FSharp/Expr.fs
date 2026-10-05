@@ -240,6 +240,9 @@ type LetOrUseKeyword<'T> =
 // Represents: record, object, and interface implementation grammar
 type FieldInitializer<'T> = | FieldInitializer of longIdent: LongIdent<'T> * equals: 'T * expr: Expr<'T>
 
+/// The `inherit Base(args)` clause opening a record expression, and the separator after it.
+type RecordInherit<'T> = | RecordInherit of decl: ClassInheritsDecl<'T> * separator: 'T voption
+
 type ObjectConstruction<'T> =
     | ObjectConstruction of typ: Type<'T> * expr: Expr<'T>
     | InterfaceConstruction of typ: Type<'T>
@@ -322,6 +325,7 @@ type Expr<'T> =
         rBrace: 'T
     | Record of
         lBrace: ParenKind<'T> *
+        inherits: RecordInherit<'T> voption *
         fieldInitializers: ImArr<FieldInitializer<'T>> *
         separators: ImArr<'T> *
         rBrace: 'T
@@ -352,6 +356,9 @@ type Expr<'T> =
     | Fun of funToken: 'T * argumentPats: ImArr<Pat<'T>> * arrow: 'T * expr: Expr<'T>
     | Function of functionToken: 'T * rules: Rules<'T>
     | Sequential of exprs: ImArr<Expr<'T>> * semicolons: ImArr<'T>
+    /// `expr then thenExpr`, which evaluates `thenExpr` after `expr` and has the value of `expr`.
+    /// F# accepts it only in a secondary-constructor body (FS0743).
+    | SequentialThen of expr: Expr<'T> * thenToken: 'T * thenExpr: Expr<'T>
     | Match of matchToken: 'T * matchExpr: Expr<'T> * withToken: 'T * rules: Rules<'T>
     | TryWith of tryToken: 'T * expr: Expr<'T> * withToken: 'T * rules: Rules<'T>
     | TryFinally of tryToken: 'T * tryExpr: Expr<'T> * finallyToken: 'T * finallyExpr: Expr<'T>
@@ -607,31 +614,51 @@ type MemberKeyword<'T> =
 // Represents: class, struct, and interface bodies
 type ClassInheritsDecl<'T> = | ClassInheritsDecl of inheritToken: 'T * typ: Type<'T> * expr: Expr<'T> voption
 
-type AdditionalConstrInitExpr<'T> =
-    | Explicit of
+type AsDefn<'T> = | AsDefn of asToken: 'T * ident: 'T
+
+/// An initialisation in tail position of a secondary-constructor body.
+[<RequireQualifiedAccess>]
+type ConstructorInit<'T> =
+    /// `{ [inherit Base(args)] field = value; ... }`, initialising the fields of the object.
+    | Fields of
         lBrace: 'T *
         inherits: ClassInheritsDecl<'T> voption *
-        initializers: ImArr<FieldInitializer<'T>> *
+        initialisers: ImArr<FieldInitializer<'T>> *
         rBrace: 'T
-    | Delegated of newToken: 'T * typ: Type<'T> * expr: Expr<'T>
+    /// `new T(args)`, delegating construction to another constructor.
+    | Delegated of newToken: 'T * typ: Type<'T> * args: Expr<'T>
+    /// Any other expression. Delegation written as an application, `T(args)`, has this form.
     | Expression of expr: Expr<'T>
 
-// Represents: additional-constr-defn and its expression body
+/// A secondary-constructor body as the evaluation path to its initialisations (F# spec §8.6.3,
+/// `additional-constr-expr`). Every path through the body ends in exactly one `Init`.
 [<RequireQualifiedAccess>]
-type AdditionalConstrExpr<'T> =
-    | SequenceAfter of stmt: Expr<'T> * semicolon: 'T * rest: AdditionalConstrExpr<'T>
-    | SequenceBefore of before: AdditionalConstrExpr<'T> * thenToken: 'T * expr: Expr<'T>
+type ConstructorBody<'T> =
+    /// `statement; rest`, or the two on consecutive lines.
+    | Statement of statement: Expr<'T> * rest: ConstructorBody<'T>
+    /// `body then postlude`.
+    | Postlude of body: ConstructorBody<'T> * thenToken: 'T * postlude: Expr<'T>
+    /// `let [rec] bindings in body`.
+    | Let of letToken: 'T * isRec: 'T voption * bindings: ImArr<Binding<'T>> * body: ConstructorBody<'T>
+    /// `if condition then thenBranch else elseBranch`. `ifToken` is the `if`, the `elif`, or the
+    /// `if` of an `else if`. Each `elif` arm is a `Conditional` in the `elseBranch` of the arm before.
     | Conditional of
         ifToken: 'T *
-        cond: Expr<'T> *
-        thenToken: 'T *
-        thenBranch: AdditionalConstrExpr<'T> *
-        elseToken: 'T *
-        elseBranch: AdditionalConstrExpr<'T>
-    | LetIn of letToken: 'T * binding: Binding<'T> * inToken: 'T * body: AdditionalConstrExpr<'T>
-    | Init of initExpr: AdditionalConstrInitExpr<'T>
+        condition: Expr<'T> *
+        thenBranch: ConstructorBody<'T> *
+        elseBranch: ConstructorBody<'T>
+    /// `match scrutinee with arms`.
+    | Match of matchToken: 'T * scrutinee: Expr<'T> * arms: ImArr<ConstructorArm<'T>>
+    | Init of init: ConstructorInit<'T>
 
-type AsDefn<'T> = | AsDefn of asToken: 'T * ident: 'T
+/// A rule of a `match` in a secondary-constructor body.
+and ConstructorArm<'T> =
+    {
+        Pattern: Pat<'T>
+        Guard: PatternGuard<'T> voption
+        Body: ConstructorBody<'T>
+    }
+
 
 // Represents: member-defn
 [<RequireQualifiedAccess>]
@@ -652,6 +679,7 @@ type MemberDefn<'T> =
         ident: 'T *
         colon: 'T *
         typ: Type<'T>
+    /// `new(pat) = body`, with `shape` the paths of `body` to its initialisations.
     | AdditionalConstructor of
         attributes: Attributes<'T> voption *
         access: Access<'T> voption *
@@ -659,7 +687,8 @@ type MemberDefn<'T> =
         pat: Pat<'T> *
         asDefn: AsDefn<'T> voption *
         equals: 'T *
-        body: AdditionalConstrExpr<'T>
+        body: Expr<'T> *
+        shape: ConstructorBody<'T>
 
 // Represents: type-defn-element and related constructs
 type TypeDefnElement<'T> =
