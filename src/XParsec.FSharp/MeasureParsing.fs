@@ -195,4 +195,7 @@ module Measure =
     let parse: Parser<Measure<SyntaxToken>, _, _, _> =
         Operator.parser atomMeasureParser measureOperatorParser
 
-    do refMeasure.Set parse
+    /// Initializes the forward parser used for measure-valued type arguments.
+    let internal init () = refMeasure.Set parse
+
+    do init ()

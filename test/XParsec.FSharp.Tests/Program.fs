@@ -144,6 +144,7 @@ let private corpusMain subDir =
 [<EntryPoint>]
 let main argv =
     match argv with
+    | [| "--cold-parse"; mode |] -> InitializationTests.parseCold mode
     | [| "--parse-file"; path |] ->
         let fullPath =
             if Path.IsPathRooted path then

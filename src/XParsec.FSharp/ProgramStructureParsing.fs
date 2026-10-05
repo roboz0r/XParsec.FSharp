@@ -51,6 +51,11 @@ module ImplementationFile =
 
 [<RequireQualifiedAccess>]
 module FSharpAst =
+    let private initialization =
+        lazy
+            (Measure.init ()
+             ObjectConstruction.init ())
+
     /// Consumes the EOF token (including trailing trivia/directives) and asserts end of input.
     let private pEof = nextSyntaxTokenIsLMsg Token.EOF "Expected end of file" .>> eof
 
@@ -140,6 +145,7 @@ module FSharpAst =
     /// Infallible: always returns `Ok`, recording parse errors as diagnostics and unparsed tokens as `SkipsTokens`.
     let parseSignature: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
         fun reader ->
+            initialization.Force()
             let startPos = reader.Position
 
             let fileIndent =
@@ -207,6 +213,7 @@ module FSharpAst =
     /// Infallible: always returns `Ok`, recording parse errors as diagnostics and unparsed tokens as `SkipsTokens`.
     let parse: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
         fun reader ->
+            initialization.Force()
             let startPos = reader.Position
 
             // Establish a base `SeqBlock` context so undentation rules have a root offside line.

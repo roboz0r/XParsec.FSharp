@@ -13,6 +13,7 @@
     <Compile Include="LexingTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="CorpusReport.fs" />
+    <Compile Include="InitializationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

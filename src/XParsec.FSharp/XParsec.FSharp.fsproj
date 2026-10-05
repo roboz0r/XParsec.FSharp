@@ -16,6 +16,11 @@
     <Compile Include="ProgramStructure.fs" />
     <Compile Include="AstTraversal.fs" />
     <Compile Include="ParsingTypes.fs" />
+    <Compile Include="CstTokens.fs" />
+    <Compile Include="CstDeclarations.fs" />
+    <Compile Include="TypeDefnPatterns.fs" />
+    <Compile Include="CstTypeWalk.fs" />
+    <Compile Include="CstWalk.fs" />
     <Compile Include="ExprPatterns.fs" />
     <Compile Include="Preprocessing.fs" />
     <Compile Include="ParsingHelpers.fs" />
