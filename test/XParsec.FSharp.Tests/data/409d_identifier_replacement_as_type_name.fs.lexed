@@ -1,0 +1,17 @@
+0, KWModule
+6, Whitespace
+7, Identifier
+15, Newline
+16, Newline
+17, LineComment
+102, Newline
+103, Newline
+104, KWType
+108, Whitespace
+109, LineIdentifier
+117, Whitespace
+118, OpEquality
+119, Whitespace
+120, Identifier
+123, Newline
+124, EOF

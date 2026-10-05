@@ -1,0 +1,176 @@
+module                   'module'          KWModule            tok=   0  pos=   0
+                         'MyModule'        Identifier          tok=   2  pos=   7
+type                     'type'            KWType              tok=  10  pos= 174
+TypeDefn.Record:
+  TypeName               'R'               Identifier          tok=  12  pos= 179
+  =                      '='               OpEquality          tok=  14  pos= 181
+  access                 'private'         KWPrivate           tok=  17  pos= 187
+  {                      '{'               KWLBrace            tok=  20  pos= 203
+    Field:
+      ident              'X'               Identifier          tok=  23  pos= 217
+      :                  ':'               OpColon             tok=  24  pos= 218
+      NamedType:
+        Ident            'int'             Identifier          tok=  26  pos= 220
+  }                      '}'               KWRBrace            tok=  29  pos= 232
+  with                   <virt>            KWWith              tok=virt  pos= 239
+    member               'member'          KWMember            tok=  33  pos= 239
+    self                 'this'            Identifier          tok=  35  pos= 246
+    Pat.NamedSimple      'Y'               Identifier          tok=  37  pos= 251
+    =                    '='               OpEquality          tok=  39  pos= 253
+      LongIdentOrOp:
+        LongIdent:
+                         'this'            Identifier          tok=  41  pos= 255
+                         'X'               Identifier          tok=  43  pos= 260
+  end                    <virt>            KWEnd               tok=virt  pos= 263
+type                     'type'            KWType              tok=  46  pos= 263
+TypeDefn.Record:
+  TypeName               'R2'              Identifier          tok=  48  pos= 268
+  =                      '='               OpEquality          tok=  50  pos= 271
+  access                 'private'         KWPrivate           tok=  53  pos= 277
+  {                      '{'               KWLBrace            tok=  55  pos= 285
+    Field:
+      ident              'X2'              Identifier          tok=  57  pos= 287
+      :                  ':'               OpColon             tok=  58  pos= 289
+      NamedType:
+        Ident            'int'             Identifier          tok=  60  pos= 291
+  }                      '}'               KWRBrace            tok=  62  pos= 295
+  with                   <virt>            KWWith              tok=virt  pos= 301
+    member               'member'          KWMember            tok=  65  pos= 301
+    self                 'this'            Identifier          tok=  67  pos= 308
+    Pat.NamedSimple      'Y'               Identifier          tok=  69  pos= 313
+    =                    '='               OpEquality          tok=  71  pos= 315
+      LongIdentOrOp:
+        LongIdent:
+                         'this'            Identifier          tok=  73  pos= 317
+                         'X2'              Identifier          tok=  75  pos= 322
+  end                    <virt>            KWEnd               tok=virt  pos= 326
+type                     'type'            KWType              tok=  78  pos= 326
+TypeDefn.Union:
+  TypeName               'U'               Identifier          tok=  80  pos= 331
+  =                      '='               OpEquality          tok=  82  pos= 333
+  access                 'private'         KWPrivate           tok=  85  pos= 339
+    Case:
+      Ident              'A'               Identifier          tok=  90  pos= 357
+      of                 'of'              KWOf                tok=  92  pos= 359
+      NamedType:
+        Ident            'int'             Identifier          tok=  94  pos= 362
+    Case:
+      Ident              'B'               Identifier          tok=  99  pos= 376
+  with                   <virt>            KWWith              tok=virt  pos= 383
+    member               'member'          KWMember            tok= 103  pos= 383
+    self                 'this'            Identifier          tok= 105  pos= 390
+    Pat.NamedSimple      'Y'               Identifier          tok= 107  pos= 395
+    =                    '='               OpEquality          tok= 109  pos= 397
+      Const              '1'               NumInt32            tok= 111  pos= 399
+  end                    <virt>            KWEnd               tok=virt  pos= 402
+type                     'type'            KWType              tok= 114  pos= 402
+TypeDefn.Union:
+  TypeName               'U2'              Identifier          tok= 116  pos= 407
+  =                      '='               OpEquality          tok= 118  pos= 410
+  access                 'internal'        KWInternal          tok= 121  pos= 416
+    Case:
+      Ident              'C'               Identifier          tok= 126  pos= 435
+    Case:
+      Ident              'D'               Identifier          tok= 131  pos= 447
+  with                   <virt>            KWWith              tok=virt  pos= 453
+    static               'static'          KWStatic            tok= 134  pos= 453
+    member               'member'          KWMember            tok= 136  pos= 460
+    Pat.NamedSimple      'Z'               Identifier          tok= 138  pos= 467
+    =                    '='               OpEquality          tok= 140  pos= 469
+      Const              '1'               NumInt32            tok= 142  pos= 471
+    member               'member'          KWMember            tok= 145  pos= 477
+    self                 'this'            Identifier          tok= 147  pos= 484
+    Pat.NamedSimple      'W'               Identifier          tok= 149  pos= 489
+    =                    '='               OpEquality          tok= 151  pos= 491
+      Const              '2'               NumInt32            tok= 153  pos= 493
+  end                    <virt>            KWEnd               tok=virt  pos= 496
+type                     'type'            KWType              tok= 156  pos= 496
+TypeDefn.Union:
+  TypeName               'U3'              Identifier          tok= 158  pos= 501
+  =                      '='               OpEquality          tok= 160  pos= 504
+  access                 'private'         KWPrivate           tok= 163  pos= 510
+    Case:
+      Ident              'E'               Identifier          tok= 167  pos= 520
+    Case:
+      Ident              'F'               Identifier          tok= 171  pos= 524
+  with                   <virt>            KWWith              tok=virt  pos= 530
+    member               'member'          KWMember            tok= 174  pos= 530
+    self                 'this'            Identifier          tok= 176  pos= 537
+    Pat.NamedSimple      'Y'               Identifier          tok= 178  pos= 542
+    =                    '='               OpEquality          tok= 180  pos= 544
+      Const              '1'               NumInt32            tok= 182  pos= 546
+  end                    <virt>            KWEnd               tok=virt  pos= 549
+type                     'type'            KWType              tok= 185  pos= 549
+TypeDefn.Record:
+  TypeName               'R3'              Identifier          tok= 187  pos= 554
+  =                      '='               OpEquality          tok= 189  pos= 557
+  access                 'internal'        KWInternal          tok= 192  pos= 563
+  {                      '{'               KWLBrace            tok= 195  pos= 580
+    Field:
+      ident              'X3'              Identifier          tok= 197  pos= 582
+      :                  ':'               OpColon             tok= 198  pos= 584
+      NamedType:
+        Ident            'int'             Identifier          tok= 200  pos= 586
+  }                      '}'               KWRBrace            tok= 202  pos= 590
+  with                   <virt>            KWWith              tok=virt  pos= 596
+    InterfaceImpl:
+      interface          'interface'       KWInterface         tok= 205  pos= 596
+      NamedType:
+        LongIdent:
+                         'System'          Identifier          tok= 207  pos= 606
+                         'IDisposabl...'   Identifier          tok= 209  pos= 613
+      with               'with'            KWWith              tok= 211  pos= 625
+        member           'member'          KWMember            tok= 214  pos= 638
+        self             'this'            Identifier          tok= 216  pos= 645
+        Pat.NamedSimple  'Dispose'         Identifier          tok= 218  pos= 650
+        Pats:
+          ParenBlock     '('               KWLParen            tok= 219  pos= 657
+                         ')'               KWRParen            tok= 220  pos= 658
+        =                '='               OpEquality          tok= 222  pos= 660
+          ParenBlock     '('               KWLParen            tok= 224  pos= 662
+                         ')'               KWRParen            tok= 225  pos= 663
+      end                <virt>            KWEnd               tok=virt  pos=   0
+  end                    <virt>            KWEnd               tok=virt  pos= 666
+type                     'type'            KWType              tok= 228  pos= 666
+TypeDefn.Record:
+  TypeName               'R4'              Identifier          tok= 230  pos= 671
+  =                      '='               OpEquality          tok= 232  pos= 674
+  access                 'private'         KWPrivate           tok= 235  pos= 680
+  {                      '{'               KWLBrace            tok= 238  pos= 696
+    Field:
+      ident              'X4'              Identifier          tok= 240  pos= 698
+      :                  ':'               OpColon             tok= 241  pos= 700
+      NamedType:
+        Ident            'int'             Identifier          tok= 243  pos= 702
+  }                      '}'               KWRBrace            tok= 245  pos= 706
+  with                   'with'            KWWith              tok= 248  pos= 712
+    member               'member'          KWMember            tok= 251  pos= 725
+    self                 'this'            Identifier          tok= 253  pos= 732
+    Pat.NamedSimple      'Y'               Identifier          tok= 255  pos= 737
+    =                    '='               OpEquality          tok= 257  pos= 739
+      LongIdentOrOp:
+        LongIdent:
+                         'this'            Identifier          tok= 259  pos= 741
+                         'X4'              Identifier          tok= 261  pos= 746
+  end                    <virt>            KWEnd               tok=virt  pos= 750
+type                     'type'            KWType              tok= 264  pos= 750
+TypeDefn.Record:
+  TypeName               'R5'              Identifier          tok= 266  pos= 755
+  =                      '='               OpEquality          tok= 268  pos= 758
+  {                      '{'               KWLBrace            tok= 271  pos= 764
+    Field:
+      ident              'X5'              Identifier          tok= 273  pos= 766
+      :                  ':'               OpColon             tok= 274  pos= 768
+      NamedType:
+        Ident            'int'             Identifier          tok= 276  pos= 770
+  }                      '}'               KWRBrace            tok= 278  pos= 774
+  with                   <virt>            KWWith              tok=virt  pos= 780
+    member               'member'          KWMember            tok= 281  pos= 780
+    self                 'this'            Identifier          tok= 283  pos= 787
+    Pat.NamedSimple      'Y'               Identifier          tok= 285  pos= 792
+    =                    '='               OpEquality          tok= 287  pos= 794
+      LongIdentOrOp:
+        LongIdent:
+                         'this'            Identifier          tok= 289  pos= 796
+                         'X5'              Identifier          tok= 291  pos= 801
+  end                    <virt>            KWEnd               tok=virt  pos= 804

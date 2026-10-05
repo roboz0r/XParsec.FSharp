@@ -17,8 +17,16 @@ module Constant =
     let private errExpectedLtMeasure: ErrorType<PositionedToken, ParseState> =
         Message "Expected '<' for measure"
 
+    /// `__SOURCE_DIRECTORY__`, `__SOURCE_FILE__` and `__LINE__` are string constants (spec §3.11).
     let isLiteralToken (t: Token) =
-        t.IsNumeric || t = Token.KWTrue || t = Token.KWFalse || t = Token.CharLiteral
+        match t with
+        | Token.KWTrue
+        | Token.KWFalse
+        | Token.CharLiteral
+        | Token.SourceDirectoryIdentifier
+        | Token.SourceFileIdentifier
+        | Token.LineIdentifier -> true
+        | _ -> t.IsNumeric
 
     let private pLiteral: FSParser<_> =
         nextSyntaxTokenSatisfiesLMsg

@@ -2138,6 +2138,9 @@ module internal TokenInfo =
         | Token.KWTrue
         | Token.KWFalse
         | Token.KWNull
+        | Token.SourceDirectoryIdentifier
+        | Token.SourceFileIdentifier
+        | Token.LineIdentifier
 
         // Opening delimiters
         | Token.KWLParen
@@ -2215,6 +2218,9 @@ module internal TokenInfo =
         | Token.KWNull
         | Token.KWTrue
         | Token.KWFalse
+        | Token.SourceDirectoryIdentifier
+        | Token.SourceFileIdentifier
+        | Token.LineIdentifier
         | Token.KWLParen
         | Token.KWLBracket
         | Token.KWLArrayBracket

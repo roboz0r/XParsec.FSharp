@@ -1268,8 +1268,8 @@ module TypeExtensionElements =
     /// Parses implicit type extensions in indentation-aware (light) syntax,
     /// where members directly follow a type definition without a `with` keyword.
     let parseLight (anchor: SyntaxToken) : Parser<TypeExtensionElements<SyntaxToken>, _, _, _> =
-        // Without an explicit `with` keyword to start a new indented block,
-        // member indentation is aligned relative to the type body itself (the `anchor`, e.g. `{` or `|`).
+        // The members' offside line is `anchor`, the first token of the definition body
+        // (`TypeDefn.BodyStart.Anchor` for a record or union).
         parser {
             let! withTok = nextSyntaxTokenVirtualIfNot Token.KWWith
             let! elems = withContextAtToken OffsideContext.WithAugment anchor (many1 TypeDefnElement.parse)
@@ -1340,14 +1340,17 @@ module TypeDefn =
                 (Measure.parse |>> Type.MeasureType)
             ]
 
-    let private pRecordField =
+    /// Parses a record field of a type definition or signature. The field type ends before a
+    /// token in the field's start column, which begins the next field.
+    let pRecordField =
         parser {
+            let! fieldStart = peekNextSyntaxToken
             let! attrs = opt Attributes.parse
             let! mut = opt pMutable
             let! acc = opt Access.parse
             let! id = pIdent
             let! col = pColon
-            let! t = withContext OffsideContext.SeqBlock Type.parse
+            let! t = withContextAtToken OffsideContext.SeqBlock fieldStart Type.parse
             let! _ = opt pSemi
             return RecordField.RecordField(attrs, mut, acc, id, col, t)
         }
@@ -1355,12 +1358,19 @@ module TypeDefn =
     /// Parses the optional access modifier on a type representation (e.g. `type R = private { ... }`).
     let pRepresentationAccess = opt Access.parse
 
-    /// Peeks the token that selects which type body follows the `=`.
-    ///
-    /// Record and union representations may have their own access modifier, so for those
-    /// the token past the modifier is returned. Other forms return the modifier token itself,
-    /// which the abbreviation branch then consumes and diagnoses.
-    let pBodyStart: FSParser<SyntaxToken> =
+    /// The leading tokens of a type body after `=`.
+    type BodyStart =
+        {
+            /// Selects the body kind. For a record or union representation this is the `{` or `|`
+            /// after any access modifier; otherwise it is the first token, which the abbreviation
+            /// branch consumes and diagnoses when it is a modifier.
+            Kind: SyntaxToken
+            /// The first token after `=`: the offside line for light-syntax members.
+            Anchor: SyntaxToken
+        }
+
+    /// Peeks the leading tokens of a type body after `=`.
+    let pBodyStart: FSParser<BodyStart> =
         parser {
             let! atModifier = peekNextSyntaxToken
 
@@ -1372,10 +1382,13 @@ module TypeDefn =
                     }
                 )
 
-            match pastModifier.Token with
-            | Token.KWLBrace
-            | Token.OpBar -> return pastModifier
-            | _ -> return atModifier
+            let kind =
+                match pastModifier.Token with
+                | Token.KWLBrace
+                | Token.OpBar -> pastModifier
+                | _ -> atModifier
+
+            return { Kind = kind; Anchor = atModifier }
         }
 
     /// Disambiguates between an implicit class definition (e.g., `type Foo() = member ...`)
@@ -1469,7 +1482,9 @@ module TypeDefn =
                 let! equals = pEquals
 
                 // 4. Branch based on type kind
-                let! next = pBodyStart
+                let! bodyStart = pBodyStart
+                let next = bodyStart.Kind
+                let bodyAnchor = bodyStart.Anchor
 
                 match next.Token with
                 | Token.KWStruct ->
@@ -1523,7 +1538,7 @@ module TypeDefn =
                     let! fields = many1 pRecordField
                     let! rBrace = pRBrace
 
-                    let! ext = TypeExtensionElements.parseOptAt next
+                    let! ext = TypeExtensionElements.parseOptAt bodyAnchor
 
                     return TypeDefn.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext)
 
@@ -1544,7 +1559,7 @@ module TypeDefn =
                                     }
                                     parser {
                                         let! cases, bars = UnionTypeCases.parse
-                                        let! ext = TypeExtensionElements.parseOptAt next
+                                        let! ext = TypeExtensionElements.parseOptAt bodyAnchor
                                         return TypeDefn.Union(typeName, equals, representationAccess, cases, bars, ext)
                                     }
                                 ]
@@ -1569,7 +1584,7 @@ module TypeDefn =
                                         ->
                                         return! fail errSingleNullaryUnionCaseIsAbbrev
                                     | _ ->
-                                        let! ext = TypeExtensionElements.parseOptAt next
+                                        let! ext = TypeExtensionElements.parseOptAt bodyAnchor
                                         return TypeDefn.Union(typeName, equals, representationAccess, cases, bars, ext)
                                 }
                                 parseAbbrevOrImplicitClass typeName primaryConstr asDefn equals

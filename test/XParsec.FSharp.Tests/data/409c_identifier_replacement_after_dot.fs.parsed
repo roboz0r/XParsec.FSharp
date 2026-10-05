@@ -1,0 +1,18 @@
+module               'module'          KWModule            tok=   0  pos=   0
+                     'MyModule'        Identifier          tok=   2  pos=   7
+FunctionOrValue:
+  let                'let'             KWLet               tok=   8  pos= 116
+    Pat.NamedSimple  'x'               Identifier          tok=  10  pos= 120
+    =                '='               OpEquality          tok=  12  pos= 122
+      SkipsTokens:
+        (skipped)    'System'          Identifier          tok=  14  pos= 124
+        (skipped)    '.'               OpDot               tok=  15  pos= 130
+        (skipped)    'IO'              Identifier          tok=  16  pos= 131
+        (skipped)    '.'               OpDot               tok=  17  pos= 133
+        (skipped)    '__SOURCE_D...'   SourceDirectoryIdentifier  tok=  18  pos= 134
+---
+Diagnostics:
+  MissingExpression at 124 (Ln 5, Col 9)
+    let x = System.IO.__SOURCE_DIRECTORY_
+                      ^ At index 134 (Ln 5, Col 19)
+    Dot RHS (identifier or index)

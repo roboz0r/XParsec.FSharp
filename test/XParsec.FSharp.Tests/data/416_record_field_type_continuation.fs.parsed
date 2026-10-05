@@ -1,0 +1,116 @@
+module                     'module'          KWModule            tok=   0  pos=   0
+                           'MyModule'        Identifier          tok=   2  pos=   7
+FunctionOrValue:
+  let                      'let'             KWLet               tok=   8  pos= 101
+    Pat.NamedSimple        'f'               Identifier          tok=  10  pos= 105
+    Pats:
+      ParenBlock           '('               KWLParen            tok=  12  pos= 107
+        Pat.Typed:
+          Pat.NamedSimple  'x'               Identifier          tok=  13  pos= 108
+          Colon            ':'               OpColon             tok=  14  pos= 109
+          AnonRecordType:
+            {|             '{|'              KWLBraceBar         tok=  16  pos= 111
+                           'A'               Identifier          tok=  18  pos= 114
+            :              ':'               OpColon             tok=  19  pos= 115
+            SuffixedType:
+              NamedType:
+                Ident      'int'             Identifier          tok=  21  pos= 117
+              Ident        'list'            Identifier          tok=  24  pos= 136
+                           'B'               Identifier          tok=  27  pos= 142
+            :              ':'               OpColon             tok=  28  pos= 143
+            NamedType:
+              Ident        'string'          Identifier          tok=  30  pos= 145
+            |}             '|}'              KWRBraceBar         tok=  32  pos= 152
+                           ')'               KWRParen            tok=  33  pos= 154
+    =                      '='               OpEquality          tok=  35  pos= 156
+      Ident                'x'               Identifier          tok=  37  pos= 158
+FunctionOrValue:
+  let                      'let'             KWLet               tok=  40  pos= 161
+    Pat.NamedSimple        'g'               Identifier          tok=  42  pos= 165
+    Pats:
+      ParenBlock           '('               KWLParen            tok=  44  pos= 167
+        Pat.Typed:
+          Pat.NamedSimple  'x'               Identifier          tok=  45  pos= 168
+          Colon            ':'               OpColon             tok=  46  pos= 169
+          AnonRecordType:
+            {|             '{|'              KWLBraceBar         tok=  48  pos= 171
+                           'A'               Identifier          tok=  50  pos= 174
+            :              ':'               OpColon             tok=  51  pos= 175
+            GenericType:
+              Ident        'Map'             Identifier          tok=  53  pos= 177
+              <            '<'               op_LessThan         tok=  54  pos= 180
+              TypeArg.Type:
+                NamedType:
+                  Ident    'int'             Identifier          tok=  57  pos= 197
+              TypeArg.Type:
+                NamedType:
+                  Ident    'string'          Identifier          tok=  61  pos= 217
+              >            '>'               op_GreaterThan      tok=  62  pos= 223
+                           'B'               Identifier          tok=  65  pos= 226
+            :              ':'               OpColon             tok=  66  pos= 227
+            NamedType:
+              Ident        'string'          Identifier          tok=  68  pos= 229
+            |}             '|}'              KWRBraceBar         tok=  70  pos= 236
+                           ')'               KWRParen            tok=  71  pos= 238
+    =                      '='               OpEquality          tok=  73  pos= 240
+      Ident                'x'               Identifier          tok=  75  pos= 242
+type                       'type'            KWType              tok=  78  pos= 245
+TypeDefn.Record:
+  TypeName                 'R'               Identifier          tok=  80  pos= 250
+  =                        '='               OpEquality          tok=  82  pos= 252
+  {                        '{'               KWLBrace            tok=  84  pos= 254
+    Field:
+      ident                'A'               Identifier          tok=  86  pos= 256
+      :                    ':'               OpColon             tok=  87  pos= 257
+      SuffixedType:
+        NamedType:
+          Ident            'int'             Identifier          tok=  89  pos= 259
+        Ident              'list'            Identifier          tok=  92  pos= 276
+    Field:
+      ident                'B'               Identifier          tok=  95  pos= 282
+      :                    ':'               OpColon             tok=  96  pos= 283
+      NamedType:
+        Ident              'string'          Identifier          tok=  98  pos= 285
+  }                        '}'               KWRBrace            tok= 100  pos= 292
+type                       'type'            KWType              tok= 103  pos= 295
+TypeDefn.Record:
+  TypeName                 'R2'              Identifier          tok= 105  pos= 300
+  =                        '='               OpEquality          tok= 107  pos= 303
+  {                        '{'               KWLBrace            tok= 109  pos= 305
+    Field:
+      ident                'A2'              Identifier          tok= 111  pos= 307
+      :                    ':'               OpColon             tok= 112  pos= 309
+      GenericType:
+        Ident              'Map'             Identifier          tok= 114  pos= 311
+        <                  '<'               op_LessThan         tok= 115  pos= 314
+        TypeArg.Type:
+          NamedType:
+            Ident          'int'             Identifier          tok= 118  pos= 330
+        TypeArg.Type:
+          NamedType:
+            Ident          'string'          Identifier          tok= 122  pos= 349
+        >                  '>'               op_GreaterThan      tok= 123  pos= 355
+    Field:
+      ident                'B2'              Identifier          tok= 126  pos= 358
+      :                    ':'               OpColon             tok= 127  pos= 360
+      NamedType:
+        Ident              'string'          Identifier          tok= 129  pos= 362
+  }                        '}'               KWRBrace            tok= 131  pos= 369
+type                       'type'            KWType              tok= 134  pos= 372
+TypeDefn.Record:
+  TypeName                 'R3'              Identifier          tok= 136  pos= 377
+  =                        '='               OpEquality          tok= 138  pos= 380
+  {                        '{'               KWLBrace            tok= 141  pos= 386
+    Field:
+      ident                'A3'              Identifier          tok= 144  pos= 396
+      :                    ':'               OpColon             tok= 145  pos= 398
+      SuffixedType:
+        NamedType:
+          Ident            'int'             Identifier          tok= 147  pos= 400
+        Ident              'list'            Identifier          tok= 150  pos= 414
+    Field:
+      ident                'B3'              Identifier          tok= 153  pos= 427
+      :                    ':'               OpColon             tok= 154  pos= 429
+      NamedType:
+        Ident              'string'          Identifier          tok= 156  pos= 431
+  }                        '}'               KWRBrace            tok= 159  pos= 442

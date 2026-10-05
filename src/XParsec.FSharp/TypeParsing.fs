@@ -363,12 +363,13 @@ module Type =
                 (refMeasure.Parser |>> TypeArg.Measure)
             ]
 
-    // Parses a single field in an anonymous record: `ident : Type`
+    // Parses a single field in an anonymous record: `ident : Type`. The field type ends before a
+    // token in the field's start column, which begins the next field.
     let private pAnonRecField =
         parser {
             let! ident = pAnonRecFieldIdent
             let! colon = pColon
-            let! typ = refType.Parser
+            let! typ = withContextAtToken OffsideContext.SeqBlock ident refType.Parser
             return AnonRecordField(ident, colon, typ)
         }
 
@@ -417,10 +418,12 @@ module Type =
                     let! r = pRHashParen
                     return Type.ILIntrinsic(l, kindTag, kind, parts, instrClose, r)
                 }
-                // Anonymous record: {| x: int; y: string |}
+                // Anonymous record: {| x: int; y: string |}, or one field per line, with an optional trailing `;`.
                 parser {
                     let! lBraceBar = pLBraceBar
-                    let! fields, seps = sepBy1 pAnonRecField pSemi
+
+                    let! fields, seps = withContext OffsideContext.SeqBlock (sepEndBy1 pAnonRecField pRecordFieldSep)
+
                     let! rBraceBar = pRBraceBar
                     return Type.AnonRecordType(lBraceBar, fields, seps, rBraceBar)
                 }

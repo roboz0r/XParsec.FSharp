@@ -256,8 +256,7 @@ module TypeExtensionElementsSignature =
     /// Light-syntax variant: synthesises a virtual `with` when member tokens follow
     /// without an explicit `with` keyword (e.g. record/union augmentations in light mode).
     let parseLightAt (anchor: SyntaxToken) : FSParser<TypeExtensionElementsSignature<SyntaxToken>> =
-        // Without an explicit `with` there is no new block, so `anchor` (the first token of
-        // the representation), `{` / `|` / the abbreviated type is the offside line.
+        // The members' offside line is `anchor`, the first token after `=` (`TypeDefn.BodyStart.Anchor`).
         // An explicit `with` opens its own block instead, floored by the enclosing context.
         parser {
             let! withTok = nextSyntaxTokenVirtualIfNot Token.KWWith
@@ -277,20 +276,6 @@ module TypeExtensionElementsSignature =
 
 [<RequireQualifiedAccess>]
 module TypeSignature =
-
-    // Record fields use SeqBlock offside so the type's postfix loop doesn't eat the next field's identifier.
-    // Mirrors TypeDefnParsing.fs pRecordField.
-    let private pRecordField =
-        parser {
-            let! attrs = opt Attributes.parse
-            let! mut = opt pMutable
-            let! acc = opt Access.parse
-            let! id = pIdent
-            let! col = pColon
-            let! t = withContext OffsideContext.SeqBlock Type.parse
-            let! _ = opt pSemi
-            return RecordField.RecordField(attrs, mut, acc, id, col, t)
-        }
 
     /// Tokens that, when seen right after `type T =`, indicate an implicit anonymous
     /// type signature body (no explicit `class`/`struct`/`begin`/`interface` keyword).
@@ -323,7 +308,9 @@ module TypeSignature =
             else
                 let! equals = pEquals
 
-                let! next = TypeDefn.pBodyStart
+                let! bodyStart = TypeDefn.pBodyStart
+                let next = bodyStart.Kind
+                let bodyAnchor = bodyStart.Anchor
 
                 match next.Token with
                 | Token.KWStruct ->
@@ -417,10 +404,10 @@ module TypeSignature =
                 | Token.KWLBrace ->
                     let! representationAccess = TypeDefn.pRepresentationAccess
                     let! lBrace = pLBrace
-                    let! fields = many1 pRecordField
+                    let! fields = many1 TypeDefn.pRecordField
                     let! rBrace = pRBrace
 
-                    let! ext = TypeExtensionElementsSignature.parseOptAt next
+                    let! ext = TypeExtensionElementsSignature.parseOptAt bodyAnchor
 
                     return TypeSignature.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext)
 
@@ -436,7 +423,7 @@ module TypeSignature =
                                 }
                                 parser {
                                     let! cases, _bars = UnionTypeCases.parse
-                                    let! ext = TypeExtensionElementsSignature.parseOptAt next
+                                    let! ext = TypeExtensionElementsSignature.parseOptAt bodyAnchor
                                     return TypeSignature.Union(typeName, equals, representationAccess, cases, ext)
                                 }
                             ]
@@ -458,7 +445,7 @@ module TypeSignature =
                                         ->
                                         return! fail errSingleNullaryUnionCaseIsAbbrev
                                     | _ ->
-                                        let! ext = TypeExtensionElementsSignature.parseOptAt next
+                                        let! ext = TypeExtensionElementsSignature.parseOptAt bodyAnchor
                                         return TypeSignature.Union(typeName, equals, representationAccess, cases, ext)
                                 }
                                 parser {
