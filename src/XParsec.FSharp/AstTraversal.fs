@@ -708,13 +708,19 @@ and walkType (visitor: AstVisitor<'T>) (ty: Type<'T>) : unit =
                 visitor.VisitToken "*" asterisks[i]
 
         visitor.ExitSection "TupleType"
-    | Type.StructTupleType(structToken, _lParen, types, _, _rParen) ->
+    | Type.StructTupleType(structToken, lParen, types, asterisks, rParen) ->
         visitor.EnterSection "StructTupleType"
         visitor.VisitToken "" structToken
+        visitor.VisitToken "(" lParen
+        let asteriskCount = asterisks.Length
 
-        for t in types do
-            walkType visitor t
+        for i in 0 .. types.Length - 1 do
+            walkType visitor types[i]
 
+            if i < asteriskCount then
+                visitor.VisitToken "*" asterisks[i]
+
+        visitor.VisitToken ")" rParen
         visitor.ExitSection "StructTupleType"
     | Type.SuffixedType(baseType, longIdent) ->
         visitor.EnterSection "SuffixedType"
