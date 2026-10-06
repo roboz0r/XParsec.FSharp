@@ -141,9 +141,19 @@ module FSharpAst =
             SignatureFile.Namespaces(decls.SetItem(lastIdx, updatedLast))
         | SignatureFile.Namespaces _ -> SignatureFile.AnonymousModule(ImmutableArray.Create(skipElem))
 
-    /// Top-level parser for signature files (`.fsi`).
-    /// Infallible: always returns `Ok`, recording parse errors as diagnostics and unparsed tokens as `SkipsTokens`.
-    let parseSignature: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
+    /// Records a block comment left open at the end of input as a diagnostic at its outermost `(*`.
+    let private reportUnclosedComment (reader: Reader<PositionedToken, ParseState, _>) =
+        let lexed = reader.State.Lexed
+
+        match lexed.UnclosedComment with
+        | ValueNone -> ()
+        | ValueSome unclosed ->
+            let token =
+                SyntaxToken.syntaxToken lexed.Tokens[unclosed.Opener] (int unclosed.Opener)
+
+            reader.State <- addDiagnosticAt (DiagnosticCode.UnterminatedComment unclosed.Ending) token reader.State
+
+    let private parseSignatureFile: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
         fun reader ->
             initialization.Force()
             let startPos = reader.Position
@@ -209,9 +219,15 @@ module FSharpAst =
 
                     Ok(FSharpAst.SignatureFile(SignatureFile.AnonymousModule elems))
 
-    /// Top-level parser for implementation files (`.fs`).
+    /// Top-level parser for signature files (`.fsi`).
     /// Infallible: always returns `Ok`, recording parse errors as diagnostics and unparsed tokens as `SkipsTokens`.
-    let parse: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
+    let parseSignature: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
+        fun reader ->
+            let result = parseSignatureFile reader
+            reportUnclosedComment reader
+            result
+
+    let private parseImplementationFile: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
         fun reader ->
             initialization.Force()
             let startPos = reader.Position
@@ -299,3 +315,11 @@ module FSharpAst =
                                 ImmutableArray.Empty
 
                         Ok(FSharpAst.ImplementationFile(ImplementationFile.AnonymousModule elems))
+
+    /// Top-level parser for implementation files (`.fs`).
+    /// Infallible: always returns `Ok`, recording parse errors as diagnostics and unparsed tokens as `SkipsTokens`.
+    let parse: Parser<FSharpAst<SyntaxToken>, PositionedToken, ParseState, _> =
+        fun reader ->
+            let result = parseImplementationFile reader
+            reportUnclosedComment reader
+            result

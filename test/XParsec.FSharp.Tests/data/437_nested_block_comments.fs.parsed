@@ -1,0 +1,67 @@
+AnonymousModule:
+FunctionOrValue:
+  let                     'let'             KWLet               tok=  18  pos= 105
+    Pat.NamedSimple       'a'               Identifier          tok=  20  pos= 109
+    =                     '='               OpEquality          tok=  22  pos= 111
+      Const               '1'               NumInt32            tok=  24  pos= 113
+FunctionOrValue:
+  let                     'let'             KWLet               tok=  48  pos= 148
+    Pat.NamedSimple       'b'               Identifier          tok=  50  pos= 152
+    =                     '='               OpEquality          tok=  52  pos= 154
+      Const               '2'               NumInt32            tok=  54  pos= 156
+FunctionOrValue:
+  let                     'let'             KWLet               tok=  75  pos= 206
+    Pat.NamedSimple       'c'               Identifier          tok=  77  pos= 210
+    =                     '='               OpEquality          tok=  79  pos= 212
+      Const               '3'               NumInt32            tok=  81  pos= 214
+FunctionOrValue:
+  let                     'let'             KWLet               tok= 101  pos= 249
+    Pat.NamedSimple       'd'               Identifier          tok= 103  pos= 253
+    =                     '='               OpEquality          tok= 105  pos= 255
+      Const               '4'               NumInt32            tok= 107  pos= 257
+FunctionOrValue:
+  let                     'let'             KWLet               tok= 109  pos= 259
+    Pat.NamedSimple       'e'               Identifier          tok= 111  pos= 263
+    =                     '='               OpEquality          tok= 113  pos= 265
+      App:
+        Func:
+          LongIdentOrOp:
+            ParenOp:
+                          '('               KWLParen            tok= 115  pos= 267
+              SymbolicOp  '*'               OpMultiply          tok= 116  pos= 268
+                          ')'               KWRParen            tok= 117  pos= 269
+        Args:
+          Const           '2'               NumInt32            tok= 119  pos= 271
+          Const           '3'               NumInt32            tok= 121  pos= 273
+FunctionOrValue:
+  let                     'let'             KWLet               tok= 123  pos= 275
+    Pat.NamedSimple       'f'               Identifier          tok= 125  pos= 279
+    =                     '='               OpEquality          tok= 127  pos= 281
+      App:
+        Func:
+          LongIdentOrOp:
+            ParenOp:
+                          '('               KWLParen            tok= 129  pos= 283
+              SymbolicOp  '*'               OpMultiply          tok= 131  pos= 285
+                          ')'               KWRParen            tok= 132  pos= 286
+        Args:
+          Const           '2'               NumInt32            tok= 134  pos= 288
+          Const           '3'               NumInt32            tok= 136  pos= 290
+FunctionOrValue:
+  let                     'let'             KWLet               tok= 261  pos= 487
+    Pat.NamedSimple       'g'               Identifier          tok= 263  pos= 491
+    =                     '='               OpEquality          tok= 265  pos= 493
+      InterpolatedString  '$"'              InterpolatedStringOpen  tok= 267  pos= 495
+      Parts:
+        Text              'a'               InterpolatedStringFragment  tok= 268  pos= 497
+        {                 '{'               InterpolatedExpressionOpen  tok= 269  pos= 498
+        Expr:
+          Ident           'a'               Identifier          tok= 271  pos= 500
+        }                 '}'               InterpolatedExpressionClose  tok= 283  pos= 514
+        Text              'b'               InterpolatedStringFragment  tok= 284  pos= 515
+                          '"'               InterpolatedStringClose  tok= 285  pos= 516
+FunctionOrValue:
+  let                     'let'             KWLet               tok= 304  pos= 548
+    Pat.NamedSimple       'h'               Identifier          tok= 306  pos= 552
+    =                     '='               OpEquality          tok= 308  pos= 554
+      Const               '5'               NumInt32            tok= 310  pos= 556

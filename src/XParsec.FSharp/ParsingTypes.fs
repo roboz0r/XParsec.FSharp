@@ -215,6 +215,8 @@ type DiagnosticCode =
     | UnclosedDelimiter of opened: Token * openedAt: Site * expected: Token
     /// A closing delimiter was present but did not match the opening delimiter (e.g. `{| … }`).
     | MismatchedDelimiter of opened: Token * openedAt: Site * expected: Token
+    /// Input ends inside a block comment. Reported at the outermost `(*`.
+    | UnterminatedComment of ending: CommentEnding
 
 [<RequireQualifiedAccess>]
 type Syntax =
@@ -371,6 +373,7 @@ module DiagnosticCode =
         | DiagnosticCode.ExpectedQuotationUntypedRight -> "ExpectedQuotationUntypedRight"
         | DiagnosticCode.UnclosedDelimiter _ -> "UnclosedDelimiter"
         | DiagnosticCode.MismatchedDelimiter _ -> "MismatchedDelimiter"
+        | DiagnosticCode.UnterminatedComment _ -> "UnterminatedComment"
 
     /// Formats the human-readable message for a diagnostic.
     let message (c: DiagnosticCode) : string =
@@ -395,6 +398,13 @@ module DiagnosticCode =
             $"Unclosed '{spelling opened}': {expecting expected}"
         | DiagnosticCode.MismatchedDelimiter(opened = opened; expected = expected) ->
             $"Wrong close for '{spelling opened}': {expecting expected}"
+        | DiagnosticCode.UnterminatedComment CommentEnding.Text -> "End of file in comment begun at or before here"
+        | DiagnosticCode.UnterminatedComment CommentEnding.String ->
+            "End of file in string embedded in comment begun at or before here"
+        | DiagnosticCode.UnterminatedComment CommentEnding.VerbatimString ->
+            "End of file in verbatim string embedded in comment begun at or before here"
+        | DiagnosticCode.UnterminatedComment CommentEnding.TripleQuoteString ->
+            "End of file in triple-quote string embedded in comment begun at or before here"
 
     /// Secondary label used for pointing back to the opening delimiter.
     let openedHereLabel = "unclosed delimiter"
@@ -602,10 +612,6 @@ module ParseState =
             | Token.Whitespace
             | Token.BlockCommentStart
             | Token.BlockCommentEnd
-            | Token.StartFSharpBlockComment
-            | Token.EndFSharpBlockComment
-            | Token.StartOCamlBlockComment
-            | Token.EndOCamlBlockComment
             | Token.Newline -> true
             | Token.Tab -> state.IndentationMode = Syntax.Verbose
             | _ -> false

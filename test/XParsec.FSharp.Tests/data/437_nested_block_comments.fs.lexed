@@ -1,0 +1,313 @@
+0, LineComment
+66, Newline
+67, BlockCommentStart
+69, Whitespace (in comment)
+70, Identifier (in comment)
+75, Whitespace (in comment)
+76, BlockCommentStart (in comment)
+78, Whitespace (in comment)
+79, Identifier (in comment)
+84, Whitespace (in comment)
+85, BlockCommentEnd (in comment)
+87, Whitespace (in comment)
+88, Identifier (in comment)
+93, Whitespace (in comment)
+94, Identifier (in comment)
+101, Whitespace (in comment)
+102, BlockCommentEnd
+104, Newline
+105, KWLet
+108, Whitespace
+109, Identifier
+110, Whitespace
+111, OpEquality
+112, Whitespace
+113, NumInt32
+114, Newline
+115, BlockCommentStart
+117, Whitespace (in comment)
+118, Identifier (in comment)
+120, Whitespace (in comment)
+121, BlockCommentStart (in comment)
+123, Whitespace (in comment)
+124, Identifier (in comment)
+126, Whitespace (in comment)
+127, BlockCommentStart (in comment)
+129, Whitespace (in comment)
+130, Identifier (in comment)
+132, Whitespace (in comment)
+133, BlockCommentEnd (in comment)
+135, Whitespace (in comment)
+136, Identifier (in comment)
+138, Whitespace (in comment)
+139, BlockCommentEnd (in comment)
+141, Whitespace (in comment)
+142, Identifier (in comment)
+144, Whitespace (in comment)
+145, BlockCommentEnd
+147, Newline
+148, KWLet
+151, Whitespace
+152, Identifier
+153, Whitespace
+154, OpEquality
+155, Whitespace
+156, NumInt32
+157, Newline
+158, BlockCommentStart
+160, Whitespace (in comment)
+161, Identifier (in comment)
+166, Newline (in comment)
+167, Indent (in comment)
+170, BlockCommentStart (in comment)
+172, Whitespace (in comment)
+173, Identifier (in comment)
+178, Newline (in comment)
+179, Indent (in comment)
+185, Identifier (in comment)
+190, Whitespace (in comment)
+191, BlockCommentEnd (in comment)
+193, Newline (in comment)
+194, Indent (in comment)
+197, Identifier (in comment)
+202, Whitespace (in comment)
+203, BlockCommentEnd
+205, Newline
+206, KWLet
+209, Whitespace
+210, Identifier
+211, Whitespace
+212, OpEquality
+213, Whitespace
+214, NumInt32
+215, Newline
+216, BlockCommentStart
+218, Whitespace (in comment)
+219, StringOpen (in comment)
+220, StringFragment (in comment)
+222, StringClose (in comment)
+223, Whitespace (in comment)
+224, VerbatimStringOpen (in comment)
+226, StringFragment (in comment)
+229, VerbatimStringClose (in comment)
+230, Whitespace (in comment)
+231, String3Open (in comment)
+234, StringFragment (in comment)
+238, String3Close (in comment)
+241, Whitespace (in comment)
+242, CharLiteral (in comment)
+245, Whitespace (in comment)
+246, BlockCommentEnd
+248, Newline
+249, KWLet
+252, Whitespace
+253, Identifier
+254, Whitespace
+255, OpEquality
+256, Whitespace
+257, NumInt32
+258, Newline
+259, KWLet
+262, Whitespace
+263, Identifier
+264, Whitespace
+265, OpEquality
+266, Whitespace
+267, KWLParen
+268, OpMultiply
+269, KWRParen
+270, Whitespace
+271, NumInt32
+272, Whitespace
+273, NumInt32
+274, Newline
+275, KWLet
+278, Whitespace
+279, Identifier
+280, Whitespace
+281, OpEquality
+282, Whitespace
+283, KWLParen
+284, Whitespace
+285, OpMultiply
+286, KWRParen
+287, Whitespace
+288, NumInt32
+289, Whitespace
+290, NumInt32
+291, Newline
+292, BlockCommentStart
+294, Whitespace (in comment)
+295, KWLParen (in comment)
+296, OpMultiply (in comment)
+297, KWRParen (in comment)
+298, Whitespace (in comment)
+299, BlockCommentEnd
+301, Newline
+302, BlockCommentStart
+304, Whitespace (in comment)
+305, Operator 0b1000000000010100 InfixMultiply (in comment)
+307, Whitespace (in comment)
+308, BlockCommentEnd
+310, Newline
+311, LineComment
+316, Newline
+317, BlockCommentStart
+319, Whitespace (in comment)
+320, KWReservedBacktick (in comment)
+321, KWReservedBacktick (in comment)
+322, Identifier (in comment)
+323, Whitespace (in comment)
+324, BlockCommentEnd
+326, Newline
+327, BlockCommentStart
+329, Whitespace (in comment)
+330, InvalidOperator (in comment)
+331, StringOpen (in comment)
+332, StringFragment (in comment)
+333, StringClose (in comment)
+334, Whitespace (in comment)
+335, BlockCommentEnd
+337, Newline
+338, BlockCommentStart
+340, Whitespace (in comment)
+341, InvalidOperator (in comment)
+342, VerbatimStringOpen (in comment)
+344, StringFragment (in comment)
+345, VerbatimStringClose (in comment)
+346, Whitespace (in comment)
+347, BlockCommentEnd
+349, Newline
+350, BlockCommentStart
+352, Whitespace (in comment)
+353, KWReservedOperator (in comment)
+355, StringOpen (in comment)
+356, StringFragment (in comment)
+357, StringClose (in comment)
+358, Whitespace (in comment)
+359, BlockCommentEnd
+361, Newline
+362, BlockCommentStart
+364, Whitespace (in comment)
+365, InvalidOperator (in comment)
+366, String3Open (in comment)
+369, StringFragment (in comment)
+370, String3Close (in comment)
+373, Whitespace (in comment)
+374, BlockCommentEnd
+376, Newline
+377, BlockCommentStart
+379, Whitespace (in comment)
+380, OpAddition (in comment)
+381, VerbatimStringOpen (in comment)
+383, StringFragment (in comment)
+384, VerbatimStringClose (in comment)
+385, Whitespace (in comment)
+386, BlockCommentEnd
+388, Newline
+389, BlockCommentStart
+391, Newline (in comment)
+392, KWHash (in comment)
+393, KWIf (in comment)
+395, Whitespace (in comment)
+396, Identifier (in comment)
+399, Whitespace (in comment)
+400, BlockCommentEnd
+402, Newline
+403, BlockCommentStart
+405, ReservedIdentifierHash (in comment)
+407, Whitespace (in comment)
+408, KWLet (in comment)
+411, Whitespace (in comment)
+412, Identifier (in comment)
+413, Whitespace (in comment)
+414, OpEquality (in comment)
+415, Whitespace (in comment)
+416, NumInt32 (in comment)
+417, Whitespace (in comment)
+418, ReservedIdentifierHash (in comment)
+420, BlockCommentEnd
+422, Newline
+423, BlockCommentStart
+425, Identifier (in comment)
+427, OpSubtraction (in comment)
+428, Identifier (in comment)
+434, Whitespace (in comment)
+435, KWLet (in comment)
+438, Whitespace (in comment)
+439, Identifier (in comment)
+440, Whitespace (in comment)
+441, OpEquality (in comment)
+442, Whitespace (in comment)
+443, NumInt32 (in comment)
+444, Whitespace (in comment)
+445, Identifier (in comment)
+450, OpSubtraction (in comment)
+451, Identifier (in comment)
+457, BlockCommentEnd
+459, Newline
+460, BlockCommentStart
+462, Identifier (in comment)
+464, OpSubtraction (in comment)
+465, Identifier (in comment)
+470, BlockCommentEnd
+472, Newline
+473, BlockCommentStart
+475, Whitespace (in comment)
+476, Identifier (in comment)
+481, Whitespace (in comment)
+482, ReservedIdentifierHash (in comment)
+484, BlockCommentEnd
+486, Newline
+487, KWLet
+490, Whitespace
+491, Identifier
+492, Whitespace
+493, OpEquality
+494, Whitespace
+495, InterpolatedStringOpen
+497, InterpolatedStringFragment
+498, InterpolatedExpressionOpen
+499, Whitespace
+500, Identifier
+501, Whitespace
+502, BlockCommentStart
+504, Whitespace (in comment)
+505, KWRBrace (in comment)
+506, Whitespace (in comment)
+507, OpColon (in comment)
+508, Whitespace (in comment)
+509, KWLParen (in comment)
+510, Whitespace (in comment)
+511, BlockCommentEnd
+513, Whitespace
+514, InterpolatedExpressionClose
+515, InterpolatedStringFragment
+516, InterpolatedStringClose
+517, Newline
+518, BlockCommentStart
+520, OpMultiply (in comment)
+521, BlockCommentEnd
+523, Newline
+524, BlockCommentStart
+526, OpMultiply (in comment)
+527, Whitespace (in comment)
+528, Identifier (in comment)
+531, Whitespace (in comment)
+532, BlockCommentStart (in comment)
+534, Whitespace (in comment)
+535, Identifier (in comment)
+541, Whitespace (in comment)
+542, BlockCommentEnd (in comment)
+544, Whitespace (in comment)
+545, BlockCommentEnd
+547, Newline
+548, KWLet
+551, Whitespace
+552, Identifier
+553, Whitespace
+554, OpEquality
+555, Whitespace
+556, NumInt32
+557, Newline
+558, EOF

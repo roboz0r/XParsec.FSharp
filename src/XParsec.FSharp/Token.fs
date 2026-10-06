@@ -187,8 +187,8 @@ module TokenRepresentation =
     // SECTION 2: Global Flags (Bits 12-11)
     // ==========================================================
 
-    // Bit 12: Indicates the token was found inside a comment block
-    // (Replaces InBlockComment and InOCamlBlockComment)
+    // Bit 12: Indicates the token is inside a block comment. The `(*` and `*)` delimiting the
+    // outermost comment are unflagged; nested delimiters are flagged.
     [<Literal>]
     let InComment = 0x1000us // Bit 12
 
@@ -962,20 +962,6 @@ module TokenRepresentation =
         [<Literal>]
         let DirectiveIndent = 25us
 
-
-        [<Literal>]
-        let StartFSharpBlockComment = 100us // "(*IF-FSHARP" | "(*F#" starts a block comment ignored by F#
-
-        [<Literal>]
-        let EndFSharpBlockComment = 101us // "ENDIF-FSHARP*)" | "F#*)" ends a block comment ignored by F#
-
-        [<Literal>]
-        let StartOCamlBlockComment = 102us // "(*IF-CAML*)" | "(*IF-OCAML*)" starts a block comment ignored by OCaml
-
-        [<Literal>]
-        let EndOCamlBlockComment = 103us // "ENDIF-CAML*)" | "ENDIF-OCAML*)" ends a block comment ignored by OCaml
-
-
         // Fallback for others
         [<Literal>]
         let DirectiveInvalid = 255us
@@ -1426,7 +1412,7 @@ type Token =
     // Comments (Using Special IDs we defined or mapped)
     | LineComment = (KindSpecial ||| Special.LineComment)
     | BlockCommentStart = (KindSpecial ||| Special.BlockCommentStart) // Start marker
-    | BlockCommentEnd = (KindSpecial ||| Special.BlockCommentEnd) // End marker (Parser logic usually handles nesting)
+    | BlockCommentEnd = (KindSpecial ||| Special.BlockCommentEnd) // End marker
     | Indent = (KindSpecial ||| Special.Indent)
 
     // 3.3 Conditional Compilation
@@ -1454,12 +1440,6 @@ type Token =
     // 19.4 File Extensions and Lexical Matters
     | IndentDirective = (KindSpecial ||| Special.DirectiveIndent) // #indent
     | InvalidDirective = (KindSpecial ||| Special.DirectiveInvalid) // Any other invalid directive starting with #
-
-    // 19.1 ML Compatibility
-    | StartFSharpBlockComment = (KindSpecial ||| Special.StartFSharpBlockComment) // "(*IF-FSHARP" | "(*F#" starts a block comment ignored by F#
-    | EndFSharpBlockComment = (KindSpecial ||| Special.EndFSharpBlockComment) // "ENDIF-FSHARP*)" | "F#*)" ends a block comment ignored by F#
-    | StartOCamlBlockComment = (KindSpecial ||| Special.StartOCamlBlockComment) // "(*IF-CAML*)" | "(*IF-OCAML*)" starts a block comment ignored by OCaml
-    | EndOCamlBlockComment = (KindSpecial ||| Special.EndOCamlBlockComment) // "ENDIF-CAML*)" | "ENDIF-OCAML*)" ends a block comment ignored by OCaml
 
     // ==============================================================================
     // 2. IDENTIFIERS (KindIdentifier 0x2000)
@@ -2030,8 +2010,8 @@ module internal Token =
                     || trimIgnored.Length < span.Length // prefix operators cannot start with ignored chars
                 then
                     Token.InvalidPrefixOperator
+                // any number of ~ (4+) is a valid prefix operator
                 else if span.Length > 3 && span.Trim('~').Length = 0 then
-                    // any number of ~ (4+) is a valid prefix operator
                     ofUInt16 (KindOperator ||| CanBePrefix ||| Precedence.Prefix)
                 else
                     let s = span.ToString()

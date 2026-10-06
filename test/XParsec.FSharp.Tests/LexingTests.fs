@@ -44,6 +44,7 @@ let private lexemes =
         // Comments and directives.
         "(*"
         "*)"
+        "(*)"
         "//"
         "#if"
         "#else"
@@ -174,6 +175,96 @@ let tests =
                         let lexed = lexString "(*\n#if A\n*)\n"
 
                         Expect.isEmpty lexed.MentionedDefines "The directive's tokens are flagged in-comment"
+                    }
+                ]
+
+            testList
+                "Block comments"
+                [
+                    test "Nested delimiters are comment text and the outermost close ends the comment" {
+                        let flagged (tok: Token) =
+                            LanguagePrimitives.EnumOfValue<_, Token>(uint16 tok ||| TokenRepresentation.InComment)
+
+                        let expected =
+                            [
+                                0, Token.BlockCommentStart
+                                2, flagged Token.BlockCommentStart
+                                4, flagged Token.BlockCommentEnd
+                                6, Token.BlockCommentEnd
+                                8, Token.Identifier
+                                9, Token.EOF
+                            ]
+                            |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos))
+
+                        testLexed "(*(**)*)x" expected
+                    }
+
+                    test "A close delimiter outside a comment is an operator and a paren" {
+                        let expected =
+                            [ 0, Token.OpMultiply; 1, Token.KWRParen; 2, Token.EOF ]
+                            |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos))
+
+                        testLexed "*)" expected
+                    }
+
+                    test "A closed comment leaves nothing unclosed" {
+                        Expect.equal (lexString "(* (* *) *)").UnclosedComment ValueNone "Both comments close"
+                    }
+
+                    test "Input ending in nested comment text names the outermost opener" {
+                        Expect.equal
+                            (lexString "x (* (* *)").UnclosedComment
+                            (ValueSome
+                                {
+                                    Opener = 2<token>
+                                    Ending = CommentEnding.Text
+                                })
+                            "The outer comment is token 2"
+                    }
+
+                    test "Input ending in a string inside a comment names the string's style" {
+                        for source, ending in
+                            [
+                                "(* \"*)", CommentEnding.String
+                                "(* @\"*)", CommentEnding.VerbatimString
+                                "(* \"\"\"*)", CommentEnding.TripleQuoteString
+                            ] do
+                            let lexed = lexString source
+
+                            Expect.equal
+                                lexed.UnclosedComment
+                                (ValueSome { Opener = 0<token>; Ending = ending })
+                                $"%A{source}: the string contains the close"
+
+                            Expect.all
+                                (lexed.Tokens |> Seq.filter (fun t -> t.Token <> Token.EOF) |> Seq.skip 1)
+                                (fun t -> t.InComment)
+                                $"%A{source}: the unterminated string token is comment text"
+                    }
+
+                    // Each source closes its comment in fsc: `'"'` is a character literal, and the
+                    // other apostrophes are plain characters.
+                    test "Apostrophes in comment text follow fsc's character literal rule" {
+                        for source in
+                            [
+                                "(* a'\"' *)"
+                                "(* 1'\"' *)"
+                                "(* '\\u1234'\"' *)"
+                                "(* '\\065'\"' *)"
+                                "(* '\\x41'\"' *)"
+                                "(* '\\q'\"' *)"
+                                "(* 'ab'\"' *)"
+                                "(* '\t'\"' *)"
+                            ] do
+                            Expect.equal (lexString source).UnclosedComment ValueNone $"%A{source} closes"
+                    }
+
+                    test "A character literal in comment text hides a double quote" {
+                        for source in [ "(* 'a'\"' *)"; "(* '''\"' *)"; "(* '\\n'\"' *)"; "(* '\\''\"' *)" ] do
+                            Expect.equal
+                                ((lexString source).UnclosedComment |> ValueOption.map (fun u -> u.Ending))
+                                (ValueSome CommentEnding.String)
+                                $"%A{source} opens a string after the character literal"
                     }
                 ]
 

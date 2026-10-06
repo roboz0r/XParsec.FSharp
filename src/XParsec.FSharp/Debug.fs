@@ -333,6 +333,7 @@ let sprintDiagnosticCode (code: DiagnosticCode) : string =
     | DiagnosticCode.ExpectedRBraceBar
     | DiagnosticCode.ExpectedQuotationTypedRight
     | DiagnosticCode.ExpectedQuotationUntypedRight -> name
+    | DiagnosticCode.UnterminatedComment ending -> $"{name}({ending})"
 
 /// Prints diagnostics in source order if any are present.
 let printDiagnostics (ctx: PrintContext) (input: string) (diagnostics: Diagnostic list) =
