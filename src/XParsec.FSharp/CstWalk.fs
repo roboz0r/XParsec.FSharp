@@ -49,9 +49,10 @@ module CstWalk =
             EnterObjectMember: 'env -> SyntaxToken voption -> ImmutableArray<Pat<SyntaxToken>> -> 'env
             /// Updates the environment for an expression evaluated in a closure: the body of a
             /// lambda, a `function` expression, the value of a binding with parameters, the operand
-            /// of `lazy`, or the body of an object-expression member. Applied after `EnterFun`,
-            /// `EnterBindingRhs` or `EnterObjectMember`.
-            EnterClosure: 'env -> Expr<SyntaxToken> -> 'env
+            /// of `lazy`, or the body of an object-expression member. The first expression is the
+            /// closure: the lambda, the `function` or the `lazy` expression, and otherwise the body
+            /// itself. Applied after `EnterFun`, `EnterBindingRhs` or `EnterObjectMember`.
+            EnterClosure: 'env -> Expr<SyntaxToken> -> Expr<SyntaxToken> -> 'env
             /// Updates the environment for a `for i = ...` loop body using the loop variable token.
             EnterForTo: 'env -> SyntaxToken -> 'env
             /// Updates the environment for a `for pat in ...` loop body.
@@ -71,7 +72,7 @@ module CstWalk =
             EnterBindingRhs = fun env _ -> ValueSome env
             EnterLetGroup = fun env _ -> env
             EnterObjectMember = fun env _ _ -> env
-            EnterClosure = fun env _ -> env
+            EnterClosure = fun env _ _ -> env
             EnterForTo = fun env _ -> env
             EnterForIn = fun env _ -> env
             EnterMatchArm = fun env _ -> env
@@ -101,7 +102,8 @@ module CstWalk =
     type ExprChildWork<'env> =
         | ChildExpr of 'env * Expr<SyntaxToken>
         | TypeAppApplied of ExprEdge<'env, ImmutableArray<Type<SyntaxToken>>>
-        | FunBody of ExprEdge<'env, ImmutableArray<Pat<SyntaxToken>>>
+        /// The body of the lambda `lambda`.
+        | FunBody of lambda: Expr<SyntaxToken> * ExprEdge<'env, ImmutableArray<Pat<SyntaxToken>>>
         | BindingRhs of 'env * Binding<SyntaxToken>
         | RecursiveLetGroup of LetGroupWork<'env>
         | LetBody of ExprEdge<'env, ImmutableArray<Binding<SyntaxToken>>>
@@ -110,8 +112,8 @@ module CstWalk =
         | MatchArm of 'env * Rule<SyntaxToken>
         /// The rules of the `function` expression `Expression`.
         | FunctionRules of ExprEdge<'env, ImmutableArray<Rule<SyntaxToken>>>
-        /// An expression evaluated in a closure, other than a lambda body or a binding's value.
-        | ClosureBody of 'env * Expr<SyntaxToken>
+        /// The operand `body` of the `lazy` expression `closure`.
+        | ClosureBody of 'env * closure: Expr<SyntaxToken> * body: Expr<SyntaxToken>
         | ObjectMember of 'env * MemberDefn<SyntaxToken>
         | ObjectMemberBinding of ObjectMemberBindingWork<'env>
 
@@ -169,7 +171,8 @@ module CstWalk =
                             Payload = types
                             Expression = applied
                         }
-            | Expr.PrefixApp(prefixOp = op; expr = inner) when op.Token = Token.KWLazy -> yield ClosureBody(env, inner)
+            | Expr.PrefixApp(prefixOp = op; expr = inner) when op.Token = Token.KWLazy ->
+                yield ClosureBody(env, e, inner)
             | Expr.EnclosedBlock(expr = inner)
             | Expr.DotLookup(expr = inner)
             | Expr.TypeApp(expr = inner)
@@ -226,12 +229,14 @@ module CstWalk =
                     yield ChildExpr(env, arg)
             | Expr.Fun(argumentPats = argPats; expr = body) ->
                 yield
-                    FunBody
+                    FunBody(
+                        e,
                         {
                             Environment = env
                             Payload = argPats
                             Expression = body
                         }
+                    )
             | Expr.LetOrUse(isRec = isRec; bindings = bindings; body = body) ->
                 if isRec.IsSome then
                     yield
@@ -336,17 +341,18 @@ module CstWalk =
             | ChildExpr _ -> yield work
             | TypeAppApplied edge ->
                 yield ChildExpr(walker.EnterTypeAppApplied edge.Environment edge.Payload, edge.Expression)
-            | FunBody edge ->
+            | FunBody(lambda, edge) ->
                 let bodyEnv =
-                    walker.EnterClosure (walker.EnterFun edge.Environment edge.Payload) edge.Expression
+                    walker.EnterClosure (walker.EnterFun edge.Environment edge.Payload) lambda edge.Expression
 
                 yield ChildExpr(bodyEnv, edge.Expression)
             | BindingRhs(env, binding) ->
                 match walker.EnterBindingRhs env binding with
                 | ValueSome rhsEnv when binding.argumentPats.IsEmpty -> yield ChildExpr(rhsEnv, binding.expr)
-                | ValueSome rhsEnv -> yield ChildExpr(walker.EnterClosure rhsEnv binding.expr, binding.expr)
+                | ValueSome rhsEnv ->
+                    yield ChildExpr(walker.EnterClosure rhsEnv binding.expr binding.expr, binding.expr)
                 | ValueNone -> ()
-            | ClosureBody(env, body) -> yield ChildExpr(walker.EnterClosure env body, body)
+            | ClosureBody(env, closure, body) -> yield ChildExpr(walker.EnterClosure env closure body, body)
             | RecursiveLetGroup group ->
                 let groupEnv = walker.EnterLetGroup group.Environment group.Bindings
 
@@ -372,7 +378,10 @@ module CstWalk =
                 | _ -> ()
             | FunctionRules edge ->
                 let bodyEnv =
-                    walker.EnterClosure (walker.EnterFun edge.Environment ImmutableArray.Empty) edge.Expression
+                    walker.EnterClosure
+                        (walker.EnterFun edge.Environment ImmutableArray.Empty)
+                        edge.Expression
+                        edge.Expression
 
                 for rule in edge.Payload do
                     yield MatchArm(bodyEnv, rule)
@@ -399,7 +408,7 @@ module CstWalk =
                 let memberEnv =
                     walker.EnterObjectMember memberWork.Environment memberWork.Self memberWork.Binding.argumentPats
 
-                yield ChildExpr(walker.EnterClosure memberEnv body, body)
+                yield ChildExpr(walker.EnterClosure memberEnv body body, body)
         }
 
     // Environment modifications returned by Enter* callbacks apply only to the subtree they are passed to.
