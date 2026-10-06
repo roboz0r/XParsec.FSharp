@@ -79,12 +79,12 @@ module ModuleFunctionOrValueDefn =
                 match isRec with
                 | ValueSome recTok ->
                     parser {
-                        let! bindings, ands = Binding.parseSepByAnd1 attrs
+                        let! bindings, ands = Binding.parseSepByAnd1
                         return ValueSome recTok, bindings, ands
                     }
                 | ValueNone ->
                     parser {
-                        let! binding = Binding.parse attrs
+                        let! binding = Binding.parseAttributed
                         return ValueNone, ImmutableArray.Create(binding), ImmutableArray.Empty
                     }
 

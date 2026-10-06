@@ -182,11 +182,15 @@ module MethodOrPropDefn =
     // member x.M args = ... (Method)
     // member x.P with get ... (PropWithGetSet)
 
-    /// The placeholder a rejected `get` / `set` binding leaves behind, holding the tokens
-    /// skipped past it.
-    let private skippedGetSetBinding (at: SyntaxToken) (skipped: ImArr<SyntaxToken>) : Binding<SyntaxToken> =
+    /// The placeholder a rejected `get` / `set` binding leaves behind, holding its attributes and
+    /// the tokens skipped past it.
+    let private skippedGetSetBinding
+        (attrs: Attributes<SyntaxToken> voption)
+        (at: SyntaxToken)
+        (skipped: ImArr<SyntaxToken>)
+        : Binding<SyntaxToken> =
         {
-            attributes = ValueNone
+            attributes = attrs
             inlineToken = ValueNone
             mutableToken = ValueNone
             access = ValueNone
@@ -234,7 +238,7 @@ module MethodOrPropDefn =
                     recoverWith
                         StoppingTokens.afterGetSetBinding
                         (DiagnosticCode.Other msg)
-                        (skippedGetSetBinding next)
+                        (skippedGetSetBinding attrs next)
                         (fail errExpectedGetOrSet)
         }
 
@@ -242,7 +246,7 @@ module MethodOrPropDefn =
         parser {
             let! ident = pIdent
             let! w = pWith
-            let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident) ValueNone
+            let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident)
             return fun thisIdent -> MethodOrPropDefn.PropertyWithGetSet(thisIdent, ident, w, bindings, ands)
         }
 
@@ -339,7 +343,7 @@ module MethodOrPropDefn =
                         // A property member whose ident was already consumed above
                         // (`static member BuildPhase with get () = … and set v = …`).
                         let! w = consumePeeked t
-                        let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident) ValueNone
+                        let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident)
                         return MethodOrPropDefn.PropertyWithGetSet(ValueNone, ident, w, bindings, ands)
 
                     | _ ->
@@ -754,7 +758,7 @@ module ClassFunctionOrValueDefn =
                     let! stat = opt pStatic
                     let! l = pLet
                     let! r = opt pRec
-                    let! bindings, ands = Binding.parseSepByAnd1 attrs
+                    let! bindings, ands = Binding.parseSepByAnd1
                     return ClassFunctionOrValueDefn.LetBindings(attrs, stat, l, r, bindings, ands)
                 }
             ]

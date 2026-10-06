@@ -1,0 +1,31 @@
+module           'module'          KWModule            tok=   0  pos=   0
+                 'RecoveryGe...'   Identifier          tok=   2  pos=   7
+type             'type'            KWType              tok=   5  pos=  33
+TypeDefn.Anon:
+  TypeName       'C'               Identifier          tok=   7  pos=  38
+  (              '('               KWLParen            tok=   8  pos=  39
+  )              ')'               KWRParen            tok=   9  pos=  40
+  =              '='               OpEquality          tok=  11  pos=  42
+  begin          <virt>            KWBegin             tok=virt  pos=  48
+    member       'member'          KWMember            tok=  14  pos=  48
+    ident        'P'               Identifier          tok=  18  pos=  57
+    with         'with'            KWWith              tok=  20  pos=  59
+    [<           '[<'              KWLAttrBracket      tok=  22  pos=  64
+    NamedType:
+      Ident      'A'               Identifier          tok=  23  pos=  66
+    >]           '>]'              KWRAttrBracket      tok=  24  pos=  67
+    SkipsTokens:
+      (skipped)  'oops'            Identifier          tok=  26  pos=  70
+      (skipped)  '('               KWLParen            tok=  28  pos=  75
+      (skipped)  ')'               KWRParen            tok=  29  pos=  76
+      (skipped)  '='               OpEquality          tok=  31  pos=  78
+      (skipped)  '1'               NumInt32            tok=  33  pos=  80
+    =            <virt>            OpEquality          tok=virt  pos=  70
+      Missing
+  end            <virt>            KWEnd               tok=virt  pos=  82
+---
+Diagnostics:
+  Other(Expected 'get' or 'set' after 'with' on 'P' but got 'oops') at 70 (Ln 4, Col 27)
+        member _.P with [<A>] oops () =
+                              ^ At index 70 (Ln 4, Col 27)
+    Expected 'get' or 'set'

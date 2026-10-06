@@ -792,10 +792,7 @@ and walkType (visitor: AstVisitor<'T>) (ty: Type<'T>) : unit =
         visitor.ExitSection "SkipsTokens"
 
 and walkBinding (visitor: AstVisitor<'T>) (binding: Binding<'T>) : unit =
-    // Note: attributes are NOT visited here — they are visited by the caller
-    // (ModuleFunctionOrValueDefn, ClassFunctionOrValueDefn, MemberDefn, etc.)
-    // to avoid duplication, since the same attrs value is stored both on the
-    // declaration wrapper and on the binding record.
+    walkAttributesOpt visitor binding.attributes
     visitTokenOpt visitor "inline" binding.inlineToken
     visitTokenOpt visitor "mutable" binding.mutableToken
     walkAccessOpt visitor binding.access
@@ -1994,12 +1991,7 @@ let walkObjectModelBody (visitor: AstVisitor<'T>) (body: ObjectModelBody<'T>) : 
             visitTokenOpt visitor "rec" isRec
 
             for i = 0 to bindings.Length - 1 do
-                let binding = bindings.[i]
-
-                if i > 0 then
-                    walkAttributesOpt visitor binding.attributes
-
-                walkBinding visitor binding
+                walkBinding visitor bindings.[i]
 
                 if i < ands.Length then
                     visitor.VisitToken "and" ands.[i]
@@ -2228,12 +2220,7 @@ let walkModuleFunctionOrValueDefn (visitor: AstVisitor<'T>) (defn: ModuleFunctio
         visitor.EnterSection ""
 
         for i = 0 to bindings.Length - 1 do
-            let binding = bindings.[i]
-
-            if i > 0 then
-                walkAttributesOpt visitor binding.attributes
-
-            walkBinding visitor binding
+            walkBinding visitor bindings.[i]
 
             if i < ands.Length then
                 visitor.VisitToken "and" ands.[i]

@@ -308,18 +308,31 @@ module Binding =
     let parse attrs : FSParser<Binding<_>> =
         choiceL [ parseFunction attrs; parseValue attrs ] "Binding"
 
-    /// Parses one or more `and`-separated bindings using the provided binding parser.
-    let sepByAnd1 (pBinding: Attributes<SyntaxToken> voption -> FSParser<Binding<_>>) attrs =
+    /// Parses a binding with `pBinding`, preceded by its optional attributes (pars.fsy
+    /// `attr_localBinding`). The attributes follow the `let`, `let rec`, `and` or `with` keyword.
+    let private attributed (pBinding: Attributes<SyntaxToken> voption -> FSParser<Binding<_>>) =
+        parser {
+            let! attrs = opt Attributes.parse
+            return! pBinding attrs
+        }
+
+    /// Parses a binding preceded by its optional attributes.
+    let parseAttributed: FSParser<Binding<_>> = attributed parse
+
+    /// Parses one or more `and`-separated bindings using the provided binding parser, each preceded
+    /// by its optional attributes.
+    let sepByAnd1 (pBinding: Attributes<SyntaxToken> voption -> FSParser<Binding<_>>) =
+        let pFirst = attributed pBinding
+
         let pAndBinding =
             parser {
                 let! andTok = pAnd
-                let! andAttrs = opt Attributes.parse
-                let! binding = pBinding andAttrs
+                let! binding = attributed pBinding
                 return struct (andTok, binding)
             }
 
         fun (reader: Reader<_, _, _>) ->
-            match pBinding attrs reader with
+            match pFirst reader with
             | Error e -> Error e
             | Ok first ->
                 match many pAndBinding reader with
@@ -336,7 +349,7 @@ module Binding =
 
                     preturn (struct (bindings.ToImmutable(), ands.ToImmutable())) reader
 
-    let parseSepByAnd1 attrs = sepByAnd1 parse attrs
+    let parseSepByAnd1: FSParser<_> = sepByAnd1 parse
 
 [<AutoOpen>]
 module private MemberHelpers =
@@ -1033,7 +1046,7 @@ module Expr =
                 token
                 (parser {
                     let! recTok = opt pRec
-                    let! bindings, ands = Binding.parseSepByAnd1 ValueNone
+                    let! bindings, ands = Binding.parseSepByAnd1
                     return struct (recTok, bindings, ands)
                 })
 

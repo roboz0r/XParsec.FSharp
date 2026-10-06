@@ -214,6 +214,9 @@ type ReturnType<'T> = | ReturnType of colon: 'T * typ: Type<'T>
 
 type Binding<'T> =
     {
+        /// The attributes written after the binding's `let`, `let rec`, `and` or `with` keyword.
+        /// Attributes written before `let` belong to the enclosing declaration and apply to its first
+        /// binding (`CstDeclarations.bindingAttributes`).
         attributes: Attributes<'T> voption
         inlineToken: 'T voption
         mutableToken: 'T voption
