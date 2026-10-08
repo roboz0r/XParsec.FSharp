@@ -69,15 +69,34 @@ module TypeDefnPatterns =
         | TypeDefn.Struct _ -> true
         | _ -> false
 
-    /// Returns true if the body declares at least one member, every member is abstract, and it has
-    /// no `let` or `do` preamble. An `inherit` clause is permitted.
+    /// The `inherit` clauses of `body` in declaration order. A class body holds its leading clause in
+    /// `inherits`; an interface body may hold several.
+    let inheritClauses (body: ObjectModelBody<'T>) : ClassInheritsDecl<'T> list =
+        [
+            match body.inherits with
+            | ValueSome decl -> decl
+            | ValueNone -> ()
+
+            for el in body.elements do
+                match el with
+                | TypeDefnElement.Inherit decl -> decl
+                | _ -> ()
+        ]
+
+    /// Returns true if the body declares at least one abstract member or `inherit` clause, every
+    /// member is abstract, every `inherit` clause is written without arguments, and it has no `let`
+    /// or `do` preamble.
     let isAbstractOnlyBody (body: ObjectModelBody<'T>) : bool =
+        let argless (ClassInheritsDecl(expr = arg)) = arg.IsNone
+
         body.classPreamble.IsEmpty
-        && not body.elements.IsEmpty
+        && (body.inherits.IsSome || not body.elements.IsEmpty)
+        && body.inherits |> ValueOption.forall argless
         && body.elements
            |> Seq.forall (fun el ->
                match el with
                | TypeDefnElement.Member(MemberDefn.Member(defn = MethodOrPropDefn.AbstractSignature _)) -> true
+               | TypeDefnElement.Inherit decl -> argless decl
                | _ -> false
            )
 
