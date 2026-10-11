@@ -27,6 +27,29 @@ module CstWalk =
         | MethodOrPropDefn.PropertyWithGetSet(identPrefix = ValueSome(struct (selfId, _))) -> ValueSome selfId
         | _ -> ValueNone
 
+    [<RequireQualifiedAccess>]
+    type ExprScope =
+        /// The identifier or long identifier directly applied to the type arguments.
+        | TypeAppApplied of types: ImmutableArray<Type<SyntaxToken>>
+        /// The lambda body, or all guards and bodies of a `function` expression with empty argument patterns.
+        | Fun of argumentPats: ImmutableArray<Pat<SyntaxToken>>
+        /// The binding's right-hand side, including its closure scope when the binding has parameters.
+        | BindingRhs of binding: Binding<SyntaxToken>
+        /// The group's body and, for a recursive group, every binding's right-hand side.
+        | LetGroup of bindings: ImmutableArray<Binding<SyntaxToken>>
+        /// The object-expression member's body, including its closure scope.
+        | ObjectMember of self: SyntaxToken voption * argumentPats: ImmutableArray<Pat<SyntaxToken>>
+        /// The lambda body, `function` guards and bodies, parameterized binding RHS, lazy operand, or object member body.
+        /// `closure` is the enclosing lambda, `function` or `lazy` expression, and otherwise equals `body`.
+        /// Entered after `Fun`, `BindingRhs` or `ObjectMember` where applicable.
+        | Closure of closure: Expr<SyntaxToken> * body: Expr<SyntaxToken>
+        /// The loop body; the start and end expressions use the enclosing environment.
+        | ForTo of ident: SyntaxToken
+        /// The loop body; the enumerable expression uses the enclosing environment.
+        | ForIn of pat: Pat<SyntaxToken>
+        /// The match or exception handler arm's guard and body.
+        | MatchArm of pat: Pat<SyntaxToken>
+
     type ExprWalker<'env> =
         {
             /// Invoked on an expression before traversing its children (if Traverse returned true).
@@ -35,30 +58,9 @@ module CstWalk =
             Leave: 'env -> Expr<SyntaxToken> -> unit
             /// Controls whether this node and its sub-tree should be traversed.
             Traverse: 'env -> Expr<SyntaxToken> -> bool
-            /// Updates the environment for the applied identifier/long identifier in a type application.
-            EnterTypeAppApplied: 'env -> ImmutableArray<Type<SyntaxToken>> -> 'env
-            /// Updates the environment for a lambda body given its argument patterns.
-            EnterFun: 'env -> ImmutableArray<Pat<SyntaxToken>> -> 'env
-            /// Updates the environment for a binding RHS, or returns ValueNone to skip it.
-            EnterBindingRhs: 'env -> Binding<SyntaxToken> -> 'env voption
-            /// Updates the environment for a `let` group given the group's bindings. The result is the
-            /// environment of the group's body, and for a `let rec` group also of each binding's RHS.
-            EnterLetGroup: 'env -> ImmutableArray<Binding<SyntaxToken>> -> 'env
-            /// Updates the environment for an object-expression member body given the member's self
-            /// identifier and argument patterns.
-            EnterObjectMember: 'env -> SyntaxToken voption -> ImmutableArray<Pat<SyntaxToken>> -> 'env
-            /// Updates the environment for an expression evaluated in a closure: the body of a
-            /// lambda, a `function` expression, the value of a binding with parameters, the operand
-            /// of `lazy`, or the body of an object-expression member. The first expression is the
-            /// closure: the lambda, the `function` or the `lazy` expression, and otherwise the body
-            /// itself. Applied after `EnterFun`, `EnterBindingRhs` or `EnterObjectMember`.
-            EnterClosure: 'env -> Expr<SyntaxToken> -> Expr<SyntaxToken> -> 'env
-            /// Updates the environment for a `for i = ...` loop body using the loop variable token.
-            EnterForTo: 'env -> SyntaxToken -> 'env
-            /// Updates the environment for a `for pat in ...` loop body.
-            EnterForIn: 'env -> Pat<SyntaxToken> -> 'env
-            /// Updates the environment for a match case guard and body.
-            EnterMatchArm: 'env -> Pat<SyntaxToken> -> 'env
+            /// Returns the environment for the expressions governed by the scope.
+            /// ValueNone skips those expressions and their nested scopes.
+            Enter: 'env -> ExprScope -> 'env voption
         }
 
     /// Default walker that visits all nodes without altering the environment.
@@ -67,15 +69,7 @@ module CstWalk =
             Visit = fun _ _ -> ()
             Leave = fun _ _ -> ()
             Traverse = fun _ _ -> true
-            EnterTypeAppApplied = fun env _ -> env
-            EnterFun = fun env _ -> env
-            EnterBindingRhs = fun env _ -> ValueSome env
-            EnterLetGroup = fun env _ -> env
-            EnterObjectMember = fun env _ _ -> env
-            EnterClosure = fun env _ _ -> env
-            EnterForTo = fun env _ -> env
-            EnterForIn = fun env _ -> env
-            EnterMatchArm = fun env _ -> env
+            Enter = fun env _ -> ValueSome env
         }
 
     type ExprEdge<'env, 'payload> =
@@ -340,51 +334,75 @@ module CstWalk =
             match work with
             | ChildExpr _ -> yield work
             | TypeAppApplied edge ->
-                yield ChildExpr(walker.EnterTypeAppApplied edge.Environment edge.Payload, edge.Expression)
+                match walker.Enter edge.Environment (ExprScope.TypeAppApplied edge.Payload) with
+                | ValueSome appliedEnv -> yield ChildExpr(appliedEnv, edge.Expression)
+                | ValueNone -> ()
             | FunBody(lambda, edge) ->
                 let bodyEnv =
-                    walker.EnterClosure (walker.EnterFun edge.Environment edge.Payload) lambda edge.Expression
+                    walker.Enter edge.Environment (ExprScope.Fun edge.Payload)
+                    |> ValueOption.bind (fun env -> walker.Enter env (ExprScope.Closure(lambda, edge.Expression)))
 
-                yield ChildExpr(bodyEnv, edge.Expression)
+                match bodyEnv with
+                | ValueSome env -> yield ChildExpr(env, edge.Expression)
+                | ValueNone -> ()
             | BindingRhs(env, binding) ->
-                match walker.EnterBindingRhs env binding with
+                match walker.Enter env (ExprScope.BindingRhs binding) with
                 | ValueSome rhsEnv when binding.argumentPats.IsEmpty -> yield ChildExpr(rhsEnv, binding.expr)
                 | ValueSome rhsEnv ->
-                    yield ChildExpr(walker.EnterClosure rhsEnv binding.expr binding.expr, binding.expr)
+                    match walker.Enter rhsEnv (ExprScope.Closure(binding.expr, binding.expr)) with
+                    | ValueSome closureEnv -> yield ChildExpr(closureEnv, binding.expr)
+                    | ValueNone -> ()
                 | ValueNone -> ()
-            | ClosureBody(env, closure, body) -> yield ChildExpr(walker.EnterClosure env closure body, body)
+            | ClosureBody(env, closure, body) ->
+                match walker.Enter env (ExprScope.Closure(closure, body)) with
+                | ValueSome closureEnv -> yield ChildExpr(closureEnv, body)
+                | ValueNone -> ()
             | RecursiveLetGroup group ->
-                let groupEnv = walker.EnterLetGroup group.Environment group.Bindings
+                match walker.Enter group.Environment (ExprScope.LetGroup group.Bindings) with
+                | ValueSome groupEnv ->
+                    for binding in group.Bindings do
+                        yield BindingRhs(groupEnv, binding)
 
-                for binding in group.Bindings do
-                    yield BindingRhs(groupEnv, binding)
-
-                match group.Body with
-                | ValueSome bodyExpr -> yield ChildExpr(groupEnv, bodyExpr)
+                    match group.Body with
+                    | ValueSome bodyExpr -> yield ChildExpr(groupEnv, bodyExpr)
+                    | ValueNone -> ()
                 | ValueNone -> ()
-            | LetBody edge -> yield ChildExpr(walker.EnterLetGroup edge.Environment edge.Payload, edge.Expression)
-            | ForToBody edge -> yield ChildExpr(walker.EnterForTo edge.Environment edge.Payload, edge.Expression)
-            | ForInBody edge -> yield ChildExpr(walker.EnterForIn edge.Environment edge.Payload, edge.Expression)
+            | LetBody edge ->
+                match walker.Enter edge.Environment (ExprScope.LetGroup edge.Payload) with
+                | ValueSome bodyEnv -> yield ChildExpr(bodyEnv, edge.Expression)
+                | ValueNone -> ()
+            | ForToBody edge ->
+                match walker.Enter edge.Environment (ExprScope.ForTo edge.Payload) with
+                | ValueSome bodyEnv -> yield ChildExpr(bodyEnv, edge.Expression)
+                | ValueNone -> ()
+            | ForInBody edge ->
+                match walker.Enter edge.Environment (ExprScope.ForIn edge.Payload) with
+                | ValueSome bodyEnv -> yield ChildExpr(bodyEnv, edge.Expression)
+                | ValueNone -> ()
             | MatchArm(env, rule) ->
                 match rule with
                 | Rule.Rule(pat = pat; guard = guard; expr = body) ->
-                    let armEnv = walker.EnterMatchArm env pat
+                    match walker.Enter env (ExprScope.MatchArm pat) with
+                    | ValueSome armEnv ->
+                        match guard with
+                        | ValueSome(PatternGuard(expr = guardExpr)) -> yield ChildExpr(armEnv, guardExpr)
+                        | ValueNone -> ()
 
-                    match guard with
-                    | ValueSome(PatternGuard(expr = guardExpr)) -> yield ChildExpr(armEnv, guardExpr)
+                        yield ChildExpr(armEnv, body)
                     | ValueNone -> ()
-
-                    yield ChildExpr(armEnv, body)
                 | _ -> ()
             | FunctionRules edge ->
                 let bodyEnv =
-                    walker.EnterClosure
-                        (walker.EnterFun edge.Environment ImmutableArray.Empty)
-                        edge.Expression
-                        edge.Expression
+                    walker.Enter edge.Environment (ExprScope.Fun ImmutableArray.Empty)
+                    |> ValueOption.bind (fun env ->
+                        walker.Enter env (ExprScope.Closure(edge.Expression, edge.Expression))
+                    )
 
-                for rule in edge.Payload do
-                    yield MatchArm(bodyEnv, rule)
+                match bodyEnv with
+                | ValueSome env ->
+                    for rule in edge.Payload do
+                        yield MatchArm(env, rule)
+                | ValueNone -> ()
             | ObjectMember(env, defn) ->
                 match defn with
                 | MemberDefn.Member(defn = MethodOrPropDefn.AutoProperty(expr = expr)) -> yield ChildExpr(env, expr)
@@ -406,12 +424,17 @@ module CstWalk =
                 let body = memberWork.Binding.expr
 
                 let memberEnv =
-                    walker.EnterObjectMember memberWork.Environment memberWork.Self memberWork.Binding.argumentPats
+                    walker.Enter
+                        memberWork.Environment
+                        (ExprScope.ObjectMember(memberWork.Self, memberWork.Binding.argumentPats))
+                    |> ValueOption.bind (fun env -> walker.Enter env (ExprScope.Closure(body, body)))
 
-                yield ChildExpr(walker.EnterClosure memberEnv body body, body)
+                match memberEnv with
+                | ValueSome env -> yield ChildExpr(env, body)
+                | ValueNone -> ()
         }
 
-    // Environment modifications returned by Enter* callbacks apply only to the subtree they are passed to.
+    // The environment returned by Enter applies to the expressions governed by that scope.
     let rec iterExpr (walker: ExprWalker<'env>) (env: 'env) (e: Expr<SyntaxToken>) : unit =
         if walker.Traverse env e then
             walker.Visit env e
@@ -428,8 +451,17 @@ module CstWalk =
             for child in expandExprChildWork walker work do
                 iterExprChildWork walker child
 
-    /// Traverses a binding's RHS in the environment returned by `EnterBindingRhs`.
-    /// Skips traversal if `EnterBindingRhs` returns `ValueNone`.
+    /// Visits every expression in pre-order with the identity environment.
+    let iterExprs (visit: Expr<SyntaxToken> -> unit) (e: Expr<SyntaxToken>) : unit =
+        iterExpr
+            { identityExprWalker<unit> with
+                Visit = fun () expr -> visit expr
+            }
+            ()
+            e
+
+    /// Traverses a binding's RHS in the environment returned by `Enter` for `ExprScope.BindingRhs`.
+    /// ValueNone skips traversal; parameterized bindings also enter `ExprScope.Closure`.
     let iterBindingRhs (walker: ExprWalker<'env>) (env: 'env) (b: Binding<SyntaxToken>) : unit =
         iterExprChildWork walker (BindingRhs(env, b))
 
