@@ -60,15 +60,6 @@ module TypeDefnPatterns =
                 }
         | _ -> ValueNone
 
-    /// Returns true if the type explicitly uses `type X = struct ... end` syntax.
-    ///
-    /// Note: Types marked with a `[<Struct>]` attribute are parsed as `Class` or `Anon`
-    /// and will return false here.
-    let isStructShape (td: TypeDefn<'T>) : bool =
-        match td with
-        | TypeDefn.Struct _ -> true
-        | _ -> false
-
     /// The `inherit` clauses of `body` in declaration order. A class body holds its leading clause in
     /// `inherits`; an interface body may hold several.
     let inheritClauses (body: ObjectModelBody<'T>) : ClassInheritsDecl<'T> list =

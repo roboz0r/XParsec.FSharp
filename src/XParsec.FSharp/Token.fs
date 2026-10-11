@@ -153,9 +153,6 @@ module TokenRepresentation =
     // SECTION 1: Token Kind (Bits 15-13)
     // ==========================================================
     [<Literal>]
-    let KindMask = 0xE000us
-
-    [<Literal>]
     let KindShift = 13
 
     // 000...
@@ -218,19 +215,6 @@ module TokenRepresentation =
     // ==========================================================
     // 8 bits = 256 unique values.
 
-    [<Literal>]
-    let PayloadMask = 0x00FFus
-
-    // --- Helpers for Kind Checks ---
-
-    // A token is a literal if it is String (0x4000) or Number (0x6000)
-    // We check this by masking the top 2 bits (0xC000) and checking for 0x4000 bit.
-    [<Literal>]
-    let internal LiteralGroupMask = 0xC000us
-
-    [<Literal>]
-    let internal LiteralGroupCheck = 0x4000us
-
     // --- Payload Definitions ---
 
     // 1. Numeric Literals (Payload Bits 0-6)
@@ -253,11 +237,6 @@ module TokenRepresentation =
     [<Literal>]
     let internal NumericBaseBinary = 0b0110_0000us
 
-    // 2. String/Text Literals (Payload Bits 0-5)
-    // Fits your requirement of ~60 types within 6 bits.
-    [<Literal>]
-    let TextTypeIDMask = 0b00111111us
-
     // 3. Operators
     // Layout:
     //   Bits 10-6: within-family operator ID (5 bits, 0-31) — distinguishes specific
@@ -271,10 +250,6 @@ module TokenRepresentation =
 
     [<Literal>]
     let PrecedenceMask = 0b0001_1111us
-
-    // Within-family operator ID lives in bits 10-6.
-    [<Literal>]
-    let OpFamilyShift = 6
 
     [<Literal>]
     let OpFamilyMask = 0b0000_0111_1100_0000us
@@ -835,62 +810,6 @@ module TokenRepresentation =
         let ReservedOperator = 255us // A reserved operator (i.e. containing a reserved symbol $ or :)
 
 
-    // ==========================================================
-    // HELPER: String/Text Subtypes (Must fit in 8 bits: 0-255)
-    // ==========================================================
-    module internal StringType =
-        [<Literal>]
-        let Regular = 0us
-
-        [<Literal>]
-        let Verbatim = 1us
-
-        [<Literal>]
-        let TripleQuote = 2us
-
-        [<Literal>]
-        let ByteArray = 3us
-
-        [<Literal>]
-        let VerbatimByteArray = 4us
-
-        [<Literal>]
-        let Char = 5us
-
-        // Interpolation parts
-        [<Literal>]
-        let InterpolatedOpen = 10us // $"
-
-        [<Literal>]
-        let InterpolatedClose = 11us // "
-
-        [<Literal>]
-        let InterpolatedPart = 12us // text inside
-
-        [<Literal>]
-        let InterpolatedExprOpen = 13us // {
-
-        [<Literal>]
-        let InterpolatedExprClose = 14us // }
-
-        // Triple Interpolation
-        [<Literal>]
-        let TripleInterpolatedOpen = 20us // $"""
-
-        [<Literal>]
-        let TripleInterpolatedClose = 21us
-
-        // Verbatim Interpolation
-        [<Literal>]
-        let VerbatimInterpolatedOpen = 30us // $@"
-
-        // Formatting / Escapes
-        [<Literal>]
-        let FormatPlaceholder = 50us
-
-        [<Literal>]
-        let EscapeChar = 51us
-
     module internal Special =
         [<Literal>]
         let EOF = 1us
@@ -1146,58 +1065,16 @@ module TokenRepresentation =
     module internal Precedence =
         // Used to define the precedence in the Token enum
         [<Literal>]
-        let As = 1us
-
-        [<Literal>]
-        let When = 2us
-
-        [<Literal>]
-        let Pipe = 3us
-
-        [<Literal>]
-        let Semicolon = 4us
-
-        [<Literal>]
-        let RArrow = 5us
-
-        [<Literal>]
-        let Let = 6us
-
-        [<Literal>]
-        let Function = 7us
-
-        [<Literal>]
-        let If = 8us
-
-        [<Literal>]
-        let Assignment = 9us
-
-        [<Literal>]
-        let Comma = 10us
-
-        [<Literal>]
-        let Range = 11us
-
-        [<Literal>]
         let LogicalOr = 12us
 
         [<Literal>]
         let LogicalAnd = 13us
 
         [<Literal>]
-        let Cast = 14us
-
-        [<Literal>]
         let ComparisonAndBitwise = 15us
 
         [<Literal>]
         let Append = 16us
-
-        [<Literal>]
-        let Cons = 17us
-
-        [<Literal>]
-        let TypeTest = 18us
 
         [<Literal>]
         let InfixAdd = 19us
@@ -1207,15 +1084,6 @@ module TokenRepresentation =
 
         [<Literal>]
         let Exponentiation = 21us
-
-        [<Literal>]
-        let QMarkQMark = 22us
-
-        [<Literal>]
-        let Application = 23us
-
-        [<Literal>]
-        let PatternMatchBar = 24us
 
         [<Literal>]
         let Prefix = 25us
@@ -1228,9 +1096,6 @@ module TokenRepresentation =
 
         [<Literal>]
         let HighApplication = 28us
-
-        [<Literal>]
-        let HighTypeApplication = 29us
 
     /// Within-family operator IDs — bits 10-6 of the Token value, 5 bits, 32 slots.
     /// IDs are globally unique across the whole Token enum: when an operator's
@@ -2084,16 +1949,10 @@ module internal TokenInfo =
     let isText (token: Token) = token |> kind = TokenKind.TextLiteral
     let isOperator (token: Token) = token |> kind = TokenKind.Operator
     let isKeyword (token: Token) = token |> kind = TokenKind.Keyword
-    let isInvalid (token: Token) = token |> kind = TokenKind.Invalid
     let isSpecial (token: Token) = token |> kind = TokenKind.Special
 
-    let isDeprecated (token: Token) = failwith "TODO: Implement isDeprecated"
-    let isReserved (token: Token) = failwith "TODO: Implement isReserved"
     let inComment (token: Token) = hasFlag token InComment
     let isVirtual (token: Token) = hasFlag token IsVirtual
-
-    let isVirtualKeyword (token: Token) =
-        isKeyword token && hasFlag token IsVirtual
 
     let withoutCommentFlags (token: Token) : Token =
         let mask = ~~~InComment
@@ -2447,12 +2306,8 @@ type PositionedToken =
 module TokenExtensions =
     type Token with
         member this.IsIdentifier = TokenInfo.isIdentifier this
-        member this.IsLiteral = TokenInfo.isLiteral this
         member this.IsOperator = TokenInfo.isOperator this
         member this.IsKeyword = TokenInfo.isKeyword this
-        member this.IsDeprecated = TokenInfo.isDeprecated this
-        member this.IsReserved = TokenInfo.isReserved this
-        member this.IsInvalid = TokenInfo.isInvalid this
         member this.IsVirtual = TokenInfo.isVirtual this
         member this.InComment = TokenInfo.inComment this
         member this.IsNumeric = TokenInfo.isNumeric this
@@ -2464,23 +2319,9 @@ module TokenExtensions =
             let mask = ~~~InComment
             uint16 this &&& mask |> uint16 |> LanguagePrimitives.EnumOfValue
 
-        member this.Kind: TokenKind = TokenInfo.kind this
-
     type PositionedToken with
         member this.IsIdentifier = TokenInfo.isIdentifier this.Token
-        member this.IsLiteral = TokenInfo.isLiteral this.Token
-        member this.IsOperator = TokenInfo.isOperator this.Token
-        member this.IsKeyword = TokenInfo.isKeyword this.Token
-        member this.IsDeprecated = TokenInfo.isDeprecated this.Token
-        member this.IsReserved = TokenInfo.isReserved this.Token
-        member this.IsInvalid = TokenInfo.isInvalid this.Token
-        member this.IsVirtual = TokenInfo.isVirtual this.Token
         member this.InComment = TokenInfo.inComment this.Token
-        member this.IsNumeric = TokenInfo.isNumeric this.Token
-        member this.IsText = TokenInfo.isText this.Token
-
-        member this.IsCommentedOut = TokenInfo.inComment this.Token
-
         member this.TokenWithoutCommentFlags: Token = TokenInfo.withoutCommentFlags this.Token
 
 [<Struct>]
@@ -2490,19 +2331,9 @@ type NumericInfo =
             _token: PositionedToken
         }
 
-    member this.PositionedToken = this._token
-    member this.Token: Token = this._token.Token
-    member this.StartIndex: int64 = this._token.StartIndex
-
     member this.Base: NumericBase = TokenInfo.numericBase this._token.Token
 
     member this.Kind: NumericKind = TokenInfo.numericKind this._token.Token
-
-    static member TryCreate(token: PositionedToken) =
-        if TokenInfo.isNumeric token.Token then
-            ValueSome { _token = token }
-        else
-            ValueNone
 
     static member Create(token: PositionedToken) =
         if TokenInfo.isNumeric token.Token then
@@ -2615,9 +2446,3 @@ type OperatorInfo =
                 }
         else
             ValueNone
-
-    /// Creates an OperatorInfo for a valid operator token, or throws an ArgumentException.
-    static member Create(token: PositionedToken) =
-        match OperatorInfo.TryCreate token with
-        | ValueSome opInfo -> opInfo
-        | ValueNone -> invalidArg "token" (sprintf "Token %A is not an operator." token)

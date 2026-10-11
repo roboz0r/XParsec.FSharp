@@ -460,15 +460,6 @@ module TypeSignature =
                             "Union or Type abbreviation"
         }
 
-    let parse: FSParser<TypeSignature<SyntaxToken>> =
-        parser {
-            let! attrs = opt Attributes.parse
-            let! _ = pType
-            let! attrsAfter = opt Attributes.parse
-            let merged = mergeAttrs attrs attrsAfter
-            return! parseBody merged
-        }
-
     /// Parses an `and`-continuation: `and [attrs] TypeName = ...`. Returns the
     /// `and` token alongside the parsed signature so `TypeSignatures.rest` can pair them.
     let parseAndContinuation: FSParser<SyntaxToken * TypeSignature<SyntaxToken>> =

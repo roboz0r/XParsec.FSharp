@@ -135,7 +135,6 @@ module CstTokens =
         | Expr.OptionalArgExpr(questionMark = t) -> t
         | Expr.ControlFlow(keyword = kw) -> firstTokenOfControlFlowKeyword kw
         | Expr.Wildcard(underscore = t) -> t
-        | Expr.Pat(pattern = inner) -> firstTokenOfPat inner
         | Expr.SliceFrom(expr = inner) -> firstTokenOfExpr inner
         | Expr.SliceTo(dotdot = t) -> t
         | Expr.SliceFromTo(startExpr = inner) -> firstTokenOfExpr inner

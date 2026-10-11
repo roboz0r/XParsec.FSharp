@@ -975,7 +975,6 @@ and walkExpr (visitor: IAstVisitor<'T>) (expr: Expr<'T>) : unit =
     | Expr.Wildcard underscore -> visitor.VisitToken "Wildcard" underscore
     | Expr.Missing -> visitor.Missing "Missing"
     | Expr.SkipsTokens(skippedTokens) -> walkExprSkipsTokens visitor skippedTokens
-    | Expr.Pat innerPat -> walkExprPat visitor innerPat
     | Expr.ControlFlow(keyword, inner) -> walkExprControlFlow visitor keyword inner
     | Expr.StaticMemberInvocation(lParen,
                                   staticTypars,
@@ -1525,11 +1524,6 @@ and walkExprILIntrinsic
 
     visitor.VisitToken "#)" rHashParen
     visitor.ExitSection "ILIntrinsic"
-
-and walkExprPat (visitor: IAstVisitor<'T>) (innerPat: Pat<'T>) : unit =
-    visitor.EnterSection "Pat"
-    walkPat visitor innerPat
-    visitor.ExitSection "Pat"
 
 and walkExprControlFlow (visitor: IAstVisitor<'T>) (keyword: ControlFlowKeyword<'T>) (expr: Expr<'T>) : unit =
     let kwLabel =

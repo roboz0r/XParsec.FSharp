@@ -138,8 +138,7 @@ module CstWalk =
             | Expr.Missing
             | Expr.SkipsTokens _
             | Expr.Ident _
-            | Expr.SliceAll _
-            | Expr.Pat _ -> ()
+            | Expr.SliceAll _ -> ()
             | Expr.String(parts = parts) ->
                 for part in parts do
                     match part with
@@ -512,8 +511,7 @@ module CstWalk =
         | Expr.Function _
         | Expr.TryWith _
         | Expr.Record(inherits = ValueNone)
-        | Expr.RecordClone _
-        | Expr.Pat _ -> ()
+        | Expr.RecordClone _ -> ()
 
         | Expr.Record(inherits = ValueSome(RecordInherit(decl = ClassInheritsDecl(typ = t)))) -> onType t
 

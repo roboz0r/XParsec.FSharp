@@ -116,15 +116,6 @@ type IfExpr<'T> =
     | Not of 'T * IfExpr<'T> // !
     | Paren of 'T * IfExpr<'T> * 'T // ( ... )
 
-[<RequireQualifiedAccess>]
-type IfOp =
-    | And
-    | Or
-    | Not
-    | LParen
-    | RParen
-
-
 // https://fsharp.github.io/fslang-spec/lexical-filtering/#1516-full-list-of-offside-contexts
 
 [<RequireQualifiedAccess>]
@@ -271,9 +262,6 @@ type TraceCallback() =
     abstract SplitPowerMinusConsumed: atStartIndex: int -> unit
     default _.SplitPowerMinusConsumed(_) = ()
 
-    abstract Message: message: string -> unit
-    default _.Message(_) = ()
-
 [<Struct>]
 type WarnDirective =
     {
@@ -303,7 +291,6 @@ and [<ReferenceEquality; NoComparison>] ParseState =
         /// Number of characters consumed since the last type parameter. Used to
         /// disambiguate multi-character operators (like `>.` or `>>=`) when closing type arguments.
         CharsConsumedAfterTypeParams: int
-        ConditionalCompilationStack: PositionedToken list
         /// When true, the next `KWRAttrBracket` (`>]`) is split and treated as `KWRBracket` (`]`).
         SplitRAttrBracket: bool
         /// When true, a custom operator starting with `^-` is split into `^` and `-`.
@@ -449,7 +436,6 @@ module ParseState =
             LastLine = 0<line>
             // ReprocessOpAfterTypeDeclaration = false
             CharsConsumedAfterTypeParams = 0
-            ConditionalCompilationStack = []
             SplitRAttrBracket = false
             SplitPowerMinus = false
             WarnDirectives = []
@@ -465,21 +451,10 @@ module ParseState =
             IndentationMode = Syntax.Light
             LastLine = 0<line>
             CharsConsumedAfterTypeParams = 0
-            ConditionalCompilationStack = []
             SplitRAttrBracket = false
             SplitPowerMinus = false
             WarnDirectives = []
             Trace = null
-        }
-
-    let setIndentOn (state: ParseState) =
-        { state with
-            IndentationMode = Syntax.Light
-        }
-
-    let setIndentOff (state: ParseState) =
-        { state with
-            IndentationMode = Syntax.Verbose
         }
 
     let pushOffside offsideCtx (state: ParseState) =
@@ -639,13 +614,6 @@ module ParseState =
         let symbol = tokenString symbolToken state
         state.ActiveDefines.Contains(symbol)
 
-    /// Returns true if the specified warning code is suppressed at `line`.
-    let isWarningSuppressed (warningNumber: int) (line: int<line>) (state: ParseState) =
-        state.WarnDirectives
-        |> List.tryFind (fun d -> d.WarningNumber = warningNumber && d.Line <= line)
-        |> Option.map (fun d -> d.Suppress)
-        |> Option.defaultValue false
-
 /// Formats trace events as text lines and writes them to a `TextWriter`.
 /// Can be subclassed to intercept or redirect trace output.
 type WriterTraceCallback(lexed: Lexed, writer: System.IO.TextWriter) =
@@ -694,8 +662,6 @@ type WriterTraceCallback(lexed: Lexed, writer: System.IO.TextWriter) =
 
     override this.SplitPowerMinusConsumed(startIndex) =
         this.Write($"SPLIT_POW_MINUS_CONSUMED @{startIndex}")
-
-    override this.Message(msg) = this.Write($"MSG: {msg}")
 
 [<RequireQualifiedAccess>]
 module Reader =

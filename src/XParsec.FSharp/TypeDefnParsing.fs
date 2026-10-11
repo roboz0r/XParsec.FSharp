@@ -57,12 +57,6 @@ module TypeName =
             return TypeName(attrs, access, prefixTypars, ident, typars, postfixConstraints)
         }
 
-    let parse: Parser<TypeName<SyntaxToken>, _, _, _> =
-        parser {
-            let! attrs = opt Attributes.parse
-            return! parseWithAttrs attrs
-        }
-
 [<RequireQualifiedAccess>]
 module AsDefn =
     let parse: Parser<AsDefn<SyntaxToken>, _, _, _> =
@@ -979,21 +973,6 @@ module UnionTypeCases =
                 | ValueNone -> sepBars
 
             return struct (cases, bars)
-        }
-
-// --- Record ---
-
-[<RequireQualifiedAccess>]
-module RecordField =
-    let parse: Parser<RecordField<SyntaxToken>, _, _, _> =
-        parser {
-            let! attrs = opt Attributes.parse
-            let! mut = opt pMutable
-            let! acc = opt Access.parse
-            let! id = pIdent
-            let! col = pColon
-            let! t = Type.parse
-            return RecordField.RecordField(attrs, mut, acc, id, col, t)
         }
 
 // --- Enum ---

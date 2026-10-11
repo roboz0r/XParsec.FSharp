@@ -698,11 +698,6 @@ module Parsing =
     /// Allows parser to avoid re-skipping trivia tokens when it needs to look ahead at the next token to decide what to parse.
     let peekNextSyntaxToken (reader: Reader<PositionedToken, ParseState, _>) = nextSyntaxTokenImpl true reader
 
-    /// Emits a trace message. Use with `do!` inside a `parser { }` CE for debugging.
-    let trace (msg: string) (reader: Reader<PositionedToken, ParseState, _>) =
-        ParseState.ifTrace reader.State (fun tc -> tc.Message msg)
-        preturn () reader
-
     /// Consumes the given token, which must have been previously returned by `peekNextSyntaxToken`, and returns it.
     let consumePeeked (token: SyntaxToken) (reader: Reader<PositionedToken, ParseState, _>) =
         match token.Index with
@@ -989,35 +984,6 @@ module Parsing =
         let index = int reader.Index * 1<token>
         let indent = ParseState.getIndent state index
         preturn indent reader
-
-    /// Returns the column (0-based) of the next non-trivia token without consuming it.
-    /// Returns -1 at EOF.
-    let peekSyntaxIndent: FSParser<int> =
-        lookAhead (fun r ->
-            match nextSyntaxToken r with
-            | Error _ -> preturn -1 r
-            | Ok token ->
-                match token.Index with
-                | TokenIndex.Virtual -> preturn 0 r
-                | TokenIndex.Regular tokenIdx ->
-                    let indent = ParseState.getIndent r.State tokenIdx
-                    preturn indent r
-        )
-
-    /// Synthesises a VirtualSep (virtual `;`) token at the current reader position
-    /// without consuming any input.
-    let makeVirtualSep (reader: Reader<PositionedToken, ParseState, _>) =
-        match reader.Peek() with
-        | ValueNone -> fail EndOfInput reader
-        | ValueSome token ->
-            ParseState.ifTrace reader.State (fun tc -> tc.VirtualToken(Token.VirtualSep, token.StartIndex))
-
-            preturn
-                {
-                    PositionedToken = PositionedToken.Create(Token.VirtualSep, token.StartIndex)
-                    Index = TokenIndex.Virtual
-                }
-                reader
 
     /// Like nextSyntaxTokenVirtualIfNot but emits a UnclosedDelimiter diagnostic
     /// when the token must be synthesised.

@@ -1,12 +1,7 @@
 namespace XParsec.FSharp.Parser
 
-open System
-open System.Collections.Generic
-open System.Collections.Immutable
 open XParsec
-open XParsec.Parsers
 open XParsec.FSharp.Lexer
-open XParsec.FSharp.Parser.ParseState
 
 [<AutoOpen>]
 module internal Keywords =
@@ -45,39 +40,9 @@ module internal Keywords =
         // TODO: Where does VirtualLet get inserted?
         mkKW Token.KWLet "Expected 'let' keyword"
 
-    let pFor: KWParser = mkKW Token.KWFor "for"
-
     let pArrowRight: KWParser = mkKW Token.OpArrowRight "->"
 
-    let pLetBang: KWParser = mkKW Token.KWLetBang "let!"
-
-    let pUseBang: KWParser = mkKW Token.KWUseBang "use!"
-
-    let pUse: KWParser = mkKW Token.KWUse "use"
-    let pDoBang: KWParser = mkKW Token.KWDoBang "do!"
-
-    let pYieldBang: KWParser = mkKW Token.KWYieldBang "yield!"
-    let pReturnBang: KWParser = mkKW Token.KWReturnBang "return!"
-
-    let pMatchBang: KWParser = mkKW Token.KWMatchBang "match!"
-
-    let pYield: KWParser = mkKW Token.KWYield "yield"
-
-    let pReturn: KWParser = mkKW Token.KWReturn "return"
-
-    let pMatch: KWParser = mkKW Token.KWMatch "match"
-    let pIf: KWParser = mkKW Token.KWIf "if"
-    let pLazy: KWParser = mkKW Token.KWLazy "lazy"
-    let pAssert: KWParser = mkKW Token.KWAssert "assert"
-    let pTry: KWParser = mkKW Token.KWTry "try"
     let pFinally: KWParser = mkKW Token.KWFinally "finally"
-
-    let pWhile: KWParser = mkKW Token.KWWhile "while"
-    let pWhileBang: KWParser = mkKW Token.KWWhileBang "while!"
-    let pFun: KWParser = mkKW Token.KWFun "fun"
-    let pFunction: KWParser = mkKW Token.KWFunction "function"
-
-    let pDone: KWParser = mkKW Token.KWDone "done"
 
     let pIdent: KWParser = mkKWIdent "identifier"
 
@@ -100,13 +65,10 @@ module internal Keywords =
     // alone disambiguates them from `<<`, `<=`, `<|`, `>>`, `>=`, etc.
     let pLessThan: KWParser = mkKW Token.OpLessThan "<"
 
-    let pGreaterThan: KWParser = mkKW Token.OpGreaterThan ">"
-
     let pLBracket: KWParser = mkKW Token.KWLBracket "["
     let pRBracket: KWParser = mkKW Token.KWRBracket "]"
     let pLBrace: KWParser = mkKW Token.KWLBrace "{"
     let pRBrace: KWParser = mkKW Token.KWRBrace "}"
-    let pRange: KWParser = mkKW Token.OpRange ".."
     let pHash: KWParser = mkKW Token.KWHash "#"
     let pWildcard: KWParser = mkKW Token.Wildcard "_"
 
@@ -147,15 +109,10 @@ module internal Keywords =
 
     let pQuotationTypedLeft: KWParser = mkKW Token.OpQuotationTypedLeft "<@"
 
-    let pQuotationTypedRight: KWParser = mkKW Token.OpQuotationTypedRight "@>"
-
     let pQuotationUntypedLeft: KWParser = mkKW Token.OpQuotationUntypedLeft "<@@"
-
-    let pQuotationUntypedRight: KWParser = mkKW Token.OpQuotationUntypedRight "@@>"
 
     //let pNil: KWParser = mkKW Token.OpNil "[]"
     let pLArrayBracket: KWParser = mkKW Token.KWLArrayBracket "[|"
-    let pRArrayBracket: KWParser = mkKW Token.KWRArrayBracket "|]"
     let pLBraceBar: KWParser = mkKW Token.KWLBraceBar "{|"
     let pRBraceBar: KWParser = mkKW Token.KWRBraceBar "|}"
     let pTypeTest: KWParser = mkKW Token.OpTypeTest ":?"

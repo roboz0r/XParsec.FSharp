@@ -366,8 +366,6 @@ module FieldInitializer =
             return FieldInitializer(id, equals, expr)
         }
 
-    let parseSepBySemi1 = sepBy1 parse pSemi
-
 /// pars.fsy `atomicExprAfterType`: the argument after the type of `new T arg`, `inherit T arg`, an
 /// object expression's `new T arg` and an attribute `[<T arg>]`.
 [<RequireQualifiedAccess>]
@@ -423,48 +421,6 @@ module ObjectConstruction =
 
     do refObjectConstruction.Set parse
 
-[<RequireQualifiedAccess>]
-module BaseCall =
-    let parse: FSParser<BaseCall<SyntaxToken>> =
-        parser {
-            // Assumes the leading 'inherit' keyword has already been consumed by the caller
-            let! construction = ObjectConstruction.parse
-
-            let! asPart =
-                opt (
-                    parser {
-                        let! asTok = pAs
-                        let! ident = pIdent
-                        return (asTok, ident)
-                    }
-                )
-
-            match asPart with
-            | ValueSome(asTok, ident) -> return BaseCall.NamedBaseCall(construction, asTok, ident)
-            | ValueNone -> return BaseCall.AnonBaseCall(construction)
-        }
-
-[<RequireQualifiedAccess>]
-module ObjectMembers =
-    let parse: FSParser<ObjectMembers<SyntaxToken>> =
-        parser {
-            let! withTok = pWith
-            // Parse members terminated by 'end'
-            let! members, endTok = manyTill refMemberDefn.Parser pEnd
-
-            return ObjectMembers.ObjectMembers(withTok, members, endTok)
-        }
-
-[<RequireQualifiedAccess>]
-module InterfaceImpl =
-    let parse: FSParser<InterfaceImpl<SyntaxToken>> =
-        parser {
-            let! interfaceTok = pInterface
-            let! typ = Type.parse
-            let! members = opt ObjectMembers.parse
-            return InterfaceImpl.InterfaceImpl(interfaceTok, typ, members)
-        }
-
 /// Auxiliary data passed from operator-specific parsers back to the expression parser for AST construction.
 [<RequireQualifiedAccess>]
 type ExprAux =
@@ -472,7 +428,6 @@ type ExprAux =
     | TypeApp of SyntaxToken * ImArr<Type<SyntaxToken>> * ImArr<SyntaxToken> * SyntaxToken
     | DotIndex of SyntaxToken * Expr<SyntaxToken> * SyntaxToken // .[ expr ]
     | DotParenOp of IdentOrOp<SyntaxToken> // .( op ) — qualified operator access
-    | PostfixDynamic of SyntaxToken * Type<SyntaxToken> // :? Type (DynamicTypeTest)
     | HighPrecApp of SyntaxToken * Expr<SyntaxToken> * SyntaxToken // ( expr ) for f(x, y)
     | HighPrecIndex of SyntaxToken * Expr<SyntaxToken> * SyntaxToken // [ expr ] for arr[i] (F# 6+ dot-less indexing)
     | TypeCast of Type<SyntaxToken> // :> Type
@@ -523,9 +478,6 @@ module Expr =
 
     let private errNotCEBody: ErrorType<PositionedToken, ParseState> =
         Message "Not a computation expression body"
-
-    let bp x =
-        LanguagePrimitives.ByteWithMeasure<bp> x
 
     let pl x : PrecedenceLevel = LanguagePrimitives.EnumOfValue x
 

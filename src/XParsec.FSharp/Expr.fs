@@ -425,7 +425,6 @@ type Expr<'T> =
     | SkipsTokens of skippedTokens: ImArr<'T> // Placeholder for skipped tokens
     // Added to make things work
     | Ident of ident: 'T
-    | Pat of pattern: Pat<'T>
     // Ranges and Slices Note: Spec has these as separate grammar productions, but they are closely related and it's easier to represent them with a single set of types.
     | Range of fromExpr: Expr<'T> * dotdot: 'T * toExpr: Expr<'T>
     | SteppedRange of fromExpr: Expr<'T> * dotdot1: 'T * stepExpr: Expr<'T> * dotdot2: 'T * toExpr: Expr<'T>
@@ -501,7 +500,6 @@ and [<RequireQualifiedAccess>] Pat<'T> =
     /// reinterprets the expression when binding the surrounding pattern
     /// construct — currently emitted inside `Pat.EnclosedBlock(ParenKind.Quoted, …)`
     /// for active-pattern quotation arguments per spec patterns:60-61.
-    /// Mirrors `Expr.Pat` on the expression side.
     | Expr of expr: Expr<'T>
     | Missing
     | SkipsTokens of skippedTokens: ImArr<'T>

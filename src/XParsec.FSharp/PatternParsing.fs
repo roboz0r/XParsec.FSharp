@@ -713,9 +713,6 @@ module Pat =
     let private parseUnionFieldPat =
         Operator.parserAt (BindingPower.fromLevel (int PrecedenceLevel.Comma + 1)) parseAtomic (PatOperatorParser())
 
-    let parseMany1 = many1 parse
-    let parseAtomicMany1 = many1 parseAtomic
-
     /// Atomic pattern parser for parameter lists (identifiers do not consume trailing arguments).
     let parseAtomicBindingArg =
         dispatchNextSyntaxTokenFallback

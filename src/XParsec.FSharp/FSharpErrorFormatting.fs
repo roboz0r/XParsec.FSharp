@@ -85,32 +85,3 @@ let splitAndFormatTokenErrors (error: ParseError<PositionedToken, ParseState>) =
     )
     // 5. Separate different failure locations with double-newlines
     |> String.concat "\n\n---\n\n"
-
-let formatFurthestTokenError (error: ParseError<PositionedToken, ParseState>) =
-    let rec flatten (e: ParseError<PositionedToken, ParseState>) =
-        match e.Errors with
-        | Nested(parentType, children) -> (e.Position, parentType) :: List.collect flatten children
-        | leafType -> [ e.Position, leafType ]
-
-    // 1. Flatten and group by index
-    let grouped = flatten error |> List.groupBy (fun (pos, _) -> pos.Index)
-
-    // 2. ONLY take the group that progressed the furthest in the file
-    let (furthestIndex, group) = grouped |> List.maxBy fst
-
-    // 3. Reconstruct and format
-    let pos = group |> List.head |> fst
-    let errorTypes = group |> List.map snd
-
-    let localizedErrorType =
-        match errorTypes |> List.distinct with // List.distinct helps remove duplicate generic messages
-        | [ single ] -> single
-        | multiple ->
-            let children = multiple |> List.map (fun et -> { Position = pos; Errors = et })
-            Nested(Message "Multiple errors at furthest point:", children)
-
-    formatTokenError
-        {
-            Position = pos
-            Errors = localizedErrorType
-        }

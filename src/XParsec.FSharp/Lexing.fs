@@ -78,13 +78,6 @@ type Lexed =
     member this.WithDefines(compilationDefines: Set<string>) =
         ParseInput(this, ActiveDefines(Set.intersect compilationDefines this.MentionedDefines))
 
-    member this.FirstTokenOnLine(lineIndex: int<line>) =
-        if lineIndex < 0<_> || int lineIndex >= this.LineStarts.Length then
-            invalidArg (nameof lineIndex) "Index out of range"
-
-        let tokenIndex = this.LineStarts[lineIndex]
-        this.Tokens[tokenIndex]
-
     member this.GetLineForToken(i: int<token>) =
         if i < 0<_> || int i >= this.Tokens.Length then
             invalidArg (nameof i) "Index out of range"
@@ -235,19 +228,6 @@ and [<NoComparison>] ParseInput =
     member this.ActiveDefines =
         let (ParseInput(_, activeDefines)) = this
         activeDefines
-
-// Format specifications for printf formats are strings with % markers
-// that indicate format. Format placeholders consist of %[flags][width][.precision][type]
-
-type InterpolationFlags =
-    {
-        // '0' '+' '-' ' '
-        // TODO: It's an error to have duplicate flags but not really a problem for lexing
-        Flags: string
-        PadZeros: bool
-        AlignLeft: bool
-        PositiveChar: char option
-    }
 
 [<RequireQualifiedAccess>]
 type FormatType =
@@ -659,14 +639,7 @@ module internal Errors =
     // Centralized error messages. Explicit type annotations are mandatory: without
     // them the F# value restriction compiles each binding as a thunk that re-allocates
     // the `Message` every time it's accessed.
-    let expectedEndOfIdent = Message "Expected end of identifier"
-
-    let expectedNewline = Message "Expected newline"
-
     let expectedStringLiteral = Message "Expected string literal"
-
-    let expectedIdentStartChar: ErrorType<char, LexBuilder> =
-        Message "Expected identifier start character"
 
     let expectedBacktickedIdent: ErrorType<char, LexBuilder> =
         Message "Expected backticked identifier"
@@ -926,8 +899,6 @@ module Lexing =
         Buffers.SearchValues.Create(customOperatorChars)
 
     // let (><-*/=~%.&|@^!?:) a b = a + b
-
-    let private parenChars = [| '('; ')'; '{'; '}'; '['; ']' |]
 
     // Hoisted character predicates and counting/skipping sub-parsers.
     // These are allocated once at module initialization so each invocation of
@@ -1240,11 +1211,6 @@ module Lexing =
                 preturn () reader
             | _ -> fail expectedBacktickedIdent reader
 
-
-    let peekNewLine (reader: Reader<char, LexBuilder, ReadableString>) =
-        match reader.Peek() with
-        | ValueSome('\n' | '\r') -> preturn () reader
-        | _ -> fail expectedNewline reader
 
     let pLineComment = pstring "//" >>. pSkipUntilNewline
     let pLineCommentToken = pToken pLineComment Token.LineComment
@@ -2310,12 +2276,6 @@ module Lexing =
         }
 
 
-    // This is a fallback, we shouldn't see any Other tokens in output
-    let private peekEndOfIdent (reader: Reader<char, LexBuilder, ReadableString>) =
-        match reader.Peek() with
-        | ValueSome c when isIdentChar c -> fail expectedEndOfIdent reader
-        | _ -> preturn () reader
-
     // Any single char that doesn't start another token
     // Multiple OtherUnlexed tokens will be combined in the append step
     let pOtherToken = pToken anyChar Token.OtherUnlexed
@@ -2799,29 +2759,6 @@ module Lexing =
     let parseFormatSpecifier (specifier: string) : FormatPlaceholder voption =
         parseFormatSpecifierView (ReadableString specifier)
 
-    let (|ExpressionCtx|_|) (ctx: LexContext) =
-        match ctx with
-        | LexContext.Normal
-        | LexContext.BracedExpression
-        | LexContext.BraceBarExpression
-        | LexContext.ParenthesExpression
-        | LexContext.BracketedExpression
-        | LexContext.QuotedExpression
-        | LexContext.TypedQuotedExpression
-        | LexContext.InterpolatedExpression -> true
-        | _ -> false
-
-    let (|NonInterpolatedExpressionCtx|_|) (ctx: LexContext) =
-        match ctx with
-        | LexContext.Normal
-        | LexContext.BracedExpression
-        | LexContext.BraceBarExpression
-        | LexContext.ParenthesExpression
-        | LexContext.BracketedExpression
-        | LexContext.QuotedExpression
-        | LexContext.TypedQuotedExpression -> true
-        | _ -> false
-
     let pTabToken = pToken (pchar '\t') Token.Tab
     let pCommaToken = pToken (pchar ',') Token.OpComma
 
@@ -3204,7 +3141,6 @@ module Lexing =
             else
                 pOpenBraceExpressionContext reader
 
-    // Fast-path dispatch for the dominant ExpressionCtx (non-Interpolated) bucket:
     // String.IndexOf(char) is SIMD-vectorized; a hit returns an index into the
     // parallel `exprCtxDispatchers` array. The pair list keeps the two in sync.
     //
@@ -3285,8 +3221,6 @@ module Lexing =
                 | LexContext.TypedQuotedExpression -> dispatchExprCtx c
 
                 | LexContext.InterpolatedExpression ->
-                    // Same as vanilla ExpressionCtx except `}` ends the expression
-                    // and `:` opens a format clause, outside comment text.
                     match c with
                     | '}' when not (LexBuilder.isInComment state) -> pInterpolatedExpressionEndToken
                     | ':' when not (LexBuilder.isInComment state) -> pInterpolatedFormatClause
