@@ -476,9 +476,9 @@ type ExprAux =
     | HighPrecApp of SyntaxToken * Expr<SyntaxToken> * SyntaxToken // ( expr ) for f(x, y)
     | HighPrecIndex of SyntaxToken * Expr<SyntaxToken> * SyntaxToken // [ expr ] for arr[i] (F# 6+ dot-less indexing)
     | TypeCast of Type<SyntaxToken> // :> Type
-    /// Wraps a fully-parsed Expr for use as 'Aux in PrefixMapped keyword operators (if, match, let, etc.)
-    | KeywordExpr of (SyntaxToken -> Expr<SyntaxToken>)
-    | ForExpr of Expr<SyntaxToken>
+    | KeywordOperand of Expr<SyntaxToken>
+    /// A complete expression for a keyword prefix operator.
+    | FinishedKeywordExpr of Expr<SyntaxToken>
     | SliceAll
     | SliceFrom
     | Range of Expr<SyntaxToken>
@@ -573,11 +573,11 @@ module Expr =
                 Expr.SteppedRange(l, dotdot1, step, op, r)
             | _ -> Expr.Range(l, op, r)
 
-        // Completes control-flow expressions (if, match, for, while, etc.) stored in ExprAux.ForExpr
-        let forE _forTok (expr: ExprAux) =
+        // Returns the complete expression parsed by a keyword body parser.
+        let finishedKeyword _op (expr: ExprAux) =
             match expr with
-            | ExprAux.ForExpr forExpr -> forExpr
-            | _ -> failwith "Unexpected Aux type for For expression completion"
+            | ExprAux.FinishedKeywordExpr e -> e
+            | _ -> failwith "Unexpected Aux type for finished keyword expression completion"
 
         let sequence (exprs: ResizeArray<Expr<_>>) ops =
             Expr.Sequential(ImmutableArray.CreateRange exprs, ImmutableArray.CreateRange ops)
@@ -668,10 +668,26 @@ module Expr =
                 | _ -> failwith "Unexpected operator for type cast completion"
             | _ -> failwith "Unexpected Aux type for type cast completion"
 
-        let keyword (op: SyntaxToken) (aux: ExprAux) =
+        let controlFlow (op: SyntaxToken) (aux: ExprAux) =
             match aux with
-            | ExprAux.KeywordExpr e -> e op
-            | _ -> failwith "Unexpected Aux type for keyword expression"
+            | ExprAux.KeywordOperand e ->
+                let kw =
+                    match op.Token with
+                    | Token.KWDo -> ControlFlowKeyword.Do op
+                    | Token.KWDoBang -> ControlFlowKeyword.DoBang op
+                    | Token.KWReturn -> ControlFlowKeyword.Return op
+                    | Token.KWReturnBang -> ControlFlowKeyword.ReturnBang op
+                    | Token.KWYield -> ControlFlowKeyword.Yield op
+                    | Token.KWYieldBang -> ControlFlowKeyword.YieldBang op
+                    | t -> failwith $"Unexpected keyword token for yield/return body {t}"
+
+                Expr.ControlFlow(kw, e)
+            | _ -> failwith "Unexpected Aux type for control-flow expression"
+
+        let keywordPrefix (op: SyntaxToken) (aux: ExprAux) =
+            match aux with
+            | ExprAux.KeywordOperand e -> Expr.PrefixApp(op, e)
+            | _ -> failwith "Unexpected Aux type for prefix keyword expression"
 
     /// Parsers for keyword-prefixed expressions (if, match, let, fun, etc.).
     /// Keywords are peeked by lhsParser and consumed here to establish offside indentation.
@@ -718,7 +734,7 @@ module Expr =
 
                 let! elifs, elseBranch = ElifBranches.parse
 
-                return ExprAux.ForExpr(Expr.IfThenElse(ifTok, cond, thenTok, thenExpr, elifs, elseBranch))
+                return ExprAux.FinishedKeywordExpr(Expr.IfThenElse(ifTok, cond, thenTok, thenExpr, elifs, elseBranch))
             }
 
         let pMatchRules =
@@ -792,7 +808,7 @@ module Expr =
                         | Ok rules ->
 
                             reader.State <- ParseState.popOffside matchEntry reader.State
-                            Ok(ExprAux.ForExpr(Expr.Match(matchTok, e, w, rules)))
+                            Ok(ExprAux.FinishedKeywordExpr(Expr.Match(matchTok, e, w, rules)))
 
             fun (reader: Reader<PositionedToken, ParseState, _>) ->
                 match assertKeywordTokens Token.KWMatch Token.KWMatchBang reader with
@@ -803,7 +819,7 @@ module Expr =
             parser {
                 let! (funcTok, indent) = assertKeywordToken Token.KWFunction
                 let! rules = withContextAt OffsideContext.Function indent funcTok.PositionedToken pMatchRules
-                return ExprAux.ForExpr(Expr.Function(funcTok, rules))
+                return ExprAux.FinishedKeywordExpr(Expr.Function(funcTok, rules))
             }
 
         let pFunExpr =
@@ -833,7 +849,7 @@ module Expr =
                             return Expr.Fun(funTok, pats, arrow, expr)
                         })
 
-                return ExprAux.ForExpr result
+                return ExprAux.FinishedKeywordExpr result
             }
 
         let pTryExpr =
@@ -914,7 +930,7 @@ module Expr =
                             Error e
                         | Ok result ->
                             reader.State <- ParseState.popOffside tryEntry reader.State
-                            Ok(ExprAux.ForExpr result)
+                            Ok(ExprAux.FinishedKeywordExpr result)
 
         let pWhileExpr =
             // Accepts both `while` and `while!` (computation expression form)
@@ -938,7 +954,7 @@ module Expr =
                     )
 
                 let! doneTok = pDoneVirt
-                return ExprAux.ForExpr(Expr.While(whileTok, cond, doTok, body, doneTok))
+                return ExprAux.FinishedKeywordExpr(Expr.While(whileTok, cond, doTok, body, doneTok))
             }
 
         let pForExpr =
@@ -1003,7 +1019,7 @@ module Expr =
                     withContextAt OffsideContext.Do bodyMinIndent forTok.PositionedToken refTypedSeqExprBlock.Parser
 
                 let! doneTok = pDoneVirt
-                return ExprAux.ForExpr(forBuilder forTok body doneTok)
+                return ExprAux.FinishedKeywordExpr(forBuilder forTok body doneTok)
             }
 
         let pLetOrUseIn letIndent (reader: Reader<PositionedToken, ParseState, _>) =
@@ -1147,7 +1163,7 @@ module Expr =
                                 ValueSome Expr.Missing
 
                     let result = buildNestedLetOrUse bindings body
-                    preturn (ExprAux.KeywordExpr(fun _opTok -> result)) reader
+                    preturn (ExprAux.FinishedKeywordExpr result) reader
 
         /// The operand of `yield`, `return` or `do` and their bang forms, parsed by `pOperand`.
         let private pControlFlowBody (pOperand: FSParser<Expr<SyntaxToken>>) =
@@ -1160,21 +1176,7 @@ module Expr =
 
             parser {
                 let! expr = pBody
-
-                return
-                    ExprAux.KeywordExpr(fun kwTok ->
-                        let kw =
-                            match kwTok.Token with
-                            | Token.KWDo -> ControlFlowKeyword.Do kwTok
-                            | Token.KWDoBang -> ControlFlowKeyword.DoBang kwTok
-                            | Token.KWReturn -> ControlFlowKeyword.Return kwTok
-                            | Token.KWReturnBang -> ControlFlowKeyword.ReturnBang kwTok
-                            | Token.KWYield -> ControlFlowKeyword.Yield kwTok
-                            | Token.KWYieldBang -> ControlFlowKeyword.YieldBang kwTok
-                            | t -> failwith $"Unexpected keyword token for yield/return body {t}"
-
-                        Expr.ControlFlow(kw, expr)
-                    )
+                return ExprAux.KeywordOperand expr
             }
 
         // Grammar: YIELD|RETURN typedSeqExprBlock, whose `then` continues the enclosing block.
@@ -1717,9 +1719,7 @@ module Expr =
             }
 
         // Parses prefix expression keywords (`lazy`, `assert`, `fixed`, `upcast`, `downcast`)
-        let pKeywordPrefixBody =
-            refExprSeqBlock.Parser
-            |>> fun e -> ExprAux.KeywordExpr(fun kwTok -> Expr.PrefixApp(kwTok, e))
+        let pKeywordPrefixBody = refExprSeqBlock.Parser |>> ExprAux.KeywordOperand
 
         let pOpRangePrefix (token: SyntaxToken) =
             // A[..5]
@@ -1747,32 +1747,32 @@ module Expr =
         let kwPrefixRoutes: struct (Token * (SyntaxToken -> Parser<_, _, _, _>))[] =
             [|
                 // CE and control-flow keyword prefixes — body parser consumes the keyword
-                struct (Token.KWLet, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
-                struct (Token.KWMatch, kwPrefixNoConsume KWBody.pMatchExpr Complete.forE)
-                struct (Token.KWIf, kwPrefixNoConsume KWBody.pIfExpr Complete.forE)
-                struct (Token.KWFun, kwPrefixNoConsume KWBody.pFunExpr Complete.forE)
-                struct (Token.KWDo, kwPrefixConsume KWBody.pDoBody Complete.keyword)
-                struct (Token.KWFor, kwPrefixNoConsume KWBody.pForExpr Complete.forE)
-                struct (Token.KWYieldBang, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
-                struct (Token.KWYield, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
-                struct (Token.KWReturn, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
-                struct (Token.KWTry, kwPrefixNoConsume KWBody.pTryExpr Complete.forE)
-                struct (Token.KWFunction, kwPrefixNoConsume KWBody.pFunctionExpr Complete.forE)
-                struct (Token.KWUse, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
-                struct (Token.KWLetBang, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
-                struct (Token.KWDoBang, kwPrefixConsume KWBody.pDoBody Complete.keyword)
-                struct (Token.KWWhile, kwPrefixNoConsume KWBody.pWhileExpr Complete.forE)
-                struct (Token.KWWhileBang, kwPrefixNoConsume KWBody.pWhileExpr Complete.forE)
-                struct (Token.KWReturnBang, kwPrefixConsume KWBody.pYieldReturnBody Complete.keyword)
-                struct (Token.KWMatchBang, kwPrefixNoConsume KWBody.pMatchExpr Complete.forE)
-                struct (Token.KWUseBang, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.keyword)
+                struct (Token.KWLet, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.finishedKeyword)
+                struct (Token.KWMatch, kwPrefixNoConsume KWBody.pMatchExpr Complete.finishedKeyword)
+                struct (Token.KWIf, kwPrefixNoConsume KWBody.pIfExpr Complete.finishedKeyword)
+                struct (Token.KWFun, kwPrefixNoConsume KWBody.pFunExpr Complete.finishedKeyword)
+                struct (Token.KWDo, kwPrefixConsume KWBody.pDoBody Complete.controlFlow)
+                struct (Token.KWFor, kwPrefixNoConsume KWBody.pForExpr Complete.finishedKeyword)
+                struct (Token.KWYieldBang, kwPrefixConsume KWBody.pYieldReturnBody Complete.controlFlow)
+                struct (Token.KWYield, kwPrefixConsume KWBody.pYieldReturnBody Complete.controlFlow)
+                struct (Token.KWReturn, kwPrefixConsume KWBody.pYieldReturnBody Complete.controlFlow)
+                struct (Token.KWTry, kwPrefixNoConsume KWBody.pTryExpr Complete.finishedKeyword)
+                struct (Token.KWFunction, kwPrefixNoConsume KWBody.pFunctionExpr Complete.finishedKeyword)
+                struct (Token.KWUse, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.finishedKeyword)
+                struct (Token.KWLetBang, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.finishedKeyword)
+                struct (Token.KWDoBang, kwPrefixConsume KWBody.pDoBody Complete.controlFlow)
+                struct (Token.KWWhile, kwPrefixNoConsume KWBody.pWhileExpr Complete.finishedKeyword)
+                struct (Token.KWWhileBang, kwPrefixNoConsume KWBody.pWhileExpr Complete.finishedKeyword)
+                struct (Token.KWReturnBang, kwPrefixConsume KWBody.pYieldReturnBody Complete.controlFlow)
+                struct (Token.KWMatchBang, kwPrefixNoConsume KWBody.pMatchExpr Complete.finishedKeyword)
+                struct (Token.KWUseBang, kwPrefixNoConsume KWBody.pLetOrUseBody Complete.finishedKeyword)
 
                 // Function-precedence keyword prefixes — body is a full typedSeqExprBlock
-                struct (Token.KWLazy, kwPrefixConsume pKeywordPrefixBody Complete.keyword)
-                struct (Token.KWAssert, kwPrefixConsume pKeywordPrefixBody Complete.keyword)
-                struct (Token.KWFixed, kwPrefixConsume pKeywordPrefixBody Complete.keyword)
-                struct (Token.KWUpcast, kwPrefixConsume pKeywordPrefixBody Complete.keyword)
-                struct (Token.KWDowncast, kwPrefixConsume pKeywordPrefixBody Complete.keyword)
+                struct (Token.KWLazy, kwPrefixConsume pKeywordPrefixBody Complete.keywordPrefix)
+                struct (Token.KWAssert, kwPrefixConsume pKeywordPrefixBody Complete.keywordPrefix)
+                struct (Token.KWFixed, kwPrefixConsume pKeywordPrefixBody Complete.keywordPrefix)
+                struct (Token.KWUpcast, kwPrefixConsume pKeywordPrefixBody Complete.keywordPrefix)
+                struct (Token.KWDowncast, kwPrefixConsume pKeywordPrefixBody Complete.keywordPrefix)
 
                 // Operators with specialized prefix precedence or lookaheads
                 struct (Token.OpRange, pOpRangePrefix)
