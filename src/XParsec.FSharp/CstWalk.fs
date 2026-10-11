@@ -545,17 +545,11 @@ module CstWalk =
                 | ValueSome(ObjectMembers(memberDefns = ds)) -> memberDefnSigs ds
                 | ValueNone -> ()
 
-    /// Visitor for pattern AST nodes.
-    /// `VisitPat` is called before child patterns are visited; returning `false` skips child traversal.
-    [<NoEquality; NoComparison>]
-    type PatIter =
-        {
-            VisitPat: PatIter -> Pat<SyntaxToken> -> bool
-        }
-
-    let rec iterPat (it: PatIter) (p: Pat<SyntaxToken>) : unit =
-        if it.VisitPat it p then
-            let walk = iterPat it
+    /// Visits pattern AST nodes before their children.
+    /// Returning `false` from `visit` skips child traversal.
+    let rec iterPat (visit: Pat<SyntaxToken> -> bool) (p: Pat<SyntaxToken>) : unit =
+        if visit p then
+            let walk = iterPat visit
 
             match p with
             | Pat.EnclosedBlock(pat = inner)
