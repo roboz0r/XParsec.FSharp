@@ -3,65 +3,61 @@ module XParsec.FSharp.AstTraversal
 open XParsec.FSharp
 open XParsec.FSharp.Parser
 
-/// Callbacks for traversing an AST in source order (typically used for debug dumping or formatting).
-type AstVisitor<'T> =
-    {
-        /// Visited for each leaf token.
-        /// Arguments: `role` (e.g., "if", "then", "=") and the `token` value.
-        VisitToken: string -> 'T -> unit
+/// Receives AST sections, leaf tokens and recovery nodes in source order.
+type IAstVisitor<'T when 'T: equality> =
+    abstract VisitToken: label: string -> token: 'T -> unit
 
-        /// Begins a nested section.
-        /// Pass an empty string to indent the block without printing a section header.
-        EnterSection: string -> unit
+    /// An empty name indents the block without printing a section header.
+    abstract EnterSection: name: string -> unit
 
-        /// Closes the current section.
-        ExitSection: string -> unit
+    abstract ExitSection: name: string -> unit
 
-        /// Emits an arbitrary line of text (e.g. placeholders, missing nodes).
-        WriteLine: string -> unit
+    /// Writes placeholder text and file headers.
+    abstract WriteLine: text: string -> unit
 
-        /// Compares two tokens for equality to prevent emitting duplicates.
-        EqualTokens: 'T -> 'T -> bool
-    }
+    /// The label supplies the missing node's debug text.
+    abstract Missing: label: string -> unit
+
+    abstract Skipped: token: 'T -> unit
 
 // ---------------------------------------------------------------------------
 // Private helper — not part of the mutual recursion group
 // ---------------------------------------------------------------------------
 
-let inline visitTokenOpt (visitor: AstVisitor<'T>) (label: string) (token: 'T voption) : unit =
+let inline visitTokenOpt (visitor: IAstVisitor<'T>) (label: string) (token: 'T voption) : unit =
     match token with
     | ValueSome t -> visitor.VisitToken label t
     | ValueNone -> ()
 
-let inline visitExternKindOpt (visitor: AstVisitor<'T>) (kind: ExternKind<'T> voption) : unit =
+let inline visitExternKindOpt (visitor: IAstVisitor<'T>) (kind: ExternKind<'T> voption) : unit =
     match kind with
     | ValueSome(ExternKind.Class tok) -> visitor.VisitToken "class" tok
     | ValueSome(ExternKind.Interface tok) -> visitor.VisitToken "interface" tok
     | ValueNone -> ()
 
-let walkAccess (visitor: AstVisitor<'T>) (access: Access<'T>) : unit =
+let walkAccess (visitor: IAstVisitor<'T>) (access: Access<'T>) : unit =
     match access with
     | Access.Private t
     | Access.Internal t
     | Access.Public t -> visitor.VisitToken "access" t
 
-let inline walkAccessOpt (visitor: AstVisitor<'T>) (access: Access<'T> voption) : unit =
+let inline walkAccessOpt (visitor: IAstVisitor<'T>) (access: Access<'T> voption) : unit =
     match access with
     | ValueSome a -> walkAccess visitor a
     | ValueNone -> ()
 
-let walkAccessor (visitor: AstVisitor<'T>) (label: string) (Accessor(access, accessorToken)) : unit =
+let walkAccessor (visitor: IAstVisitor<'T>) (label: string) (Accessor(access, accessorToken)) : unit =
     walkAccessOpt visitor access
     visitor.VisitToken label accessorToken
 
-let walkTrailingAccessorOpt (visitor: AstVisitor<'T>) (label: string) (trailing: TrailingAccessor<'T> voption) : unit =
+let walkTrailingAccessorOpt (visitor: IAstVisitor<'T>) (label: string) (trailing: TrailingAccessor<'T> voption) : unit =
     match trailing with
     | ValueSome(TrailingAccessor(comma, accessor)) ->
         visitor.VisitToken "," comma
         walkAccessor visitor label accessor
     | ValueNone -> ()
 
-let walkWithClause (visitor: AstVisitor<'T>) (clause: WithClause<'T>) : unit =
+let walkWithClause (visitor: IAstVisitor<'T>) (clause: WithClause<'T>) : unit =
     match clause with
     | WithClause.GetFirst(withToken = withTok; getter = getter; setter = setter) ->
         visitor.VisitToken "with" withTok
@@ -87,7 +83,7 @@ let parenKind lParen =
 // Main walk functions — one big let rec / and block
 // ---------------------------------------------------------------------------
 
-let walkAttributeTarget (visitor: AstVisitor<'T>) (target: AttributeTarget<'T>) : unit =
+let walkAttributeTarget (visitor: IAstVisitor<'T>) (target: AttributeTarget<'T>) : unit =
     match target with
     | AttributeTarget.Assembly t -> visitor.VisitToken "target" t
     | AttributeTarget.Module t -> visitor.VisitToken "target" t
@@ -99,14 +95,14 @@ let walkAttributeTarget (visitor: AstVisitor<'T>) (target: AttributeTarget<'T>) 
     | AttributeTarget.Constructor t -> visitor.VisitToken "target" t
     | AttributeTarget.Event t -> visitor.VisitToken "target" t
 
-let walkRangeOpName (visitor: AstVisitor<'T>) (rangeOpName: RangeOpName<'T>) : unit =
+let walkRangeOpName (visitor: IAstVisitor<'T>) (rangeOpName: RangeOpName<'T>) : unit =
     match rangeOpName with
     | RangeOpName.DotDot dotDot -> visitor.VisitToken "DotDot" dotDot
     | RangeOpName.DotDotDotDot(first, second) ->
         visitor.VisitToken "DotDotDotDot" first
         visitor.VisitToken "DotDotDotDot" second
 
-let walkActivePatternOpName (visitor: AstVisitor<'T>) (apn: ActivePatternOpName<'T>) : unit =
+let walkActivePatternOpName (visitor: IAstVisitor<'T>) (apn: ActivePatternOpName<'T>) : unit =
     match apn with
     | ActivePatternOpName.ActivePatternOp(lBar, idents, finalUnderscore, rBar) ->
         visitor.EnterSection "ActivePatternOp"
@@ -120,7 +116,7 @@ let walkActivePatternOpName (visitor: AstVisitor<'T>) (apn: ActivePatternOpName<
         visitor.VisitToken "" rBar
         visitor.ExitSection "ActivePatternOp"
 
-let walkOpName (visitor: AstVisitor<'T>) (opName: OpName<'T>) : unit =
+let walkOpName (visitor: IAstVisitor<'T>) (opName: OpName<'T>) : unit =
     match opName with
     | OpName.SymbolicOp op -> visitor.VisitToken "SymbolicOp" op
     | OpName.RangeOp rangeOp ->
@@ -135,7 +131,7 @@ let walkOpName (visitor: AstVisitor<'T>) (opName: OpName<'T>) : unit =
         visitor.VisitToken "[" lBracket
         visitor.VisitToken "]" rBracket
 
-let walkIdentOrOp (visitor: AstVisitor<'T>) (identOrOp: IdentOrOp<'T>) : unit =
+let walkIdentOrOp (visitor: IAstVisitor<'T>) (identOrOp: IdentOrOp<'T>) : unit =
     match identOrOp with
     | IdentOrOp.Ident ident -> visitor.VisitToken "Ident" ident
     | IdentOrOp.ParenOp(lParen, opName, rParen) ->
@@ -145,7 +141,7 @@ let walkIdentOrOp (visitor: AstVisitor<'T>) (identOrOp: IdentOrOp<'T>) : unit =
         visitor.VisitToken "" rParen
         visitor.ExitSection "ParenOp"
 
-let walkLongIdentOrOp (visitor: AstVisitor<'T>) (longIdentOrOp: LongIdentOrOp<'T>) : unit =
+let walkLongIdentOrOp (visitor: IAstVisitor<'T>) (longIdentOrOp: LongIdentOrOp<'T>) : unit =
     match longIdentOrOp with
     | LongIdentOrOp.LongIdent lid when lid.Idents.Length = 1 -> visitor.VisitToken "Ident" lid.Idents.[0]
     | LongIdentOrOp.LongIdent lid ->
@@ -169,14 +165,14 @@ let walkLongIdentOrOp (visitor: AstVisitor<'T>) (longIdentOrOp: LongIdentOrOp<'T
         walkIdentOrOp visitor identOrOp
         visitor.ExitSection "QualifiedOp"
 
-let walkTypar (visitor: AstVisitor<'T>) (typar: Typar<'T>) : unit =
+let walkTypar (visitor: IAstVisitor<'T>) (typar: Typar<'T>) : unit =
     match typar with
     | Typar.Anon underscore -> visitor.VisitToken "Typar.Anon" underscore
     | Typar.Named(quote, ident) ->
         visitor.EnterSection "Typar.Named"
         visitor.VisitToken "" quote
         // When quote and ident are the same token (e.g. 'T lexed as one token), only print once.
-        if not (visitor.EqualTokens quote ident) then
+        if quote <> ident then
             visitor.VisitToken "" ident
 
         visitor.ExitSection "Typar.Named"
@@ -186,7 +182,7 @@ let walkTypar (visitor: AstVisitor<'T>) (typar: Typar<'T>) : unit =
         visitor.VisitToken "" ident
         visitor.ExitSection "Typar.Static"
 
-let rec walkMeasure (visitor: AstVisitor<'T>) (measure: Measure<'T>) : unit =
+let rec walkMeasure (visitor: IAstVisitor<'T>) (measure: Measure<'T>) : unit =
     match measure with
     | Measure.Named longIdent ->
         visitor.EnterSection "Measure.Named"
@@ -240,7 +236,7 @@ let rec walkMeasure (visitor: AstVisitor<'T>) (measure: Measure<'T>) : unit =
         visitor.VisitToken "" rParen
         visitor.ExitSection "Measure.Paren"
 
-let walkConstant (visitor: AstVisitor<'T>) (label: string) (x: Constant<'T>) : unit =
+let walkConstant (visitor: IAstVisitor<'T>) (label: string) (x: Constant<'T>) : unit =
     match x with
     | Constant.Literal value -> visitor.VisitToken label value
     | Constant.MeasuredLiteral(value, lAngle, measure, rAngle) ->
@@ -253,50 +249,50 @@ let walkConstant (visitor: AstVisitor<'T>) (label: string) (x: Constant<'T>) : u
         visitor.VisitToken ">" rAngle
         visitor.ExitSection label
 
-let walkStaticTypars (visitor: AstVisitor<'T>) (staticTypars: StaticTypars<'T>) : unit =
+let walkStaticTypars (visitor: IAstVisitor<'T>) (staticTypars: StaticTypars<'T>) : unit =
     match staticTypars with
     | StaticTypars.Single typar -> walkTypar visitor typar
     | StaticTypars.OrList(_lParen, typars, _ors, _rParen) ->
         for typar in typars do
             walkTypar visitor typar
 
-let walkExprOptionalArgExpr (visitor: AstVisitor<'T>) (qmark: 'T) (ident: 'T) : unit =
+let walkExprOptionalArgExpr (visitor: IAstVisitor<'T>) (qmark: 'T) (ident: 'T) : unit =
     visitor.EnterSection "OptionalArg"
     visitor.VisitToken "?" qmark
     visitor.VisitToken "Ident" ident
     visitor.ExitSection "OptionalArg"
 
-let walkExprEmptyBlock (visitor: AstVisitor<'T>) (lParen: ParenKind<'T>) (r: 'T) : unit =
+let walkExprEmptyBlock (visitor: IAstVisitor<'T>) (lParen: ParenKind<'T>) (r: 'T) : unit =
     let label, lTok = parenKind lParen
     visitor.VisitToken label lTok
     visitor.VisitToken "" r
 
-let walkExprLongIdentOrOp (visitor: AstVisitor<'T>) (longIdentOrOp: LongIdentOrOp<'T>) : unit =
+let walkExprLongIdentOrOp (visitor: IAstVisitor<'T>) (longIdentOrOp: LongIdentOrOp<'T>) : unit =
     visitor.EnterSection "LongIdentOrOp"
     walkLongIdentOrOp visitor longIdentOrOp
     visitor.ExitSection "LongIdentOrOp"
 
-let walkExprSkipsTokens (visitor: AstVisitor<'T>) (skippedTokens: ImArr<'T>) : unit =
+let walkExprSkipsTokens (visitor: IAstVisitor<'T>) (skippedTokens: ImArr<'T>) : unit =
     visitor.EnterSection "SkipsTokens"
 
     for t in skippedTokens do
-        visitor.VisitToken "(skipped)" t
+        visitor.Skipped t
 
     visitor.ExitSection "SkipsTokens"
 
-let walkExprSliceAll (visitor: AstVisitor<'T>) (star: 'T) : unit =
+let walkExprSliceAll (visitor: IAstVisitor<'T>) (star: 'T) : unit =
     visitor.EnterSection "SliceAll"
     visitor.VisitToken "*" star
     visitor.ExitSection "SliceAll"
 
-let rec walkObjectConstruction (visitor: AstVisitor<'T>) (oc: ObjectConstruction<'T>) : unit =
+let rec walkObjectConstruction (visitor: IAstVisitor<'T>) (oc: ObjectConstruction<'T>) : unit =
     match oc with
     | ObjectConstruction.ObjectConstruction(typ, expr) ->
         walkType visitor typ
         walkExpr visitor expr
     | ObjectConstruction.InterfaceConstruction typ -> walkType visitor typ
 
-and walkAttribute (visitor: AstVisitor<'T>) (attr: Attribute<'T>) : unit =
+and walkAttribute (visitor: IAstVisitor<'T>) (attr: Attribute<'T>) : unit =
     let (Attribute.Attribute(target, construction)) = attr
 
     match target with
@@ -307,7 +303,7 @@ and walkAttribute (visitor: AstVisitor<'T>) (attr: Attribute<'T>) : unit =
 
     walkObjectConstruction visitor construction
 
-and walkAttributeSet (visitor: AstVisitor<'T>) (attrSet: AttributeSet<'T>) : unit =
+and walkAttributeSet (visitor: IAstVisitor<'T>) (attrSet: AttributeSet<'T>) : unit =
     let (AttributeSet.AttributeSet(lBracket, attributes, rBracket)) = attrSet
     visitor.VisitToken "[<" lBracket
 
@@ -317,17 +313,17 @@ and walkAttributeSet (visitor: AstVisitor<'T>) (attrSet: AttributeSet<'T>) : uni
 
     visitor.VisitToken ">]" rBracket
 
-and walkAttributes (visitor: AstVisitor<'T>) (attrs: Attributes<'T>) : unit =
+and walkAttributes (visitor: IAstVisitor<'T>) (attrs: Attributes<'T>) : unit =
     for attrSet in attrs do
         walkAttributeSet visitor attrSet
 
-and walkAttributesOpt (visitor: AstVisitor<'T>) (attrs: Attributes<'T> voption) : unit =
+and walkAttributesOpt (visitor: IAstVisitor<'T>) (attrs: Attributes<'T> voption) : unit =
     match attrs with
     | ValueSome a -> walkAttributes visitor a
     | ValueNone -> ()
 
 and walkModuleHeaderPrefix
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (attrs: Attributes<'T> voption)
     (moduleToken: 'T)
     (access: Access<'T> voption)
@@ -338,7 +334,7 @@ and walkModuleHeaderPrefix
     walkAccessOpt visitor access
     visitTokenOpt visitor "rec" isRec
 
-and walkPat (visitor: AstVisitor<'T>) (pat: Pat<'T>) : unit =
+and walkPat (visitor: IAstVisitor<'T>) (pat: Pat<'T>) : unit =
     match pat with
     | Pat.Const value -> walkConstant visitor "Pat.Const" value
     | Pat.NamedSimple ident -> visitor.VisitToken "Pat.NamedSimple" ident
@@ -510,16 +506,16 @@ and walkPat (visitor: AstVisitor<'T>) (pat: Pat<'T>) : unit =
         visitor.EnterSection "Pat.Expr"
         walkExpr visitor innerExpr
         visitor.ExitSection "Pat.Expr"
-    | Pat.Missing -> visitor.WriteLine "Missing"
+    | Pat.Missing -> visitor.Missing "Missing"
     | Pat.SkipsTokens(skippedTokens) ->
         visitor.EnterSection "SkipsTokens"
 
         for t in skippedTokens do
-            visitor.VisitToken "(skipped)" t
+            visitor.Skipped t
 
         visitor.ExitSection "SkipsTokens"
 
-and walkStaticOptimizationConstraint (visitor: AstVisitor<'T>) (c: StaticOptimizationConstraint<'T>) : unit =
+and walkStaticOptimizationConstraint (visitor: IAstVisitor<'T>) (c: StaticOptimizationConstraint<'T>) : unit =
     match c with
     | StaticOptimizationConstraint.WhenTyparTyconEqualsTycon(typar, colon, rhsType) ->
         visitor.EnterSection "WhenTyparTyconEqualsTycon"
@@ -538,7 +534,7 @@ and walkStaticOptimizationConstraint (visitor: AstVisitor<'T>) (c: StaticOptimiz
         visitor.VisitToken "struct" structToken
         visitor.ExitSection "WhenTyparIsStruct"
 
-and walkTyparConstraints (visitor: AstVisitor<'T>) (cs: TyparConstraints<'T>) : unit =
+and walkTyparConstraints (visitor: IAstVisitor<'T>) (cs: TyparConstraints<'T>) : unit =
     visitor.VisitToken "when" cs.WhenToken
     walkConstraint visitor cs.Constraint
 
@@ -546,7 +542,7 @@ and walkTyparConstraints (visitor: AstVisitor<'T>) (cs: TyparConstraints<'T>) : 
         visitor.VisitToken "and" andToken
         walkConstraint visitor c
 
-and walkConstraint (visitor: AstVisitor<'T>) (c: Constraint<'T>) : unit =
+and walkConstraint (visitor: IAstVisitor<'T>) (c: Constraint<'T>) : unit =
     match c with
     | Constraint.Coercion(typar, colonGT, typ) ->
         visitor.EnterSection "Constraint.Coercion"
@@ -639,7 +635,7 @@ and walkConstraint (visitor: AstVisitor<'T>) (c: Constraint<'T>) : unit =
         walkType visitor typ
         visitor.ExitSection "Constraint.Default"
 
-and walkTyparDefns (visitor: AstVisitor<'T>) (typars: TyparDefns<'T>) : unit =
+and walkTyparDefns (visitor: IAstVisitor<'T>) (typars: TyparDefns<'T>) : unit =
     let (TyparDefns(lAngle, defns, constraints, rAngle)) = typars
     visitor.EnterSection "TyparDefns"
     visitor.VisitToken "<" lAngle
@@ -655,7 +651,7 @@ and walkTyparDefns (visitor: AstVisitor<'T>) (typars: TyparDefns<'T>) : unit =
     visitor.VisitToken ">" rAngle
     visitor.ExitSection "TyparDefns"
 
-and walkTypeArg (visitor: AstVisitor<'T>) (typeArg: TypeArg<'T>) : unit =
+and walkTypeArg (visitor: IAstVisitor<'T>) (typeArg: TypeArg<'T>) : unit =
     match typeArg with
     | TypeArg.Type ty ->
         visitor.EnterSection "TypeArg.Type"
@@ -666,7 +662,7 @@ and walkTypeArg (visitor: AstVisitor<'T>) (typeArg: TypeArg<'T>) : unit =
         walkMeasure visitor measure
         visitor.ExitSection "TypeArg.Measure"
 
-and walkType (visitor: AstVisitor<'T>) (ty: Type<'T>) : unit =
+and walkType (visitor: IAstVisitor<'T>) (ty: Type<'T>) : unit =
     match ty with
     | Type.ParenType(lParen, typ, rParen) ->
         visitor.VisitToken "ParenType" lParen
@@ -788,16 +784,16 @@ and walkType (visitor: AstVisitor<'T>) (ty: Type<'T>) : unit =
         visitor.EnterSection "MeasureType"
         walkMeasure visitor measure
         visitor.ExitSection "MeasureType"
-    | Type.Missing -> visitor.WriteLine "Missing"
+    | Type.Missing -> visitor.Missing "Missing"
     | Type.SkipsTokens(skippedTokens) ->
         visitor.EnterSection "SkipsTokens"
 
         for t in skippedTokens do
-            visitor.VisitToken "(skipped)" t
+            visitor.Skipped t
 
         visitor.ExitSection "SkipsTokens"
 
-and walkBinding (visitor: AstVisitor<'T>) (binding: Binding<'T>) : unit =
+and walkBinding (visitor: IAstVisitor<'T>) (binding: Binding<'T>) : unit =
     walkAttributesOpt visitor binding.attributes
     visitTokenOpt visitor "inline" binding.inlineToken
     visitTokenOpt visitor "mutable" binding.mutableToken
@@ -828,7 +824,7 @@ and walkBinding (visitor: AstVisitor<'T>) (binding: Binding<'T>) : unit =
     walkExpr visitor binding.expr
     visitor.ExitSection ""
 
-and walkFieldInitializer (visitor: AstVisitor<'T>) (fieldInit: FieldInitializer<'T>) : unit =
+and walkFieldInitializer (visitor: IAstVisitor<'T>) (fieldInit: FieldInitializer<'T>) : unit =
     let (FieldInitializer(longIdent, equals, fieldExpr)) = fieldInit
     visitor.EnterSection "Field"
     walkLongIdentOrOp visitor (LongIdentOrOp.LongIdent longIdent)
@@ -838,7 +834,7 @@ and walkFieldInitializer (visitor: AstVisitor<'T>) (fieldInit: FieldInitializer<
     visitor.ExitSection "Expr"
     visitor.ExitSection "Field"
 
-and walkRules (visitor: AstVisitor<'T>) (rules: Rules<'T>) : unit =
+and walkRules (visitor: IAstVisitor<'T>) (rules: Rules<'T>) : unit =
     let (Rules(firstBar, ruleList, bars)) = rules
 
     let walkOneRule (rule: Rule<'T>) =
@@ -860,8 +856,14 @@ and walkRules (visitor: AstVisitor<'T>) (rules: Rules<'T>) : unit =
             visitor.EnterSection "Expr"
             walkExpr visitor ruleExpr
             visitor.ExitSection "Expr"
-        | Rule.Missing -> visitor.WriteLine "Missing"
-        | Rule.SkipsTokens _ -> visitor.WriteLine "SkipsTokens (nested)"
+        | Rule.Missing -> visitor.Missing "Missing"
+        | Rule.SkipsTokens skippedTokens ->
+            visitor.EnterSection "SkipsTokens"
+
+            for t in skippedTokens do
+                visitor.Skipped t
+
+            visitor.ExitSection "SkipsTokens"
 
     for i in 0 .. ruleList.Length - 1 do
         let bar = if i = 0 then firstBar else ValueSome bars[i - 1]
@@ -869,21 +871,12 @@ and walkRules (visitor: AstVisitor<'T>) (rules: Rules<'T>) : unit =
 
         visitTokenOpt visitor "Bar" bar
 
-        match ruleList[i] with
-        | Rule.Rule _
-        | Rule.Missing as rule -> walkOneRule rule
-        | Rule.SkipsTokens(skippedTokens) ->
-            visitor.EnterSection "SkipsTokens"
-
-            for t in skippedTokens do
-                visitor.VisitToken "(skipped)" t
-
-            visitor.ExitSection "SkipsTokens"
+        walkOneRule ruleList[i]
 
         visitor.ExitSection "Rule"
 
 and walkStringKindAndParts
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (kind: StringKind<'T>)
     (parts: ImArr<StringPart<'T>>)
     (closing: 'T)
@@ -928,7 +921,7 @@ and walkStringKindAndParts
 // deep expression recursion only contains the locals for that one arm. This
 // keeps per-frame size small on deeply nested expressions (pipelines, App/InfixApp
 // chains, match/paren stacks) and avoids stack overflows on large inputs.
-and walkExpr (visitor: AstVisitor<'T>) (expr: Expr<'T>) : unit =
+and walkExpr (visitor: IAstVisitor<'T>) (expr: Expr<'T>) : unit =
     match expr with
     | Expr.Const value -> walkConstant visitor "Const" value
     | Expr.Ident ident -> visitor.VisitToken "Ident" ident
@@ -980,7 +973,7 @@ and walkExpr (visitor: AstVisitor<'T>) (expr: Expr<'T>) : unit =
     | Expr.ILIntrinsic(lHashParen, instrKind, instrParts, instrClose, typeArg, args, returnType, rHashParen) ->
         walkExprILIntrinsic visitor lHashParen instrKind instrParts instrClose typeArg args returnType rHashParen
     | Expr.Wildcard underscore -> visitor.VisitToken "Wildcard" underscore
-    | Expr.Missing -> visitor.WriteLine "Missing"
+    | Expr.Missing -> visitor.Missing "Missing"
     | Expr.SkipsTokens(skippedTokens) -> walkExprSkipsTokens visitor skippedTokens
     | Expr.Pat innerPat -> walkExprPat visitor innerPat
     | Expr.ControlFlow(keyword, inner) -> walkExprControlFlow visitor keyword inner
@@ -1020,7 +1013,7 @@ and walkExpr (visitor: AstVisitor<'T>) (expr: Expr<'T>) : unit =
     | Expr.SliceAll(star) -> walkExprSliceAll visitor star
 
 and walkExprLetOrUse
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (keyword: LetOrUseKeyword<'T>)
     (isRec: 'T voption)
     (bindings: ImArr<Binding<'T>>)
@@ -1051,20 +1044,20 @@ and walkExprLetOrUse
         visitor.ExitSection "Body"
     | ValueNone -> ()
 
-and walkExprInfixApp (visitor: AstVisitor<'T>) (left: Expr<'T>) (op: 'T) (right: Expr<'T>) : unit =
+and walkExprInfixApp (visitor: IAstVisitor<'T>) (left: Expr<'T>) (op: 'T) (right: Expr<'T>) : unit =
     visitor.VisitToken "InfixApp" op
     visitor.EnterSection ""
     walkExpr visitor left
     walkExpr visitor right
     visitor.ExitSection ""
 
-and walkExprPrefixApp (visitor: AstVisitor<'T>) (op: 'T) (expr: Expr<'T>) : unit =
+and walkExprPrefixApp (visitor: IAstVisitor<'T>) (op: 'T) (expr: Expr<'T>) : unit =
     visitor.VisitToken "PrefixApp" op
     visitor.EnterSection ""
     walkExpr visitor expr
     visitor.ExitSection ""
 
-and walkExprDynamicLookup (visitor: AstVisitor<'T>) (expr: Expr<'T>) (qmark: 'T) (ident: 'T) : unit =
+and walkExprDynamicLookup (visitor: IAstVisitor<'T>) (expr: Expr<'T>) (qmark: 'T) (ident: 'T) : unit =
     visitor.EnterSection "DynamicLookup"
     visitor.EnterSection "Expr"
     walkExpr visitor expr
@@ -1073,7 +1066,7 @@ and walkExprDynamicLookup (visitor: AstVisitor<'T>) (expr: Expr<'T>) (qmark: 'T)
     visitor.VisitToken "Ident" ident
     visitor.ExitSection "DynamicLookup"
 
-and walkExprSequential (visitor: AstVisitor<'T>) (exprs: ImArr<Expr<'T>>) : unit =
+and walkExprSequential (visitor: IAstVisitor<'T>) (exprs: ImArr<Expr<'T>>) : unit =
     visitor.EnterSection "Sequential"
 
     for e in exprs do
@@ -1081,14 +1074,14 @@ and walkExprSequential (visitor: AstVisitor<'T>) (exprs: ImArr<Expr<'T>>) : unit
 
     visitor.ExitSection "Sequential"
 
-and walkExprSequentialThen (visitor: AstVisitor<'T>) (expr: Expr<'T>) (thenToken: 'T) (thenExpr: Expr<'T>) : unit =
+and walkExprSequentialThen (visitor: IAstVisitor<'T>) (expr: Expr<'T>) (thenToken: 'T) (thenExpr: Expr<'T>) : unit =
     visitor.EnterSection "SequentialThen"
     walkExpr visitor expr
     visitor.VisitToken "then" thenToken
     walkExpr visitor thenExpr
     visitor.ExitSection "SequentialThen"
 
-and walkExprTuple (visitor: AstVisitor<'T>) (elements: ImArr<Expr<'T>>) : unit =
+and walkExprTuple (visitor: IAstVisitor<'T>) (elements: ImArr<Expr<'T>>) : unit =
     visitor.EnterSection "Tuple"
 
     for elem in elements do
@@ -1096,7 +1089,7 @@ and walkExprTuple (visitor: AstVisitor<'T>) (elements: ImArr<Expr<'T>>) : unit =
 
     visitor.ExitSection "Tuple"
 
-and walkExprStructTuple (visitor: AstVisitor<'T>) (elements: ImArr<Expr<'T>>) : unit =
+and walkExprStructTuple (visitor: IAstVisitor<'T>) (elements: ImArr<Expr<'T>>) : unit =
     visitor.EnterSection "StructTuple"
 
     for elem in elements do
@@ -1104,7 +1097,7 @@ and walkExprStructTuple (visitor: AstVisitor<'T>) (elements: ImArr<Expr<'T>>) : 
 
     visitor.ExitSection "StructTuple"
 
-and walkExprEnclosedBlock (visitor: AstVisitor<'T>) (lParen: ParenKind<'T>) (expr: Expr<'T>) (r: 'T) : unit =
+and walkExprEnclosedBlock (visitor: IAstVisitor<'T>) (lParen: ParenKind<'T>) (expr: Expr<'T>) (r: 'T) : unit =
     let label, lTok = parenKind lParen
     visitor.VisitToken label lTok
     visitor.EnterSection ""
@@ -1112,7 +1105,7 @@ and walkExprEnclosedBlock (visitor: AstVisitor<'T>) (lParen: ParenKind<'T>) (exp
     visitor.ExitSection ""
     visitor.VisitToken "" r
 
-and walkExprTypeApp (visitor: AstVisitor<'T>) (expr: Expr<'T>) (types: ImArr<Type<'T>>) : unit =
+and walkExprTypeApp (visitor: IAstVisitor<'T>) (expr: Expr<'T>) (types: ImArr<Type<'T>>) : unit =
     visitor.EnterSection "TypeApp"
     visitor.EnterSection "Expr"
     walkExpr visitor expr
@@ -1125,7 +1118,7 @@ and walkExprTypeApp (visitor: AstVisitor<'T>) (expr: Expr<'T>) (types: ImArr<Typ
     visitor.ExitSection "Types"
     visitor.ExitSection "TypeApp"
 
-and walkExprDotLookup (visitor: AstVisitor<'T>) (expr: Expr<'T>) (dot: 'T) (longIdentOrOp: LongIdentOrOp<'T>) : unit =
+and walkExprDotLookup (visitor: IAstVisitor<'T>) (expr: Expr<'T>) (dot: 'T) (longIdentOrOp: LongIdentOrOp<'T>) : unit =
     visitor.EnterSection "DotLookup"
     visitor.EnterSection "Expr"
     walkExpr visitor expr
@@ -1137,7 +1130,7 @@ and walkExprDotLookup (visitor: AstVisitor<'T>) (expr: Expr<'T>) (dot: 'T) (long
     visitor.ExitSection "DotLookup"
 
 and walkExprIfThenElse
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (ifToken: 'T)
     (condition: Expr<'T>)
     (thenToken: 'T)
@@ -1168,7 +1161,7 @@ and walkExprIfThenElse
 
     visitor.ExitSection "IfThenElse"
 
-and walkElifBranch (visitor: AstVisitor<'T>) (branch: ElifBranch<'T>) : unit =
+and walkElifBranch (visitor: IAstVisitor<'T>) (branch: ElifBranch<'T>) : unit =
     visitor.EnterSection "ElifBranch"
 
     match branch with
@@ -1195,7 +1188,7 @@ and walkElifBranch (visitor: AstVisitor<'T>) (branch: ElifBranch<'T>) : unit =
     visitor.ExitSection "ElifBranch"
 
 and walkExprMatch
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (matchToken: 'T)
     (matchExpr: Expr<'T>)
     (withToken: 'T)
@@ -1210,7 +1203,7 @@ and walkExprMatch
     walkRules visitor rules
     visitor.ExitSection "Match"
 
-and walkExprFun (visitor: AstVisitor<'T>) (funToken: 'T) (pats: ImArr<Pat<'T>>) (arrow: 'T) (body: Expr<'T>) : unit =
+and walkExprFun (visitor: IAstVisitor<'T>) (funToken: 'T) (pats: ImArr<Pat<'T>>) (arrow: 'T) (body: Expr<'T>) : unit =
     visitor.VisitToken "Fun" funToken
     visitor.EnterSection "Pats"
 
@@ -1224,7 +1217,7 @@ and walkExprFun (visitor: AstVisitor<'T>) (funToken: 'T) (pats: ImArr<Pat<'T>>) 
     visitor.ExitSection "Body"
 
 and walkExprTryWith
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (tryToken: 'T)
     (tryExpr: Expr<'T>)
     (withToken: 'T)
@@ -1238,7 +1231,7 @@ and walkExprTryWith
     walkRules visitor rules
 
 and walkExprTryFinally
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (tryToken: 'T)
     (tryExpr: Expr<'T>)
     (finallyToken: 'T)
@@ -1254,7 +1247,7 @@ and walkExprTryFinally
     visitor.ExitSection "FinallyExpr"
 
 and walkExprWhile
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (whileToken: 'T)
     (cond: Expr<'T>)
     (doToken: 'T)
@@ -1272,7 +1265,7 @@ and walkExprWhile
     visitor.VisitToken "DoneToken" doneToken
 
 and walkExprForTo
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (forToken: 'T)
     (ident: 'T)
     (equals: 'T)
@@ -1300,7 +1293,7 @@ and walkExprForTo
     visitor.VisitToken "DoneToken" doneToken
 
 and walkExprForIn
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (forToken: 'T)
     (pat: Pat<'T>)
     (inToken: 'T)
@@ -1321,7 +1314,7 @@ and walkExprForIn
     visitor.ExitSection "Body"
     visitor.VisitToken "DoneToken" doneToken
 
-and walkExprApp (visitor: AstVisitor<'T>) (funcExpr: Expr<'T>) (argExprs: ImArr<Expr<'T>>) : unit =
+and walkExprApp (visitor: IAstVisitor<'T>) (funcExpr: Expr<'T>) (argExprs: ImArr<Expr<'T>>) : unit =
     visitor.EnterSection "App"
     visitor.EnterSection "Func"
     walkExpr visitor funcExpr
@@ -1335,7 +1328,7 @@ and walkExprApp (visitor: AstVisitor<'T>) (funcExpr: Expr<'T>) (argExprs: ImArr<
     visitor.ExitSection "App"
 
 and walkExprHighPrecedenceApp
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (funcExpr: Expr<'T>)
     (lParen: 'T)
     (argExpr: Expr<'T>)
@@ -1352,7 +1345,7 @@ and walkExprHighPrecedenceApp
     visitor.VisitToken "" rParen
     visitor.ExitSection "HighPrecedenceApp"
 
-and walkExprTypeAnnotation (visitor: AstVisitor<'T>) (innerExpr: Expr<'T>) (colon: 'T) (typ: Type<'T>) : unit =
+and walkExprTypeAnnotation (visitor: IAstVisitor<'T>) (innerExpr: Expr<'T>) (colon: 'T) (typ: Type<'T>) : unit =
     visitor.EnterSection "TypeAnnotation"
     visitor.EnterSection "Expr"
     walkExpr visitor innerExpr
@@ -1361,13 +1354,13 @@ and walkExprTypeAnnotation (visitor: AstVisitor<'T>) (innerExpr: Expr<'T>) (colo
     walkType visitor typ
     visitor.ExitSection "TypeAnnotation"
 
-and walkExprFunction (visitor: AstVisitor<'T>) (functionToken: 'T) (rules: Rules<'T>) : unit =
+and walkExprFunction (visitor: IAstVisitor<'T>) (functionToken: 'T) (rules: Rules<'T>) : unit =
     visitor.VisitToken "Function" functionToken
     visitor.EnterSection ""
     walkRules visitor rules
     visitor.ExitSection ""
 
-and walkExprNew (visitor: AstVisitor<'T>) (newToken: 'T) (typ: Type<'T>) (newExpr: Expr<'T>) : unit =
+and walkExprNew (visitor: IAstVisitor<'T>) (newToken: 'T) (typ: Type<'T>) (newExpr: Expr<'T>) : unit =
     visitor.VisitToken "New" newToken
     visitor.EnterSection ""
     walkType visitor typ
@@ -1376,7 +1369,7 @@ and walkExprNew (visitor: AstVisitor<'T>) (newToken: 'T) (typ: Type<'T>) (newExp
     visitor.ExitSection "Arg"
     visitor.ExitSection ""
 
-and walkExprAssignment (visitor: AstVisitor<'T>) (leftExpr: Expr<'T>) (arrow: 'T) (rightExpr: Expr<'T>) : unit =
+and walkExprAssignment (visitor: IAstVisitor<'T>) (leftExpr: Expr<'T>) (arrow: 'T) (rightExpr: Expr<'T>) : unit =
     visitor.VisitToken "Assignment" arrow
     visitor.EnterSection ""
     walkExpr visitor leftExpr
@@ -1384,7 +1377,7 @@ and walkExprAssignment (visitor: AstVisitor<'T>) (leftExpr: Expr<'T>) (arrow: 'T
     visitor.ExitSection ""
 
 and walkExprRecord
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (lBrace: ParenKind<'T>)
     (inherits: RecordInherit<'T> voption)
     (fieldInitializers: ImArr<FieldInitializer<'T>>)
@@ -1414,7 +1407,7 @@ and walkExprRecord
     visitor.VisitToken "" rBrace
 
 and walkExprRecordClone
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (lBrace: ParenKind<'T>)
     (baseExpr: Expr<'T>)
     (withToken: 'T)
@@ -1441,7 +1434,7 @@ and walkExprRecordClone
     visitor.VisitToken "" rBrace
 
 and walkExprIndexedLookup
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (indexedExpr: Expr<'T>)
     (dot: 'T voption)
     (lBracket: 'T)
@@ -1462,7 +1455,7 @@ and walkExprIndexedLookup
     visitor.VisitToken "" rBracket
     visitor.ExitSection "IndexedLookup"
 
-and walkExprStaticUpcast (visitor: AstVisitor<'T>) (castExpr: Expr<'T>) (colonGT: 'T) (typ: Type<'T>) : unit =
+and walkExprStaticUpcast (visitor: IAstVisitor<'T>) (castExpr: Expr<'T>) (colonGT: 'T) (typ: Type<'T>) : unit =
     visitor.EnterSection "StaticUpcast"
     visitor.EnterSection "Expr"
     walkExpr visitor castExpr
@@ -1471,7 +1464,7 @@ and walkExprStaticUpcast (visitor: AstVisitor<'T>) (castExpr: Expr<'T>) (colonGT
     walkType visitor typ
     visitor.ExitSection "StaticUpcast"
 
-and walkExprDynamicTypeTest (visitor: AstVisitor<'T>) (testExpr: Expr<'T>) (colonQ: 'T) (typ: Type<'T>) : unit =
+and walkExprDynamicTypeTest (visitor: IAstVisitor<'T>) (testExpr: Expr<'T>) (colonQ: 'T) (typ: Type<'T>) : unit =
     visitor.EnterSection "DynamicTypeTest"
     visitor.EnterSection "Expr"
     walkExpr visitor testExpr
@@ -1480,7 +1473,7 @@ and walkExprDynamicTypeTest (visitor: AstVisitor<'T>) (testExpr: Expr<'T>) (colo
     walkType visitor typ
     visitor.ExitSection "DynamicTypeTest"
 
-and walkExprDynamicDowncast (visitor: AstVisitor<'T>) (castExpr: Expr<'T>) (colonQGT: 'T) (typ: Type<'T>) : unit =
+and walkExprDynamicDowncast (visitor: IAstVisitor<'T>) (castExpr: Expr<'T>) (colonQGT: 'T) (typ: Type<'T>) : unit =
     visitor.EnterSection "DynamicDowncast"
     visitor.EnterSection "Expr"
     walkExpr visitor castExpr
@@ -1490,7 +1483,7 @@ and walkExprDynamicDowncast (visitor: AstVisitor<'T>) (castExpr: Expr<'T>) (colo
     visitor.ExitSection "DynamicDowncast"
 
 and walkExprILIntrinsic
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (lHashParen: 'T)
     (instrKind: StringKind<'T>)
     (instrParts: ImArr<StringPart<'T>>)
@@ -1533,12 +1526,12 @@ and walkExprILIntrinsic
     visitor.VisitToken "#)" rHashParen
     visitor.ExitSection "ILIntrinsic"
 
-and walkExprPat (visitor: AstVisitor<'T>) (innerPat: Pat<'T>) : unit =
+and walkExprPat (visitor: IAstVisitor<'T>) (innerPat: Pat<'T>) : unit =
     visitor.EnterSection "Pat"
     walkPat visitor innerPat
     visitor.ExitSection "Pat"
 
-and walkExprControlFlow (visitor: AstVisitor<'T>) (keyword: ControlFlowKeyword<'T>) (expr: Expr<'T>) : unit =
+and walkExprControlFlow (visitor: IAstVisitor<'T>) (keyword: ControlFlowKeyword<'T>) (expr: Expr<'T>) : unit =
     let kwLabel =
         match keyword with
         | ControlFlowKeyword.Yield t ->
@@ -1565,7 +1558,7 @@ and walkExprControlFlow (visitor: AstVisitor<'T>) (keyword: ControlFlowKeyword<'
     visitor.ExitSection kwLabel
 
 and walkExprStaticMemberInvocation
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (lParen: 'T)
     (staticTypars: StaticTypars<'T>)
     (colon: 'T)
@@ -1591,7 +1584,7 @@ and walkExprStaticMemberInvocation
     visitor.ExitSection "StaticMemberInvocation"
 
 and walkExprLibraryOnlyStaticOptimization
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (defaultExpr: Expr<'T>)
     (clauses: ImArr<StaticOptimizationClause<'T>>)
     : unit =
@@ -1614,7 +1607,7 @@ and walkExprLibraryOnlyStaticOptimization
     visitor.ExitSection "LibraryOnlyStaticOptimization"
 
 and walkExprObject
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (lBrace: 'T)
     (newKeyword: 'T voption)
     (baseCall: BaseCall<'T>)
@@ -1653,7 +1646,7 @@ and walkExprObject
     visitor.ExitSection "ObjectExpr"
 
 and walkExprObjectInterface
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (interfaceTok: 'T)
     (typ: Type<'T>)
     (objMembers: ObjectMembers<'T> voption)
@@ -1676,7 +1669,7 @@ and walkExprObjectInterface
 
     visitor.ExitSection "InterfaceImpl"
 
-and walkExprRange (visitor: AstVisitor<'T>) (fromExpr: Expr<'T>) (dotdot: 'T) (toExpr: Expr<'T>) : unit =
+and walkExprRange (visitor: IAstVisitor<'T>) (fromExpr: Expr<'T>) (dotdot: 'T) (toExpr: Expr<'T>) : unit =
     visitor.EnterSection "Range"
     walkExpr visitor fromExpr
     visitor.VisitToken ".." dotdot
@@ -1684,7 +1677,7 @@ and walkExprRange (visitor: AstVisitor<'T>) (fromExpr: Expr<'T>) (dotdot: 'T) (t
     visitor.ExitSection "Range"
 
 and walkExprSteppedRange
-    (visitor: AstVisitor<'T>)
+    (visitor: IAstVisitor<'T>)
     (fromExpr: Expr<'T>)
     (dotdot1: 'T)
     (stepExpr: Expr<'T>)
@@ -1699,26 +1692,26 @@ and walkExprSteppedRange
     walkExpr visitor toExpr
     visitor.ExitSection "SteppedRange"
 
-and walkExprSliceFrom (visitor: AstVisitor<'T>) (expr: Expr<'T>) (dotdot: 'T) : unit =
+and walkExprSliceFrom (visitor: IAstVisitor<'T>) (expr: Expr<'T>) (dotdot: 'T) : unit =
     visitor.EnterSection "SliceFrom"
     walkExpr visitor expr
     visitor.VisitToken ".." dotdot
     visitor.ExitSection "SliceFrom"
 
-and walkExprSliceTo (visitor: AstVisitor<'T>) (dotdot: 'T) (expr: Expr<'T>) : unit =
+and walkExprSliceTo (visitor: IAstVisitor<'T>) (dotdot: 'T) (expr: Expr<'T>) : unit =
     visitor.EnterSection "SliceTo"
     visitor.VisitToken ".." dotdot
     walkExpr visitor expr
     visitor.ExitSection "SliceTo"
 
-and walkExprSliceFromTo (visitor: AstVisitor<'T>) (startExpr: Expr<'T>) (dotdot: 'T) (endExpr: Expr<'T>) : unit =
+and walkExprSliceFromTo (visitor: IAstVisitor<'T>) (startExpr: Expr<'T>) (dotdot: 'T) (endExpr: Expr<'T>) : unit =
     visitor.EnterSection "SliceFromTo"
     walkExpr visitor startExpr
     visitor.VisitToken ".." dotdot
     walkExpr visitor endExpr
     visitor.ExitSection "SliceFromTo"
 
-and walkArgSpec (visitor: AstVisitor<'T>) (argSpec: ArgSpec<'T>) : unit =
+and walkArgSpec (visitor: IAstVisitor<'T>) (argSpec: ArgSpec<'T>) : unit =
     let (ArgSpec(attrs, name, typ)) = argSpec
 
     walkAttributesOpt visitor attrs
@@ -1731,7 +1724,7 @@ and walkArgSpec (visitor: AstVisitor<'T>) (argSpec: ArgSpec<'T>) : unit =
 
     walkType visitor typ
 
-and walkCurriedSig (visitor: AstVisitor<'T>) (sign: CurriedSig<'T>) : unit =
+and walkCurriedSig (visitor: IAstVisitor<'T>) (sign: CurriedSig<'T>) : unit =
     let (CurriedSig(argGroups, ret)) = sign
 
     for struct (argsSpec, arrowTok) in argGroups do
@@ -1744,7 +1737,7 @@ and walkCurriedSig (visitor: AstVisitor<'T>) (sign: CurriedSig<'T>) : unit =
 
     walkType visitor ret
 
-and walkMemberSig (visitor: AstVisitor<'T>) (sign: MemberSig<'T>) : unit =
+and walkMemberSig (visitor: IAstVisitor<'T>) (sign: MemberSig<'T>) : unit =
     match sign with
     | MemberSig.MethodOrPropSig(ident, _, colon, sigType) ->
         walkIdentOrOp visitor ident
@@ -1756,7 +1749,7 @@ and walkMemberSig (visitor: AstVisitor<'T>) (sign: MemberSig<'T>) : unit =
         walkCurriedSig visitor sigType
         walkWithClause visitor withClause
 
-and walkMethodOrPropDefn (visitor: AstVisitor<'T>) (defn: MethodOrPropDefn<'T>) : unit =
+and walkMethodOrPropDefn (visitor: IAstVisitor<'T>) (defn: MethodOrPropDefn<'T>) : unit =
     match defn with
     | MethodOrPropDefn.Property(identPrefix, binding) ->
         match identPrefix with
@@ -1798,7 +1791,7 @@ and walkMethodOrPropDefn (visitor: AstVisitor<'T>) (defn: MethodOrPropDefn<'T>) 
         visitor.ExitSection ""
     | MethodOrPropDefn.AbstractSignature sign -> walkMemberSig visitor sign
 
-and walkMemberDefn (visitor: AstVisitor<'T>) (memberDefn: MemberDefn<'T>) : unit =
+and walkMemberDefn (visitor: IAstVisitor<'T>) (memberDefn: MemberDefn<'T>) : unit =
     match memberDefn with
     | MemberDefn.Value(attrs, staticTok, valTok, mutableTok, _, ident, colon, typ) ->
         visitor.EnterSection "Val"
@@ -1837,7 +1830,7 @@ and walkMemberDefn (visitor: AstVisitor<'T>) (memberDefn: MemberDefn<'T>) : unit
 
         visitor.ExitSection "AdditionalConstructor"
 
-let walkUncurriedSig (visitor: AstVisitor<'T>) (sign: UncurriedSig<'T>) : unit =
+let walkUncurriedSig (visitor: IAstVisitor<'T>) (sign: UncurriedSig<'T>) : unit =
     let (UncurriedSig(argsSpec, arrow, retType)) = sign
     let (ArgsSpec.ArgsSpec(args, _)) = argsSpec
 
@@ -1847,7 +1840,7 @@ let walkUncurriedSig (visitor: AstVisitor<'T>) (sign: UncurriedSig<'T>) : unit =
     visitor.VisitToken "->" arrow
     walkType visitor retType
 
-let walkTypeDefnElement (visitor: AstVisitor<'T>) (elem: TypeDefnElement<'T>) : unit =
+let walkTypeDefnElement (visitor: IAstVisitor<'T>) (elem: TypeDefnElement<'T>) : unit =
     match elem with
     | TypeDefnElement.Member m -> walkMemberDefn visitor m
     | TypeDefnElement.InterfaceImpl(InterfaceImpl.InterfaceImpl(interfaceTok, typ, objMembers)) ->
@@ -1877,7 +1870,7 @@ let walkTypeDefnElement (visitor: AstVisitor<'T>) (elem: TypeDefnElement<'T>) : 
         | ValueSome e -> walkExpr visitor e
         | ValueNone -> ()
 
-let walkTypeName (visitor: AstVisitor<'T>) (typeName: TypeName<'T>) : unit =
+let walkTypeName (visitor: IAstVisitor<'T>) (typeName: TypeName<'T>) : unit =
     let (TypeName(attrs, access, prefixTypars, ident, typars, postfixConstraints)) =
         typeName
 
@@ -1911,7 +1904,7 @@ let walkTypeName (visitor: AstVisitor<'T>) (typeName: TypeName<'T>) : unit =
     | ValueSome cs -> walkTyparConstraints visitor cs
     | ValueNone -> ()
 
-let walkPrimaryConstrArgs (visitor: AstVisitor<'T>) (args: PrimaryConstrArgs<'T>) : unit =
+let walkPrimaryConstrArgs (visitor: IAstVisitor<'T>) (args: PrimaryConstrArgs<'T>) : unit =
     let (PrimaryConstrArgs(_, _, lParen, pat, rParen)) = args
     visitor.VisitToken "(" lParen
 
@@ -1921,7 +1914,7 @@ let walkPrimaryConstrArgs (visitor: AstVisitor<'T>) (args: PrimaryConstrArgs<'T>
 
     visitor.VisitToken ")" rParen
 
-let walkUnionCaseData (visitor: AstVisitor<'T>) (data: UnionTypeCaseData<'T>) : unit =
+let walkUnionCaseData (visitor: IAstVisitor<'T>) (data: UnionTypeCaseData<'T>) : unit =
     match data with
     | UnionTypeCaseData.Nullary name -> walkIdentOrOp visitor name
     | UnionTypeCaseData.Nary(name, ofTok, fields, _) ->
@@ -1944,7 +1937,7 @@ let walkUnionCaseData (visitor: AstVisitor<'T>) (data: UnionTypeCaseData<'T>) : 
         visitor.VisitToken ":" colon
         walkType visitor typ
 
-let walkExceptionDefn (visitor: AstVisitor<'T>) (exnDefn: ExceptionDefn<'T>) : unit =
+let walkExceptionDefn (visitor: IAstVisitor<'T>) (exnDefn: ExceptionDefn<'T>) : unit =
     match exnDefn with
     | ExceptionDefn.Full(attrs, exTok, caseData, extensions) ->
         visitor.EnterSection "ExceptionDefn.Full"
@@ -1977,7 +1970,7 @@ let walkExceptionDefn (visitor: AstVisitor<'T>) (exnDefn: ExceptionDefn<'T>) : u
 
         visitor.ExitSection "ExceptionDefn.Abbrev"
 
-let walkObjectModelBody (visitor: AstVisitor<'T>) (body: ObjectModelBody<'T>) : unit =
+let walkObjectModelBody (visitor: IAstVisitor<'T>) (body: ObjectModelBody<'T>) : unit =
     match body.inherits with
     | ValueSome(ClassInheritsDecl(inhTok, typ, expr)) ->
         visitor.VisitToken "inherit" inhTok
@@ -2011,7 +2004,7 @@ let walkObjectModelBody (visitor: AstVisitor<'T>) (body: ObjectModelBody<'T>) : 
     for e in body.elements do
         walkTypeDefnElement visitor e
 
-let walkTypeDefn (visitor: AstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
+let walkTypeDefn (visitor: IAstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
     match typeDefn with
     | TypeDefn.Abbrev(typeName, equals, representationAccess, typ, ext) ->
         visitor.EnterSection "TypeDefn.Abbrev"
@@ -2207,16 +2200,16 @@ let walkTypeDefn (visitor: AstVisitor<'T>) (typeDefn: TypeDefn<'T>) : unit =
         visitor.EnterSection "TypeDefn.Abstract"
         walkTypeName visitor typeName
         visitor.ExitSection "TypeDefn.Abstract"
-    | TypeDefn.Missing -> visitor.WriteLine "TypeDefn.Missing"
+    | TypeDefn.Missing -> visitor.Missing "TypeDefn.Missing"
     | TypeDefn.SkipsTokens(skippedTokens) ->
         visitor.EnterSection "TypeDefn.SkipsTokens"
 
         for t in skippedTokens do
-            visitor.VisitToken "(skipped)" t
+            visitor.Skipped t
 
         visitor.ExitSection "TypeDefn.SkipsTokens"
 
-let walkModuleFunctionOrValueDefn (visitor: AstVisitor<'T>) (defn: ModuleFunctionOrValueDefn<'T>) : unit =
+let walkModuleFunctionOrValueDefn (visitor: IAstVisitor<'T>) (defn: ModuleFunctionOrValueDefn<'T>) : unit =
     match defn with
     | ModuleFunctionOrValueDefn.Let(attrs, letToken, isRec, bindings, ands, inToken) ->
         walkAttributesOpt visitor attrs
@@ -2241,7 +2234,7 @@ let walkModuleFunctionOrValueDefn (visitor: AstVisitor<'T>) (defn: ModuleFunctio
         visitor.ExitSection ""
         visitTokenOpt visitor "in" inToken
 
-let walkImportDecl (visitor: AstVisitor<'T>) (decl: ImportDecl<'T>) : unit =
+let walkImportDecl (visitor: IAstVisitor<'T>) (decl: ImportDecl<'T>) : unit =
     match decl with
     | ImportDecl.ImportDecl(openToken, longIdent) ->
         visitor.VisitToken "open" openToken
@@ -2255,7 +2248,7 @@ let walkImportDecl (visitor: AstVisitor<'T>) (decl: ImportDecl<'T>) : unit =
         for ident in longIdent.Idents do
             visitor.VisitToken "" ident
 
-let walkModuleAbbrev (visitor: AstVisitor<'T>) (abbrev: ModuleAbbrev<'T>) : unit =
+let walkModuleAbbrev (visitor: IAstVisitor<'T>) (abbrev: ModuleAbbrev<'T>) : unit =
     let (ModuleAbbrev.ModuleAbbrev(moduleToken, ident, equals, longIdent)) = abbrev
     visitor.VisitToken "module" moduleToken
     visitor.VisitToken "ident" ident
@@ -2264,7 +2257,7 @@ let walkModuleAbbrev (visitor: AstVisitor<'T>) (abbrev: ModuleAbbrev<'T>) : unit
     for id in longIdent.Idents do
         visitor.VisitToken "" id
 
-let walkCompilerDirective (visitor: AstVisitor<'T>) (decl: CompilerDirectiveDecl<'T>) : unit =
+let walkCompilerDirective (visitor: IAstVisitor<'T>) (decl: CompilerDirectiveDecl<'T>) : unit =
     let (CompilerDirectiveDecl.CompilerDirectiveDecl(hash, ident, strings)) = decl
     visitor.VisitToken "#" hash
     visitor.VisitToken "directive" ident
@@ -2272,7 +2265,7 @@ let walkCompilerDirective (visitor: AstVisitor<'T>) (decl: CompilerDirectiveDecl
     for s in strings do
         visitor.VisitToken "" s
 
-let rec walkModuleElem (visitor: AstVisitor<'T>) (elem: ModuleElem<'T>) : unit =
+let rec walkModuleElem (visitor: IAstVisitor<'T>) (elem: ModuleElem<'T>) : unit =
     match elem with
     | ModuleElem.FunctionOrValue defn ->
         visitor.EnterSection "FunctionOrValue"
@@ -2301,16 +2294,16 @@ let rec walkModuleElem (visitor: AstVisitor<'T>) (elem: ModuleElem<'T>) : unit =
         walkCompilerDirective visitor directive
         visitor.ExitSection "CompilerDirective"
     | ModuleElem.Expression expr -> walkExpr visitor expr
-    | ModuleElem.Missing -> visitor.WriteLine "Missing"
+    | ModuleElem.Missing -> visitor.Missing "Missing"
     | ModuleElem.SkipsTokens(skippedTokens) ->
         visitor.EnterSection "SkipsTokens"
 
         for t in skippedTokens do
-            visitor.VisitToken "(skipped)" t
+            visitor.Skipped t
 
         visitor.ExitSection "SkipsTokens"
 
-and walkModuleDefn (visitor: AstVisitor<'T>) (defn: ModuleDefn<'T>) : unit =
+and walkModuleDefn (visitor: IAstVisitor<'T>) (defn: ModuleDefn<'T>) : unit =
     let (ModuleDefn.ModuleDefn(attrs, moduleToken, access, isRec, ident, equals, body)) =
         defn
 
@@ -2330,11 +2323,11 @@ and walkModuleDefn (visitor: AstVisitor<'T>) (defn: ModuleDefn<'T>) : unit =
 
     visitor.VisitToken "end" endToken
 
-and walkModuleElems (visitor: AstVisitor<'T>) (elems: ModuleElems<'T>) : unit =
+and walkModuleElems (visitor: IAstVisitor<'T>) (elems: ModuleElems<'T>) : unit =
     for elem in elems do
         walkModuleElem visitor elem
 
-let walkNamespaceDeclGroup (visitor: AstVisitor<'T>) (group: NamespaceDeclGroup<'T>) : unit =
+let walkNamespaceDeclGroup (visitor: IAstVisitor<'T>) (group: NamespaceDeclGroup<'T>) : unit =
     match group with
     | NamespaceDeclGroup.Named(nsTok, isRec, longIdent, elems) ->
         visitor.VisitToken "namespace" nsTok
@@ -2353,7 +2346,7 @@ let walkNamespaceDeclGroup (visitor: AstVisitor<'T>) (group: NamespaceDeclGroup<
         walkModuleElems visitor elems
         visitor.ExitSection ""
 
-let walkImplementationFile (visitor: AstVisitor<'T>) (file: ImplementationFile<'T>) : unit =
+let walkImplementationFile (visitor: IAstVisitor<'T>) (file: ImplementationFile<'T>) : unit =
     match file with
     | ImplementationFile.AnonymousModule elems ->
         visitor.WriteLine "AnonymousModule:"
@@ -2372,7 +2365,7 @@ let walkImplementationFile (visitor: AstVisitor<'T>) (file: ImplementationFile<'
         for group in groups do
             walkNamespaceDeclGroup visitor group
 
-let walkValSig (visitor: AstVisitor<'T>) (valSig: ValSig<'T>) : unit =
+let walkValSig (visitor: IAstVisitor<'T>) (valSig: ValSig<'T>) : unit =
     let (ValSig.ValSig(attrs, valTok, inlineTok, access, mutableTok, ident, typars, colon, signature, literalValue)) =
         valSig
 
@@ -2396,7 +2389,7 @@ let walkValSig (visitor: AstVisitor<'T>) (valSig: ValSig<'T>) : unit =
         walkExpr visitor expr
     | ValueNone -> ()
 
-let walkTypeSignatureElement (visitor: AstVisitor<'T>) (elem: TypeSignatureElement<'T>) : unit =
+let walkTypeSignatureElement (visitor: IAstVisitor<'T>) (elem: TypeSignatureElement<'T>) : unit =
     match elem with
     | TypeSignatureElement.Constructor(attrs, access, newTok, colon, signature) ->
         visitor.EnterSection "Constructor"
@@ -2467,7 +2460,7 @@ let walkTypeSignatureElement (visitor: AstVisitor<'T>) (elem: TypeSignatureEleme
         | ValueSome e -> walkExpr visitor e
         | ValueNone -> ()
 
-let walkTypeExtensionElementsSignature (visitor: AstVisitor<'T>) (ext: TypeExtensionElementsSignature<'T>) : unit =
+let walkTypeExtensionElementsSignature (visitor: IAstVisitor<'T>) (ext: TypeExtensionElementsSignature<'T>) : unit =
     let (TypeExtensionElementsSignature.TypeExtensionElementsSignature(withTok, elems, endTok)) =
         ext
 
@@ -2480,7 +2473,7 @@ let walkTypeExtensionElementsSignature (visitor: AstVisitor<'T>) (ext: TypeExten
     visitor.ExitSection ""
     visitor.VisitToken "end" endTok
 
-let walkTypeSignature (visitor: AstVisitor<'T>) (typeSig: TypeSignature<'T>) : unit =
+let walkTypeSignature (visitor: IAstVisitor<'T>) (typeSig: TypeSignature<'T>) : unit =
     match typeSig with
     | TypeSignature.Abbrev(typeName, equals, representationAccess, typ, ext) ->
         visitor.EnterSection "TypeSig.Abbrev"
@@ -2643,7 +2636,7 @@ let walkTypeSignature (visitor: AstVisitor<'T>) (typeSig: TypeSignature<'T>) : u
 
         visitor.ExitSection "TypeSig.Extern"
 
-let walkTypeSignatures (visitor: AstVisitor<'T>) (typeSigs: TypeSignatures<'T>) : unit =
+let walkTypeSignatures (visitor: IAstVisitor<'T>) (typeSigs: TypeSignatures<'T>) : unit =
     let (TypeSignatures.TypeSignatures(first, rest)) = typeSigs
     walkTypeSignature visitor first
 
@@ -2651,7 +2644,7 @@ let walkTypeSignatures (visitor: AstVisitor<'T>) (typeSigs: TypeSignatures<'T>) 
         visitor.VisitToken "and" andTok
         walkTypeSignature visitor ts
 
-let rec walkModuleSignatureElement (visitor: AstVisitor<'T>) (elem: ModuleSignatureElement<'T>) : unit =
+let rec walkModuleSignatureElement (visitor: IAstVisitor<'T>) (elem: ModuleSignatureElement<'T>) : unit =
     match elem with
     | ModuleSignatureElement.Val valSig ->
         visitor.EnterSection "Val"
@@ -2684,20 +2677,20 @@ let rec walkModuleSignatureElement (visitor: AstVisitor<'T>) (elem: ModuleSignat
         visitor.EnterSection "CompilerDirective"
         walkCompilerDirective visitor directive
         visitor.ExitSection "CompilerDirective"
-    | ModuleSignatureElement.Missing -> visitor.WriteLine "Missing"
+    | ModuleSignatureElement.Missing -> visitor.Missing "Missing"
     | ModuleSignatureElement.SkipsTokens skippedTokens ->
         visitor.EnterSection "SkipsTokens"
 
         for t in skippedTokens do
-            visitor.VisitToken "(skipped)" t
+            visitor.Skipped t
 
         visitor.ExitSection "SkipsTokens"
 
-and walkModuleSignatureElements (visitor: AstVisitor<'T>) (elems: ModuleSignatureElements<'T>) : unit =
+and walkModuleSignatureElements (visitor: IAstVisitor<'T>) (elems: ModuleSignatureElements<'T>) : unit =
     for elem in elems do
         walkModuleSignatureElement visitor elem
 
-and walkModuleSignature (visitor: AstVisitor<'T>) (modSig: ModuleSignature<'T>) : unit =
+and walkModuleSignature (visitor: IAstVisitor<'T>) (modSig: ModuleSignature<'T>) : unit =
     let (ModuleSignature.ModuleSignature(attrs, moduleTok, access, isRec, ident, equals, body)) =
         modSig
 
@@ -2711,7 +2704,7 @@ and walkModuleSignature (visitor: AstVisitor<'T>) (modSig: ModuleSignature<'T>) 
     visitor.ExitSection ""
     visitor.VisitToken "end" endTok
 
-let walkNamespaceDeclGroupSignature (visitor: AstVisitor<'T>) (group: NamespaceDeclGroupSignature<'T>) : unit =
+let walkNamespaceDeclGroupSignature (visitor: IAstVisitor<'T>) (group: NamespaceDeclGroupSignature<'T>) : unit =
     match group with
     | NamespaceDeclGroupSignature.Named(nsTok, isRec, longIdent, elems) ->
         visitor.VisitToken "namespace" nsTok
@@ -2730,7 +2723,7 @@ let walkNamespaceDeclGroupSignature (visitor: AstVisitor<'T>) (group: NamespaceD
         walkModuleSignatureElements visitor elems
         visitor.ExitSection ""
 
-let walkSignatureFile (visitor: AstVisitor<'T>) (file: SignatureFile<'T>) : unit =
+let walkSignatureFile (visitor: IAstVisitor<'T>) (file: SignatureFile<'T>) : unit =
     match file with
     | SignatureFile.AnonymousModule elems ->
         visitor.WriteLine "AnonymousModuleSig:"
@@ -2749,7 +2742,7 @@ let walkSignatureFile (visitor: AstVisitor<'T>) (file: SignatureFile<'T>) : unit
         for group in groups do
             walkNamespaceDeclGroupSignature visitor group
 
-let walkFSharpAst (visitor: AstVisitor<'T>) (ast: FSharpAst<'T>) : unit =
+let walkFSharpAst (visitor: IAstVisitor<'T>) (ast: FSharpAst<'T>) : unit =
     match ast with
     | FSharpAst.ImplementationFile file -> walkImplementationFile visitor file
     | FSharpAst.SignatureFile file -> walkSignatureFile visitor file

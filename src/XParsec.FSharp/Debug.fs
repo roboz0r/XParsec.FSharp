@@ -143,18 +143,20 @@ let printTokenRow (label: string) (ctx: PrintContext) (lexed: Lexed) (token: Syn
 // ---- Visitor factory ----
 
 /// Creates an AST visitor that writes formatted debug output to the given context.
-let makeDebugVisitor (ctx: PrintContext) (lexed: Lexed) : AstVisitor<SyntaxToken> =
-    {
-        VisitToken = fun label tok -> printTokenRow label ctx lexed tok
-        EnterSection =
-            fun name ->
-                if name <> "" then
-                    ctx.WriteLine($"{name}:")
+let makeDebugVisitor (ctx: PrintContext) (lexed: Lexed) : IAstVisitor<SyntaxToken> =
+    { new IAstVisitor<SyntaxToken> with
+        member _.VisitToken label tok = printTokenRow label ctx lexed tok
 
-                ctx.Indent <- ctx.Indent + 1
-        ExitSection = fun _ -> ctx.Indent <- ctx.Indent - 1
-        WriteLine = fun text -> ctx.WriteLine text
-        EqualTokens = fun a b -> a.Index = b.Index
+        member _.EnterSection name =
+            if name <> "" then
+                ctx.WriteLine($"{name}:")
+
+            ctx.Indent <- ctx.Indent + 1
+
+        member _.ExitSection _ = ctx.Indent <- ctx.Indent - 1
+        member _.WriteLine text = ctx.WriteLine text
+        member _.Missing label = ctx.WriteLine label
+        member _.Skipped tok = printTokenRow "(skipped)" ctx lexed tok
     }
 
 // ---- Print functions (wrappers over AstTraversal walk functions) ----
