@@ -145,7 +145,7 @@ module CstTokens =
             | _ -> tokens.[0]
         | Expr.Missing -> failwithf "CstTokens.firstTokenOfExpr: missing expression retains no token"
 
-    and firstTokenOfPat (p: Pat<SyntaxToken>) : SyntaxToken =
+    let rec firstTokenOfPat (p: Pat<SyntaxToken>) : SyntaxToken =
         match p with
         | Pat.Const c -> firstTokenOfConstant c
         | Pat.NamedSimple t -> t

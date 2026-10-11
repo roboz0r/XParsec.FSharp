@@ -322,18 +322,6 @@ and walkAttributesOpt (visitor: IAstVisitor<'T>) (attrs: Attributes<'T> voption)
     | ValueSome a -> walkAttributes visitor a
     | ValueNone -> ()
 
-and walkModuleHeaderPrefix
-    (visitor: IAstVisitor<'T>)
-    (attrs: Attributes<'T> voption)
-    (moduleToken: 'T)
-    (access: Access<'T> voption)
-    (isRec: 'T voption)
-    : unit =
-    walkAttributesOpt visitor attrs
-    visitor.VisitToken "module" moduleToken
-    walkAccessOpt visitor access
-    visitTokenOpt visitor "rec" isRec
-
 and walkPat (visitor: IAstVisitor<'T>) (pat: Pat<'T>) : unit =
     match pat with
     | Pat.Const value -> walkConstant visitor "Pat.Const" value
@@ -1823,6 +1811,18 @@ and walkMemberDefn (visitor: IAstVisitor<'T>) (memberDefn: MemberDefn<'T>) : uni
         walkExpr visitor body
 
         visitor.ExitSection "AdditionalConstructor"
+
+let walkModuleHeaderPrefix
+    (visitor: IAstVisitor<'T>)
+    (attrs: Attributes<'T> voption)
+    (moduleToken: 'T)
+    (access: Access<'T> voption)
+    (isRec: 'T voption)
+    : unit =
+    walkAttributesOpt visitor attrs
+    visitor.VisitToken "module" moduleToken
+    walkAccessOpt visitor access
+    visitTokenOpt visitor "rec" isRec
 
 let walkUncurriedSig (visitor: IAstVisitor<'T>) (sign: UncurriedSig<'T>) : unit =
     let (UncurriedSig(argsSpec, arrow, retType)) = sign
