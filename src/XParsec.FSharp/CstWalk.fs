@@ -50,27 +50,16 @@ module CstWalk =
         /// The match or exception handler arm's guard and body.
         | MatchArm of pat: Pat<SyntaxToken>
 
-    type ExprWalker<'env> =
-        {
-            /// Invoked on an expression before traversing its children (if Traverse returned true).
-            Visit: 'env -> Expr<SyntaxToken> -> unit
-            /// Invoked on an expression after traversing its children (if Traverse returned true).
-            Leave: 'env -> Expr<SyntaxToken> -> unit
-            /// Controls whether this node and its sub-tree should be traversed.
-            Traverse: 'env -> Expr<SyntaxToken> -> bool
-            /// Returns the environment for the expressions governed by the scope.
-            /// ValueNone skips those expressions and their nested scopes.
-            Enter: 'env -> ExprScope -> 'env voption
-        }
-
-    /// Default walker that visits all nodes without altering the environment.
-    let identityExprWalker<'env> : ExprWalker<'env> =
-        {
-            Visit = fun _ _ -> ()
-            Leave = fun _ _ -> ()
-            Traverse = fun _ _ -> true
-            Enter = fun env _ -> ValueSome env
-        }
+    type IExprWalker<'env> =
+        /// Invoked on an expression before traversing its children (if Traverse returned true).
+        abstract Visit: 'env -> Expr<SyntaxToken> -> unit
+        /// Invoked on an expression after traversing its children (if Traverse returned true).
+        abstract Leave: 'env -> Expr<SyntaxToken> -> unit
+        /// Controls whether this node and its sub-tree should be traversed.
+        abstract Traverse: 'env -> Expr<SyntaxToken> -> bool
+        /// Returns the environment for the expressions governed by the scope.
+        /// ValueNone skips those expressions and their nested scopes.
+        abstract Enter: 'env -> ExprScope -> 'env voption
 
     type ExprEdge<'env, 'payload> =
         {
@@ -329,7 +318,7 @@ module CstWalk =
         }
 
     /// Resolves a deferred edge when the traversal reaches it.
-    let expandExprChildWork (walker: ExprWalker<'env>) (work: ExprChildWork<'env>) : ExprChildWork<'env> seq =
+    let expandExprChildWork (walker: IExprWalker<'env>) (work: ExprChildWork<'env>) : ExprChildWork<'env> seq =
         seq {
             match work with
             | ChildExpr _ -> yield work
@@ -435,7 +424,7 @@ module CstWalk =
         }
 
     // The environment returned by Enter applies to the expressions governed by that scope.
-    let rec iterExpr (walker: ExprWalker<'env>) (env: 'env) (e: Expr<SyntaxToken>) : unit =
+    let rec iterExpr (walker: IExprWalker<'env>) (env: 'env) (e: Expr<SyntaxToken>) : unit =
         if walker.Traverse env e then
             walker.Visit env e
 
@@ -444,7 +433,7 @@ module CstWalk =
 
             walker.Leave env e
 
-    and private iterExprChildWork (walker: ExprWalker<'env>) (work: ExprChildWork<'env>) : unit =
+    and private iterExprChildWork (walker: IExprWalker<'env>) (work: ExprChildWork<'env>) : unit =
         match work with
         | ChildExpr(env, expr) -> iterExpr walker env expr
         | _ ->
@@ -454,20 +443,23 @@ module CstWalk =
     /// Visits every expression in pre-order with the identity environment.
     let iterExprs (visit: Expr<SyntaxToken> -> unit) (e: Expr<SyntaxToken>) : unit =
         iterExpr
-            { identityExprWalker<unit> with
-                Visit = fun () expr -> visit expr
+            { new IExprWalker<unit> with
+                member _.Visit () expr = visit expr
+                member _.Leave () _ = ()
+                member _.Traverse () _ = true
+                member _.Enter env _ = ValueSome env
             }
             ()
             e
 
     /// Traverses a binding's RHS in the environment returned by `Enter` for `ExprScope.BindingRhs`.
     /// ValueNone skips traversal; parameterized bindings also enter `ExprScope.Closure`.
-    let iterBindingRhs (walker: ExprWalker<'env>) (env: 'env) (b: Binding<SyntaxToken>) : unit =
+    let iterBindingRhs (walker: IExprWalker<'env>) (env: 'env) (b: Binding<SyntaxToken>) : unit =
         iterExprChildWork walker (BindingRhs(env, b))
 
     /// Traverses type annotations and member signatures embedded directly on this expression node.
     /// Does not recurse into child expressions or pattern annotations.
-    let iterExprEmbeddedTypes (it: CstTypeWalk.TypeIter) (e: Expr<SyntaxToken>) : unit =
+    let iterExprEmbeddedTypes (it: CstTypeWalk.ITypeVisitor) (e: Expr<SyntaxToken>) : unit =
         let onType = CstTypeWalk.iterType it
         let onMemberSig = CstTypeWalk.iterTypeMemberSig it
 

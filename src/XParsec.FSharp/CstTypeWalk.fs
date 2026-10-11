@@ -2,29 +2,25 @@ namespace XParsec.FSharp.Parser
 
 open XParsec.FSharp.Parser
 
-/// Traverses type definitions and type references within Concrete Syntax Tree (CST) nodes
-/// using a visitor pattern defined by `TypeIter`.
+/// Traverses type definitions and type references within Concrete Syntax Tree (CST) nodes.
 
 module CstTypeWalk =
 
-    /// Visitor callbacks for traversing CST types and units of measure.
-    /// - `VisitType`: Invoked on each `Type` node before visiting its children; returning `false` skips child traversal.
-    /// - `VisitMeasureName`: Invoked on measure identifiers (such as `m` in `<m/s>`) that appear outside standard `Type` nodes.
-    [<NoEquality; NoComparison>]
-    type TypeIter =
-        {
-            VisitType: TypeIter -> Type<SyntaxToken> -> bool
-            VisitMeasureName: LongIdent<SyntaxToken> -> unit
-        }
+    type ITypeVisitor =
+        /// Visits a type before its children; returning false skips child traversal.
+        abstract VisitType: Type<SyntaxToken> -> bool
+        /// Visits measure identifiers outside standard type nodes.
+        abstract VisitMeasureName: LongIdent<SyntaxToken> -> unit
 
-    let identityTypeIter: TypeIter =
-        {
-            VisitType = fun _ _ -> true
-            VisitMeasureName = ignore
-        }
+    module TypeVisitor =
+        let ofTypes (visit: Type<SyntaxToken> -> bool) : ITypeVisitor =
+            { new ITypeVisitor with
+                member _.VisitType ty = visit ty
+                member _.VisitMeasureName _ = ()
+            }
 
     /// Traverses all named identifiers within a unit of measure expression.
-    let rec iterMeasure (it: TypeIter) (m: Measure<SyntaxToken>) : unit =
+    let rec iterMeasure (it: ITypeVisitor) (m: Measure<SyntaxToken>) : unit =
         match m with
         | Measure.Named li -> it.VisitMeasureName li
         | Measure.Power(inner, _, _, _)
@@ -41,8 +37,8 @@ module CstTypeWalk =
         | Measure.Anonymous _
         | Measure.Typar _ -> ()
 
-    let rec iterType (it: TypeIter) (ty: Type<SyntaxToken>) : unit =
-        if it.VisitType it ty then
+    let rec iterType (it: ITypeVisitor) (ty: Type<SyntaxToken>) : unit =
+        if it.VisitType ty then
             let walk = iterType it
 
             match ty with
@@ -82,11 +78,11 @@ module CstTypeWalk =
             | Type.Missing
             | Type.SkipsTokens _ -> ()
 
-    and iterTypeConstraints (it: TypeIter) (cs: TyparConstraints<SyntaxToken>) : unit =
+    and iterTypeConstraints (it: ITypeVisitor) (cs: TyparConstraints<SyntaxToken>) : unit =
         for c in cs.Constraints do
             iterTypeConstraint it c
 
-    and iterTypeConstraint (it: TypeIter) (c: Constraint<SyntaxToken>) : unit =
+    and iterTypeConstraint (it: ITypeVisitor) (c: Constraint<SyntaxToken>) : unit =
         iterConstraintTypes (iterType it) (iterTypeMemberSig it) c
 
     /// Traverses types and member signatures referenced within a type constraint (`when` clause).
@@ -113,7 +109,7 @@ module CstTypeWalk =
         | Constraint.Equality _
         | Constraint.Comparison _ -> ()
 
-    and iterTypeMemberSig (it: TypeIter) (ms: MemberSig<SyntaxToken>) : unit =
+    and iterTypeMemberSig (it: ITypeVisitor) (ms: MemberSig<SyntaxToken>) : unit =
         match ms with
         | MemberSig.MethodOrPropSig(typarDefns = tds; sign = cs) ->
             match tds with
@@ -123,7 +119,7 @@ module CstTypeWalk =
             iterTypeCurriedSig it cs
         | MemberSig.PropSig(sign = cs) -> iterTypeCurriedSig it cs
 
-    and iterTypeCurriedSig (it: TypeIter) (cs: CurriedSig<SyntaxToken>) : unit =
+    and iterTypeCurriedSig (it: ITypeVisitor) (cs: CurriedSig<SyntaxToken>) : unit =
         let (CurriedSig(args = argGroups; returnType = ret)) = cs
 
         for struct (argsSpec, _) in argGroups do
@@ -138,17 +134,13 @@ module CstTypeWalk =
     let tryPickType (f: Type<SyntaxToken> -> 'a voption) (ty: Type<SyntaxToken>) : 'a voption =
         let mutable found = ValueNone
 
-        let visitType _ (t: Type<SyntaxToken>) =
+        let visitType (t: Type<SyntaxToken>) =
             if found.IsNone then
                 found <- f t
 
             found.IsNone
 
-        iterType
-            { identityTypeIter with
-                VisitType = visitType
-            }
-            ty
+        iterType (TypeVisitor.ofTypes visitType) ty
 
         found
 
@@ -159,7 +151,7 @@ module CstTypeWalk =
 
     /// Traverses the types in an uncurried signature, such as a delegate signature
     /// or a GADT-style union case signature (`Case : arg * arg -> ret`).
-    let iterTypeUncurriedSig (it: TypeIter) (sign: UncurriedSig<SyntaxToken>) : unit =
+    let iterTypeUncurriedSig (it: ITypeVisitor) (sign: UncurriedSig<SyntaxToken>) : unit =
         let (UncurriedSig(args = ArgsSpec.ArgsSpec(args = args); returnType = ret)) = sign
 
         for (ArgSpec(typ = t)) in args do
@@ -169,7 +161,7 @@ module CstTypeWalk =
 
     /// Traverses all types declared in a discriminated union case, supporting standard fields
     /// and GADT syntax.
-    let iterTypeUnionCase (it: TypeIter) (UnionTypeCase(data = data)) : unit =
+    let iterTypeUnionCase (it: ITypeVisitor) (UnionTypeCase(data = data)) : unit =
         match data with
         | UnionTypeCaseData.Nullary _ -> ()
         | UnionTypeCaseData.Nary(fields = fs) ->
@@ -181,7 +173,7 @@ module CstTypeWalk =
         | UnionTypeCaseData.GadtNullary(typ = t) -> iterType it t
 
     /// Traverses the type constraints defined directly on a type declaration's header.
-    let iterTypeNameConstraints (it: TypeIter) (tn: TypeName<SyntaxToken>) : unit =
+    let iterTypeNameConstraints (it: ITypeVisitor) (tn: TypeName<SyntaxToken>) : unit =
         let (TypeName(typarDefns = tds; postfixConstraints = post)) = tn
 
         match tds with
@@ -211,7 +203,11 @@ module CstTypeWalk =
 
     /// Traverses type annotations in a member definition's signature (return types,
     /// auto-property types, abstract slots, and `val` fields). Parameter patterns are delegated to `onPat`.
-    let iterMemberDefnSigTypes (it: TypeIter) (onPat: Pat<SyntaxToken> -> unit) (md: MemberDefn<SyntaxToken>) : unit =
+    let iterMemberDefnSigTypes
+        (it: ITypeVisitor)
+        (onPat: Pat<SyntaxToken> -> unit)
+        (md: MemberDefn<SyntaxToken>)
+        : unit =
         let onType = iterType it
         let onMemberSig = iterTypeMemberSig it
 
@@ -238,7 +234,7 @@ module CstTypeWalk =
     /// Traverses the types declared within a type definition's structural surface
     /// (base types, interfaces, fields, and member signatures), excluding method and property implementation bodies.
     let iterTypeDefnTypes
-        (it: TypeIter)
+        (it: ITypeVisitor)
         (onPat: Pat<SyntaxToken> -> unit)
         (onInherit: Type<SyntaxToken> -> unit)
         (td: TypeDefn<SyntaxToken>)
@@ -340,7 +336,7 @@ module CstTypeWalk =
 
     /// Traverses structural types in a signature file or interface specification (base classes,
     /// interface implementations, and `val` fields). Method and property members are handled separately.
-    let iterTypeElementsSignatureStructure (it: TypeIter) (els: TypeElementsSignature<SyntaxToken>) : unit =
+    let iterTypeElementsSignatureStructure (it: ITypeVisitor) (els: TypeElementsSignature<SyntaxToken>) : unit =
         for el in els do
             match el with
             | TypeSignatureElement.Interface(InterfaceSpec.InterfaceSpec(typ = t))
@@ -354,7 +350,7 @@ module CstTypeWalk =
             | TypeSignatureElement.StaticMember _ -> ()
 
     /// Traverses all types and constraints declared in a `val` signature.
-    let iterValSigTypes (it: TypeIter) (ValSig(typars = tds; signature = cs)) : unit =
+    let iterValSigTypes (it: ITypeVisitor) (ValSig(typars = tds; signature = cs)) : unit =
         match tds with
         | ValueSome(TyparDefns(constraints = ValueSome tcs)) -> iterTypeConstraints it tcs
         | _ -> ()
@@ -365,7 +361,7 @@ module CstTypeWalk =
     /// `when` constraints and any inline `Type.WhenConstrainedType` constraints.
     let whenClauses
         (header: TyparDefns<SyntaxToken> voption)
-        (walk: TypeIter -> unit)
+        (walk: ITypeVisitor -> unit)
         : TyparConstraints<SyntaxToken> list =
         let acc = ResizeArray<TyparConstraints<SyntaxToken>>()
 
@@ -373,15 +369,14 @@ module CstTypeWalk =
         | ValueSome(TyparDefns(constraints = ValueSome cs)) -> acc.Add cs
         | _ -> ()
 
-        walk
-            { identityTypeIter with
-                VisitType =
-                    fun _ t ->
-                        match t with
-                        | Type.WhenConstrainedType(constraints = cs) -> acc.Add cs
-                        | _ -> ()
+        walk (
+            TypeVisitor.ofTypes (fun t ->
+                match t with
+                | Type.WhenConstrainedType(constraints = cs) -> acc.Add cs
+                | _ -> ()
 
-                        true
-            }
+                true
+            )
+        )
 
         List.ofSeq acc
