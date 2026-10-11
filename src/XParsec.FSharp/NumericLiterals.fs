@@ -38,20 +38,6 @@ module IntKind =
             IntKind.UNativeInt
         ]
 
-    /// Returns the F# literal suffix (e.g., "y" for 10y, "UL" for 10UL, "" for int32).
-    let suffix (k: IntKind) : string =
-        match k with
-        | IntKind.SByte -> "y"
-        | IntKind.Byte -> "uy"
-        | IntKind.Int16 -> "s"
-        | IntKind.UInt16 -> "us"
-        | IntKind.Int32 -> ""
-        | IntKind.UInt32 -> "u"
-        | IntKind.Int64 -> "L"
-        | IntKind.UInt64 -> "UL"
-        | IntKind.NativeInt -> "n"
-        | IntKind.UNativeInt -> "un"
-
     let isSigned (k: IntKind) : bool =
         match k with
         | IntKind.SByte

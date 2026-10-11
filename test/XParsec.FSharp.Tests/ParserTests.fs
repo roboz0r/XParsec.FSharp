@@ -128,8 +128,7 @@ let tracingTests =
                         override _.TokenConsumed(_, _, _) = consumeCount <- consumeCount + 1
                     }
 
-                let reader =
-                    XParsec.FSharp.Parser.Reader.ofParseInputWithTracing (lexed.WithDefines Set.empty) traceCallback
+                let reader = ofParseInputWithTracing (lexed.WithDefines Set.empty) traceCallback
 
                 match XParsec.FSharp.Parser.FSharpAst.parse reader with
                 | Error e ->

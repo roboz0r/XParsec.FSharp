@@ -668,7 +668,3 @@ module Reader =
     let ofParseInput (input: ParseInput) : Reader<_, ParseState, _> =
         let initialState = ParseState.create input
         Reader((input.Lexed.Tokens.AsReadableArray()), initialState, 0)
-
-    let ofParseInputWithTracing (input: ParseInput) (trace: TraceCallback) : Reader<_, ParseState, _> =
-        let initialState = ParseState.createWithTracing input trace
-        Reader((input.Lexed.Tokens.AsReadableArray()), initialState, 0)

@@ -238,7 +238,7 @@ let private consumptionsPerToken (source: string) : float =
             override _.TokenConsumed(_, _, _) = consumed <- consumed + 1
         }
 
-    let reader = Reader.ofParseInputWithTracing (lexed.WithDefines Set.empty) trace
+    let reader = ofParseInputWithTracing (lexed.WithDefines Set.empty) trace
 
     match FSharpAst.parse reader with
     | Ok _ ->

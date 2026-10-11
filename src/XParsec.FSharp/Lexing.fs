@@ -2544,22 +2544,6 @@ module Lexing =
                     do! updateUserState (LexBuilder.append token pos CtxOp.NoOp)
             }
 
-    module Operator =
-        open System.Collections.Concurrent
-        let generatedNameCache = ConcurrentDictionary<string, string>()
-
-        let generateOperatorName (t: Token) (operatorText: string) =
-            if operatorText.Length = 0 then
-                invalidArg "operatorText" "Operator text cannot be empty."
-
-            if not t.IsOperator then
-                invalidArg "t" (sprintf "Token %A is not an operator token." t)
-
-            if t.IsKeyword then
-                operatorText // Keywords are not renamed
-            else
-                generatedNameCache.GetOrAdd(operatorText, (fun op -> OperatorData.nameOfSymbol op))
-
     [<AutoOpen>]
     module internal FormatStrings =
 
@@ -2620,12 +2604,8 @@ module Lexing =
                 preturn (struct (FormatType.Text, c)) reader
             | ValueSome c -> fail (Unexpected c) reader
 
-        // Parses the `[flags][width][.precision][type]` body that follows the
-        // `%`. Written as an explicit reader function (rather than a single
-        // allocated parser value) so it stays generic over the user state:
-        // the lexer runs it with `LexBuilder`, while the public
-        // `parseFormatSpecifier` reuses it with unit state — the format
-        // grammar therefore lives in exactly one place.
+        // Parses the `[flags][width][.precision][type]` body after `%` for both
+        // lexing and semantic analysis.
         let lFormatPlaceholder
             (reader: Reader<char, 'State, ReadableString>)
             : ParseResult<FormatPlaceholder, char, 'State> =
@@ -2656,7 +2636,7 @@ module Lexing =
         // TODO: consider caching the parsed `FormatPlaceholder` in a side-table
         // on `LexBuilder` (token index -> FormatPlaceholder) so semantic
         // analysis / codegen can read the structured spec without re-parsing
-        // via `parseFormatSpecifier`. Deferred deliberately: re-parsing a few
+        // via `parseFormatSpecifierView`. Deferred deliberately: re-parsing a few
         // short specifier strings on demand is plausibly cheaper than storing
         // these records on every lexed token — measure before adding the table.
         // NOTE: any side-table indexed in lockstep with `Tokens` must also be fed by
@@ -2752,12 +2732,6 @@ module Lexing =
         match lFormatPlaceholder (Reader(view, (), start)) with
         | Ok placeholder -> ValueSome placeholder
         | Error _ -> ValueNone
-
-    /// Convenience overload of `parseFormatSpecifierView` for a specifier
-    /// already held as a `string` (e.g. tests). Wraps the string in a
-    /// `ReadableString` view; the body itself is still parsed in place.
-    let parseFormatSpecifier (specifier: string) : FormatPlaceholder voption =
-        parseFormatSpecifierView (ReadableString specifier)
 
     let pTabToken = pToken (pchar '\t') Token.Tab
     let pCommaToken = pToken (pchar ',') Token.OpComma
