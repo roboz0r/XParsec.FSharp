@@ -184,6 +184,77 @@ module CstTokens =
             | _ -> tokens.[0]
         | Pat.Missing -> failwithf "CstTokens.firstTokenOfPat: missing pattern retains no token"
 
+    /// The first of `items`'s start tokens, by `start`.
+    let inline private tryFirstStart
+        ([<InlineIfLambda>] start: 'a -> SyntaxToken voption)
+        (items: System.Collections.Immutable.ImmutableArray<'a>)
+        : SyntaxToken voption =
+        match items.Length with
+        | 0 -> ValueNone
+        | _ -> start items.[0]
+
+    let private tryFirstOfLongIdent (li: LongIdent<SyntaxToken>) : SyntaxToken voption =
+        tryFirstStart ValueSome li.Idents
+
+    let private tryFirstOfLongIdentOrOp (lio: LongIdentOrOp<SyntaxToken>) : SyntaxToken voption =
+        match lio with
+        | LongIdentOrOp.LongIdent li
+        | LongIdentOrOp.QualifiedOp(li, _, _) -> tryFirstOfLongIdent li
+        | LongIdentOrOp.Op op -> ValueSome(firstTokenOfIdentOrOp op)
+
+    /// The token at which the source text of `e` starts: the left operand's start for an infix
+    /// application, an assignment or a type test, and the expression's first token elsewhere.
+    /// `ValueNone` for a parse recovered with no token at its start.
+    let rec tryStartTokenOfExpr (e: Expr<SyntaxToken>) : SyntaxToken voption =
+        match e with
+        | Expr.Missing -> ValueNone
+        | Expr.InfixApp(leftExpr = inner)
+        | Expr.Assignment(leftExpr = inner)
+        | Expr.App(inner, _)
+        | Expr.HighPrecedenceApp(funcExpr = inner)
+        | Expr.Range(fromExpr = inner)
+        | Expr.SteppedRange(fromExpr = inner)
+        | Expr.SequentialThen(expr = inner)
+        | Expr.TypeAnnotation(expr = inner)
+        | Expr.StaticUpcast(expr = inner)
+        | Expr.DynamicTypeTest(expr = inner)
+        | Expr.DynamicDowncast(expr = inner)
+        | Expr.DotLookup(expr = inner)
+        | Expr.DynamicLookup(expr = inner)
+        | Expr.IndexedLookup(expr = inner)
+        | Expr.TypeApp(expr = inner)
+        | Expr.SliceFrom(expr = inner)
+        | Expr.SliceFromTo(startExpr = inner) -> tryStartTokenOfExpr inner
+        | Expr.Tuple(exprs = exprs)
+        | Expr.Sequential(exprs = exprs) -> tryFirstStart tryStartTokenOfExpr exprs
+        | Expr.SkipsTokens tokens -> tryFirstStart ValueSome tokens
+        | Expr.LongIdentOrOp lio -> tryFirstOfLongIdentOrOp lio
+        | Expr.LibraryOnlyStaticOptimization(defaultExpr = defaultExpr; clauses = clauses) ->
+            match clauses.Length with
+            | 0 -> tryStartTokenOfExpr defaultExpr
+            | _ -> ValueSome clauses.[0].WhenToken
+        | _ -> ValueSome(firstTokenOfExpr e)
+
+    /// The token at which the source text of `p` starts: the head's start for a cons pattern, and
+    /// the pattern's first token elsewhere. `ValueNone` for a parse recovered with no token at its
+    /// start.
+    let rec tryStartTokenOfPat (p: Pat<SyntaxToken>) : SyntaxToken voption =
+        match p with
+        | Pat.Missing -> ValueNone
+        | Pat.Cons(head = inner)
+        | Pat.Typed(pat = inner)
+        | Pat.Attributed(pat = inner)
+        | Pat.As(pat = inner)
+        | Pat.Or(left = inner)
+        | Pat.And(left = inner) -> tryStartTokenOfPat inner
+        | Pat.Tuple(patterns = pats)
+        | Pat.Elems(pats = pats) -> tryFirstStart tryStartTokenOfPat pats
+        | Pat.Expr(expr = inner) -> tryStartTokenOfExpr inner
+        | Pat.SkipsTokens tokens -> tryFirstStart ValueSome tokens
+        | Pat.Named(longIdent = li)
+        | Pat.NamedFieldPats(longIdent = li) -> tryFirstOfLongIdent li
+        | _ -> ValueSome(firstTokenOfPat p)
+
     /// Gets the diagnostic token for an expression; member accesses use the accessed member's token.
     let diagTokenOfExpr (e: Expr<SyntaxToken>) : SyntaxToken =
         match e with
