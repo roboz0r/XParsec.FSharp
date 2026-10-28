@@ -276,15 +276,28 @@ module Binding =
                 }
         }
 
-    /// Parse a value-style binding: [mutable] [access] pat [typar-defns] [: returnType] = expr
+    /// Parse a value-style binding: `[mutable] [access] pat [typar-defns] [: returnType] = expr`, or
+    /// `inline [access] pat [: returnType] = expr`. An inline binding with explicit type parameters is
+    /// a function-style binding.
     let parseValue attrs =
         let pBody = pBindingBody
 
         parser {
-            let! mut = opt pMutableTok
+            let! inlineTok = opt pInline
+
+            let! mut =
+                match inlineTok with
+                | ValueSome _ -> preturn ValueNone
+                | ValueNone -> opt pMutableTok
+
             let! access = opt Access.parse
             let! pat = Pat.parseHead
-            let! typarDefns = opt TyparDefns.parse
+
+            let! typarDefns =
+                match inlineTok with
+                | ValueSome _ -> preturn ValueNone
+                | ValueNone -> opt TyparDefns.parse
+
             let! returnType = opt ReturnType.parse
             let! equals = pEquals
             let! expr = pBody
@@ -292,7 +305,7 @@ module Binding =
             return
                 {
                     attributes = attrs
-                    inlineToken = ValueNone
+                    inlineToken = inlineTok
                     mutableToken = mut
                     access = access
                     pattern = pat

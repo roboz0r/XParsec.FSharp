@@ -2,7 +2,27 @@ namespace XParsec.FSharp.Parser
 
 open System.Collections.Immutable
 
+/// The inlining written on a `let` binding.
+[<RequireQualifiedAccess>]
+type BindingInlining =
+    | NotInline
+    /// `inline` on a binding with parameters or explicit type parameters.
+    | Inline
+    /// `inline` on a binding with neither parameters nor explicit type parameters, which F# refuses
+    /// (FS0832).
+    | InlineValue
+
 module CstDeclarations =
+
+    let inlining (binding: Binding<'T>) : BindingInlining =
+        match binding.inlineToken, binding.typarDefns, binding.argumentPats.Length with
+        | ValueNone, _, _ -> BindingInlining.NotInline
+        | ValueSome _, ValueNone, 0 -> BindingInlining.InlineValue
+        | ValueSome _, _, _ -> BindingInlining.Inline
+
+    /// Whether `binding` is inlined at its uses: an `Inline` binding.
+    let isInlined (binding: Binding<'T>) : bool =
+        inlining binding = BindingInlining.Inline
 
     /// The attributes that apply to `binding`, the binding at `index` of a `let` group whose
     /// declaration carries the `leading` attributes written before `let`. The leading attributes

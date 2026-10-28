@@ -150,6 +150,42 @@ let tracingTests =
             }
         ]
 
+/// Whether `source` parses without an error or a recovery diagnostic.
+let private parsesClean (source: string) : bool =
+    let lexed = XParsec.FSharp.Lexer.Lexing.lexString source
+    let reader = XParsec.FSharp.Parser.Reader.ofParseInput (lexed.WithDefines Set.empty)
+
+    match XParsec.FSharp.Parser.FSharpAst.parse reader with
+    | Ok _ -> Seq.isEmpty reader.State.Diagnostics
+    | Error _ -> false
+
+[<Tests>]
+let inlineBindingTests =
+    testList
+        "InlineBindings"
+        [
+            // fsc parses an inline value, reporting FS0832 after parsing, and refuses explicit type
+            // parameters after a pattern head that is other than a name (FS0010 at `<`).
+            test "an inline value parses, and an inline pattern head with explicit type parameters is refused" {
+                Expect.isTrue (parsesClean "let inline v = 1\n") "an inline value"
+                Expect.isTrue (parsesClean "let inline (a, b) = (1, 2)\n") "an inline tuple value"
+                Expect.isTrue (parsesClean "let inline v<'T> = 1\n") "an inline generic value"
+
+                let refused =
+                    [
+                        "let inline (x, y)<'T> = (1, 2)\n"
+                        "let inline _<'T> = 1\n"
+                        "let inline (x)<'T> = 1\n"
+                        "let inline mutable m = 1\n"
+                    ]
+
+                Expect.equal
+                    [ for source in refused -> source, parsesClean source ]
+                    [ for source in refused -> source, false ]
+                    "each source is refused"
+            }
+        ]
+
 /// Tests that parsing every prefix of every golden file at token boundaries always returns Ok.
 /// This validates the error recovery: no truncation should cause a parse Error or exception.
 let testSlicedParsing (filePath: string) =
