@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../ParserDebugFixtures.fs" Link="ParserDebugFixtures.fs" />
+    <Compile Include="../GoldenFiles.fs" Link="GoldenFiles.fs" />
     <Compile Include="TestHelpers.fs" />
     <Compile Include="KeywordTests.fs" />
     <Compile Include="NumericTests.fs" />

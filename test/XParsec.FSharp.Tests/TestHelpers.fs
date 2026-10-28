@@ -284,7 +284,7 @@ let private testParseFileWithParser
             ctx.FlushToString()
 
     if updateSnapshots || not (File.Exists expectedPath) then
-        File.WriteAllText(expectedPath, actual)
+        GoldenFiles.write expectedPath actual
 
         if not updateSnapshots then
             if isCi then
@@ -489,7 +489,7 @@ let parseWithStackProbe (stackSize: int) (timeout: System.TimeSpan) (filePath: s
             ctx.FlushToString()
 
         let expectedPath = filePath + ".parsed"
-        File.WriteAllText(expectedPath, parseOutput)
+        GoldenFiles.write expectedPath parseOutput
 
     taskResult
 
