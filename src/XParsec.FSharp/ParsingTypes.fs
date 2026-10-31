@@ -262,11 +262,47 @@ type TraceCallback() =
     abstract SplitPowerMinusConsumed: atStartIndex: int -> unit
     default _.SplitPowerMinusConsumed(_) = ()
 
+/// A warning code written in a `#nowarn` or `#warnon` directive.
+[<RequireQualifiedAccess>]
+type WarnCode =
+    /// An F# compiler code, written `42`, `"42"` or `"FS0042"`.
+    | FSharp of number: int
+    /// Any other code, such as `"V278"`.
+    | Named of code: string
+
+    override this.ToString() =
+        match this with
+        | FSharp n -> string n
+        | Named code -> code
+
+[<RequireQualifiedAccess>]
+module WarnCode =
+
+    /// The code written as the string `text` in a directive; `ValueNone` for empty text or text holding whitespace.
+    let ofText (text: string) : WarnCode voption =
+        let number (s: string) : int voption =
+            match s.Length > 0 && Seq.forall System.Char.IsAsciiDigit s, System.Int32.TryParse s with
+            | true, (true, n) -> ValueSome n
+            | _ -> ValueNone
+
+        let unprefixed =
+            if text.StartsWith("FS", System.StringComparison.Ordinal) then
+                text.Substring 2
+            else
+                text
+
+        match number unprefixed with
+        | ValueSome n -> ValueSome(WarnCode.FSharp n)
+        | ValueNone when text.Length > 0 && not (Seq.exists System.Char.IsWhiteSpace text) ->
+            ValueSome(WarnCode.Named text)
+        | ValueNone -> ValueNone
+
 [<Struct>]
 type WarnDirective =
     {
+        /// The zero-based line of the directive.
         Line: int<line>
-        WarningNumber: int
+        Code: WarnCode
         Suppress: bool
     }
 

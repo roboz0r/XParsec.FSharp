@@ -151,38 +151,33 @@ module Parsing =
                 let text = lexed.GetTokenString(tIdx)
                 reader.Skip()
 
-                match token.Token with
-                | Token.NumInt32 ->
-                    match System.Int32.TryParse(text) with
-                    | true, n ->
+                let record (code: WarnCode voption) =
+                    match code with
+                    | ValueSome code ->
                         warnDirectives <-
                             {
                                 Line = currentLine
-                                WarningNumber = n
+                                Code = code
                                 Suppress = isSuppress
                             }
                             :: warnDirectives
+                    | ValueNone -> ()
+
+                match token.Token with
+                | Token.NumInt32 ->
+                    match System.Int32.TryParse(text) with
+                    | true, n -> record (ValueSome(WarnCode.FSharp n))
                     | _ -> ()
                 | Token.StringOpen ->
                     // String is now fragmented: StringOpen, StringFragment*, StringClose
-                    // Look for a single StringFragment containing the warning number
+                    // Look for a single StringFragment containing the warning code
                     if reader.Index < int nextLineTokenIndex then
                         match reader.Peek() with
                         | ValueSome fragToken when fragToken.Token = Token.StringFragment ->
                             let fragIdx = tokenIndex reader
                             let fragText = lexed.GetTokenString(fragIdx)
                             reader.Skip()
-
-                            match System.Int32.TryParse(fragText) with
-                            | true, n ->
-                                warnDirectives <-
-                                    {
-                                        Line = currentLine
-                                        WarningNumber = n
-                                        Suppress = isSuppress
-                                    }
-                                    :: warnDirectives
-                            | _ -> ()
+                            record (WarnCode.ofText fragText)
                         | _ -> ()
                 | _ -> ()
 
