@@ -202,6 +202,47 @@ module Parsing =
         else
             0
 
+    /// Checks if an operator has leading whitespace but no trailing whitespace (F# spec 3.8.1),
+    /// as in `f -x`, which makes a dual-use operator a prefix operator.
+    let isAdjacentPrefixOp (state: ParseState) (rawIndex: int<token>) =
+        let tokens = state.Lexed.Tokens
+
+        let rightAdjacent =
+            rawIndex + 1<token> < tokens.Length * 1<token>
+            && not (ParseState.isTriviaToken state tokens[rawIndex + 1<token>])
+
+        let leftSeparated =
+            rawIndex = 0<token>
+            || (rawIndex > 0<token>
+                && ParseState.isTriviaToken state tokens[rawIndex - 1<token>])
+
+        rightAdjacent && leftSeparated
+
+    let private isPrefixCapable (token: Token) =
+        match token with
+        | Token.OpAmp
+        | Token.OpAmpAmp -> true
+        | _ -> TokenInfo.isOperator token && TokenInfo.canBePrefix token
+
+    /// The operators that are both prefix and infix and that fsc treats as infix at the start of a
+    /// line (LexFilter `isInfix`): `+`/`-`-led operators and `&&`. `%`-, `&`- and `~`-led operators
+    /// start a new expression instead.
+    let private isDualUseInfixOperator (token: Token) =
+        match token with
+        | Token.OpAmpAmp -> true
+        | _ ->
+            TokenInfo.isOperator token
+            && TokenInfo.canBePrefix token
+            && TokenInfo.operatorPrecedence token = PrecedenceLevel.InfixAdd
+
+    /// Whether a dual-use operator at the start of a line continues the preceding expression as an
+    /// infix operator. An adjacent operator (`-x`, `&&x`) is a prefix operator and starts a new
+    /// expression.
+    let continuesAsInfixAtLineStart (state: ParseState) (token: SyntaxToken) =
+        match token.Index with
+        | TokenIndex.Regular rawIndex -> isDualUseInfixOperator token.Token && not (isAdjacentPrefixOp state rawIndex)
+        | TokenIndex.Virtual -> false
+
     /// Returns true if the token can appear as an infix operator in expressions.
     /// Used for the SeqBlock infix undentation exception (F# spec 15.1.9).
     let private isInfixToken (token: Token) =
@@ -441,8 +482,13 @@ module Parsing =
 
             // --- 15.1.9: Exceptions to Offside Rules ---
 
-            // SeqBlock infix: an infix token may be offside by (tokenSize + 1)
-            elif current.Context = OffsideContext.SeqBlock && isInfixToken token then
+            // SeqBlock infix: an infix token may be offside by (tokenSize + 1). The exception
+            // excludes an adjacent prefix operator (`-x`, `&&x`).
+            elif
+                current.Context = OffsideContext.SeqBlock
+                && isInfixToken token
+                && not (isPrefixCapable token && isAdjacentPrefixOp state (int readerIndex * 1<token>))
+            then
                 let tokenLength = getTokenLength state (int readerIndex * 1<token>)
 
                 if tokenCol >= current.Indent - (tokenLength + 1) then

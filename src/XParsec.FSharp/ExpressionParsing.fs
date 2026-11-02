@@ -1276,21 +1276,6 @@ module Expr =
 
     module private Application =
         let parse =
-            /// Checks if an operator has leading whitespace but no trailing whitespace (F# spec 3.8.1).
-            let isAdjacentPrefixOp (state: ParseState) (rawIndex: int<token>) =
-                let tokens = state.Lexed.Tokens
-
-                let rightAdjacent =
-                    rawIndex + 1<token> < tokens.Length * 1<token>
-                    && not (ParseState.isTriviaToken state tokens[rawIndex + 1<token>])
-
-                let leftSeparated =
-                    rawIndex = 0<token>
-                    || (rawIndex > 0<token>
-                        && ParseState.isTriviaToken state tokens[rawIndex - 1<token>])
-
-                rightAdjacent && leftSeparated
-
             let isAtomicExprToken (state: ParseState) (t: SyntaxToken) =
                 match t.Token with
                 | Token.Identifier
@@ -1402,10 +1387,20 @@ module Expr =
             | t when t.Token = Token.EOF -> return! failSep
             | t when t.Token = Token.OpSemicolon -> return! consumePeeked t
             | t ->
-                // Emit VirtualSep only if the next token can legally start an expression at this indent
-                if TokenInfo.canStartExpression t.Token then
+                let! state = getUserState
+
+                // Emit VirtualSep only if the next token can legally start an expression at this
+                // indent. A dual-use operator such as `+ b` continues the preceding expression,
+                // while an adjacent prefix operator such as `&&x` starts a new one.
+                let startsExpression =
+                    match t.Token, t.Index with
+                    | (Token.OpAmp | Token.OpAmpAmp), TokenIndex.Regular rawIndex -> isAdjacentPrefixOp state rawIndex
+                    | _ ->
+                        TokenInfo.canStartExpression t.Token
+                        && not (continuesAsInfixAtLineStart state t)
+
+                if startsExpression then
                     let! indent = currentIndent
-                    let! state = getUserState
 
                     let atContextIndent =
                         match state.Context with
