@@ -414,7 +414,8 @@ module Type =
                 parser {
                     let! lBraceBar = pLBraceBar
 
-                    let! fields, seps = withContext OffsideContext.SeqBlock (sepEndBy1 pAnonRecField pRecordFieldSep)
+                    let! fields, seps =
+                        withContext OffsideContext.SeqBlock (sepEndBy1 pAnonRecField pRecordFieldSep)
 
                     let! rBraceBar = pRBraceBar
                     return Type.AnonRecordType(lBraceBar, fields, seps, rBraceBar)

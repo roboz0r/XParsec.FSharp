@@ -260,7 +260,10 @@ module TypeExtensionElementsSignature =
         // An explicit `with` opens its own block instead, floored by the enclosing context.
         parser {
             let! withTok = nextSyntaxTokenVirtualIfNot Token.KWWith
-            let! elems = withContextAtToken OffsideContext.WithAugment anchor (many1 TypeSignatureElement.parse)
+
+            let! elems =
+                withContextAtToken OffsideContext.WithAugment anchor (many1 TypeSignatureElement.parse)
+
             let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
             return TypeExtensionElementsSignature.TypeExtensionElementsSignature(withTok, elems, endTok)
         }

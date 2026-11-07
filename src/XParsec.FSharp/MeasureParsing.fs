@@ -76,7 +76,9 @@ module Measure =
         static let pJuxtapositionOp =
             parser {
                 let! pos = getPosition
-                let! token = satisfyL (fun (t: PositionedToken) -> t.Token = Token.Whitespace) "Whitespace"
+
+                let! token =
+                    satisfyL (fun (t: PositionedToken) -> t.Token = Token.Whitespace) "Whitespace"
 
                 // Lookahead to confirm we are adjacent to a measure atom
                 let! _ =

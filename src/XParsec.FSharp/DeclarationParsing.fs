@@ -29,7 +29,10 @@ module ModuleAbbrev =
     let parse =
         parser {
             let! modTok = pModule
-            let! ident = nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsIdentifier) "Expected identifier"
+
+            let! ident =
+                nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsIdentifier) "Expected identifier"
+
             let! eq = pEquals
             let! lid = LongIdent.parse
             return ModuleAbbrev.ModuleAbbrev(modTok, ident, eq, lid)
@@ -47,7 +50,9 @@ module CompilerDirectiveDecl =
                     "Expected directive identifier after '#'"
                     (nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsIdentifier) "Directive identifier")
 
-            let! strings = many (nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsText) "String argument")
+            let! strings =
+                many (nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsText) "String argument")
+
             return CompilerDirectiveDecl(hash, ident, strings)
         }
 
@@ -134,7 +139,9 @@ module ModuleDefn =
 
             let! beginTok = nextSyntaxTokenVirtualIfNot Token.KWBegin
             // Indent module body 1 column past the 'module' keyword
-            let! elems = withContextAt OffsideContext.Module (indent + 1) modTok.PositionedToken (opt elementParser)
+            let! elems =
+                withContextAt OffsideContext.Module (indent + 1) modTok.PositionedToken (opt elementParser)
+
             let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
             return ModuleDefnBody(beginTok, elems, endTok)
         }
@@ -152,7 +159,8 @@ module ModuleDefn =
                     "Expected module identifier"
                     (nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsIdentifier) "Module identifier")
 
-            let! eq = recoverWithVirtualToken Token.OpEquality "Expected '=' after module identifier" pEquals
+            let! eq =
+                recoverWithVirtualToken Token.OpEquality "Expected '=' after module identifier" pEquals
 
             let! body = parseBody modTok elementParser
             return ModuleDefn(attrs, modTok, access, isRec, ident, eq, body)

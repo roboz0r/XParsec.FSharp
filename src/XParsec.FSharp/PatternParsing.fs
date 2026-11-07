@@ -126,7 +126,9 @@ module Pat =
     let private pAsRhs =
         parser {
             // 'as' was already consumed by the operator parser; consume the binding identifier.
-            let! ident = nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsIdentifier) "identifier after 'as'"
+            let! ident =
+                nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsIdentifier) "identifier after 'as'"
+
             return PatAux.AsIdent ident
         }
 
@@ -176,8 +178,10 @@ module Pat =
 
     // Static route tables for RHS pattern operators.
     let private patRhsRoutesFull
-        : struct (Token *
-          (SyntaxToken -> RHSOperator<SyntaxToken, PatAux, Pat<SyntaxToken>, PositionedToken, ParseState, FSReadable>))[] =
+        : struct (
+            Token *
+            (SyntaxToken -> RHSOperator<SyntaxToken, PatAux, Pat<SyntaxToken>, PositionedToken, ParseState, FSReadable>)
+        )[] =
         [|
             struct (Token.OpComma, mkOpComma)
             struct (Token.OpBar, mkOpBar)
@@ -189,8 +193,10 @@ module Pat =
         |]
 
     let private patRhsRoutesHead
-        : struct (Token *
-          (SyntaxToken -> RHSOperator<SyntaxToken, PatAux, Pat<SyntaxToken>, PositionedToken, ParseState, FSReadable>))[] =
+        : struct (
+            Token *
+            (SyntaxToken -> RHSOperator<SyntaxToken, PatAux, Pat<SyntaxToken>, PositionedToken, ParseState, FSReadable>)
+        )[] =
         [|
             struct (Token.OpComma, mkOpComma)
             struct (Token.OpBar, mkOpBar)
@@ -203,8 +209,11 @@ module Pat =
     // Dispatches RHS operators by looking up the next token in the route table.
     let private patRhsParserSpecialist
         (routes:
-            struct (Token *
-            (SyntaxToken -> RHSOperator<SyntaxToken, PatAux, Pat<SyntaxToken>, PositionedToken, ParseState, FSReadable>))[])
+            struct (
+                Token *
+                (SyntaxToken
+                    -> RHSOperator<SyntaxToken, PatAux, Pat<SyntaxToken>, PositionedToken, ParseState, FSReadable>)
+            )[])
         (semiCompletesElems: bool)
         : FSParser<_> =
         fun reader ->
@@ -379,7 +388,9 @@ module Pat =
 
                 let innerParser =
                     parser {
-                        let! fields, seps = withContext OffsideContext.SeqBlock (sepEndBy1 pFieldPat pRecordFieldSep)
+                        let! fields, seps =
+                            withContext OffsideContext.SeqBlock (sepEndBy1 pFieldPat pRecordFieldSep)
+
                         let! r = pRBrace
                         return Pat.Record(l, fields, seps, r)
                     }
@@ -607,7 +618,8 @@ module Pat =
             let kind = stringKindOfToken opening
             let! parts = loop (ResizeArray())
 
-            let! closing = nextSyntaxTokenSatisfiesLMsg (fun t -> isStringClose t.Token) "Expected string close"
+            let! closing =
+                nextSyntaxTokenSatisfiesLMsg (fun t -> isStringClose t.Token) "Expected string close"
 
             return Pat.String(kind, ImmutableArray.CreateRange(parts), closing)
         }

@@ -1023,7 +1023,10 @@ module TypeExtensionElements =
         // (`TypeDefn.BodyStart.Anchor` for a record or union).
         parser {
             let! withTok = nextSyntaxTokenVirtualIfNot Token.KWWith
-            let! elems = withContextAtToken OffsideContext.WithAugment anchor (many1 TypeDefnElement.parse)
+
+            let! elems =
+                withContextAtToken OffsideContext.WithAugment anchor (many1 TypeDefnElement.parse)
+
             let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
             return TypeExtensionElements.TypeExtensionElements(withTok, elems, endTok)
         }

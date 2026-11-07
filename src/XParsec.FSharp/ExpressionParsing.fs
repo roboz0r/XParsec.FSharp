@@ -210,7 +210,8 @@ module Binding =
                 parser {
                     match maybeColon with
                     | ValueSome(colon, colonCol) ->
-                        let! typ = withContextAt OffsideContext.Let (colonCol + 1) colon.PositionedToken Type.parse
+                        let! typ =
+                            withContextAt OffsideContext.Let (colonCol + 1) colon.PositionedToken Type.parse
 
                         return Expr.TypeAnnotation(expr, colon, typ)
                     | ValueNone -> return expr
@@ -519,7 +520,8 @@ module Expr =
 
             match maybeColon with
             | ValueSome(colon, colonCol) ->
-                let! typ = withContextAt OffsideContext.Let (colonCol + 1) colon.PositionedToken Type.parse
+                let! typ =
+                    withContextAt OffsideContext.Let (colonCol + 1) colon.PositionedToken Type.parse
 
                 return Expr.TypeAnnotation(expr, colon, typ)
             | ValueNone -> return expr
@@ -690,7 +692,8 @@ module Expr =
                         withContextAt OffsideContext.If (indent + 1) ifTok.PositionedToken refExpr.Parser
                     )
 
-                let! thenTok = recoverWithVirtualToken Token.KWThen "Expected 'then' after condition" pThen
+                let! thenTok =
+                    recoverWithVirtualToken Token.KWThen "Expected 'then' after condition" pThen
                 // Grammar: THEN typedSeqExprBlock (anchored to if_col + 1)
                 let! thenExpr =
                     recoverExprMissing (
@@ -783,7 +786,10 @@ module Expr =
         let pFunctionExpr =
             parser {
                 let! (funcTok, indent) = assertKeywordToken Token.KWFunction
-                let! rules = withContextAt OffsideContext.Function indent funcTok.PositionedToken pMatchRules
+
+                let! rules =
+                    withContextAt OffsideContext.Function indent funcTok.PositionedToken pMatchRules
+
                 return ExprAux.FinishedKeywordExpr(Expr.Function(funcTok, rules))
             }
 
@@ -978,7 +984,9 @@ module Expr =
                 // Loop header requires deeper indent than 'for'; body can align with 'for'
                 let headerMinIndent = indent + 1
                 let bodyMinIndent = indent
-                let! forBuilder = withContextAt OffsideContext.For headerMinIndent forTok.PositionedToken pForHeader
+
+                let! forBuilder =
+                    withContextAt OffsideContext.For headerMinIndent forTok.PositionedToken pForHeader
                 // Grammar: FOR _ IN _ DO typedSeqExprBlock (and FOR _ = _ TO _ DO typedSeqExprBlock)
                 let! body =
                     withContextAt OffsideContext.Do bodyMinIndent forTok.PositionedToken refTypedSeqExprBlock.Parser
@@ -1178,7 +1186,9 @@ module Expr =
 
         let pTypeAppRhs =
             parser {
-                let! lAngle = nextSyntaxTokenIsLMsg Token.OpLessThan "Expected '<' for type application"
+                let! lAngle =
+                    nextSyntaxTokenIsLMsg Token.OpLessThan "Expected '<' for type application"
+
                 let! types, commas = sepBy Type.parse pComma
 
                 let! state = getUserState
@@ -1499,7 +1509,7 @@ module Expr =
 
         let rhsOperators
             : (SyntaxToken
-                  -> RHSOperator<SyntaxToken, ExprAux, Expr<SyntaxToken>, PositionedToken, ParseState, FSReadable>) array =
+                -> RHSOperator<SyntaxToken, ExprAux, Expr<SyntaxToken>, PositionedToken, ParseState, FSReadable>) array =
             Array.init
                 30
                 (fun i ->
@@ -1922,7 +1932,8 @@ module Expr =
                 | Ok(kind, parts, closing) -> preturn (Expr.String(kind, parts, closing)) reader
             | Ok _ ->
                 (parser {
-                    let! opening = nextSyntaxTokenSatisfiesLMsg (fun t -> isStringOpen t.Token) "Expected string open"
+                    let! opening =
+                        nextSyntaxTokenSatisfiesLMsg (fun t -> isStringOpen t.Token) "Expected string open"
 
                     let kind = stringKindOfToken opening
 
@@ -1935,7 +1946,8 @@ module Expr =
 
                     let! parts = loop isInterpolated (ResizeArray())
 
-                    let! closing = nextSyntaxTokenSatisfiesLMsg (fun t -> isStringClose t.Token) "Expected string close"
+                    let! closing =
+                        nextSyntaxTokenSatisfiesLMsg (fun t -> isStringClose t.Token) "Expected string close"
 
                     return Expr.String(kind, ImmutableArray.CreateRange parts, closing)
                 })
@@ -2124,7 +2136,8 @@ module Expr =
     /// Parses record field initializers with optional trailing semicolon and consumes the close delimiter.
     let private pRecordFieldsAndClose (openTok: SyntaxToken) (expectedClose: Token) (mismatchedClose: Token) =
         parser {
-            let! fields, seps = withContext OffsideContext.SeqBlock (sepBy1 FieldInitializer.parse pRecordFieldSep)
+            let! fields, seps =
+                withContext OffsideContext.SeqBlock (sepBy1 FieldInitializer.parse pRecordFieldSep)
 
             let! trailingSep = opt pSemi
 
@@ -2206,13 +2219,15 @@ module Expr =
                     let! baseExpr = refExprInRecords.Parser
                     let! withTok = pWith
 
-                    let! struct (fields, seps, rClose) = pRecordFieldsAndClose openTok expectedClose mismatchedClose
+                    let! struct (fields, seps, rClose) =
+                        pRecordFieldsAndClose openTok expectedClose mismatchedClose
 
                     return Expr.RecordClone(lParen, baseExpr, withTok, fields, seps, rClose)
                 }
                 // { Field = val; ... } — record literal
                 parser {
-                    let! struct (fields, seps, rClose) = pRecordFieldsAndClose openTok expectedClose mismatchedClose
+                    let! struct (fields, seps, rClose) =
+                        pRecordFieldsAndClose openTok expectedClose mismatchedClose
 
                     return Expr.Record(lParen, ValueNone, fields, seps, rClose)
                 }
