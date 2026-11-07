@@ -272,7 +272,7 @@ let lineStartOperatorTests =
                 "let s =\n    true\n    &&false\n"
             case "an adjacent -b in a list starts a new element" NewExpression 3 "let s =\n    [ a\n      -b ]\n"
             case "% at the column starts a new expression" NewExpression 3 "let s =\n    7\n    % 2\n"
-            // fsi rejects this source with FS0010 at `-x`; Vesper reads `-x` as a top-level expression.
+            // fsi rejects this source with FS0010 at `-x`; this parser reads `-x` as a top-level expression.
             case
                 "an adjacent -x one column left of the column is outside the infix undentation"
                 NewExpression
