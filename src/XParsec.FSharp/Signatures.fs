@@ -108,26 +108,6 @@ type TypeSignature<'T> =
     | TypeExtension of typeName: TypeName<'T> * elements: TypeExtensionElementsSignature<'T>
     // Opaque type signature (no `=` body), e.g. `[<Measure>] type kg` or `type T`.
     | AbstractType of typeName: TypeName<'T>
-    // Intrinsic primitive signature: `type int = extern`. Declares "the target
-    // provides this; there is no Vesper representation" — the impl-side pair is a
-    // `TypeDefn.Abbrev` whose RHS is `Type.ILIntrinsic`. Distinct from `AbstractType`
-    // (opaque/abstract) and from `Abbrev` (a real type alias). The optional trailing
-    // `with member … / interface …` (same surface as `Record`'s extension) publishes
-    // the capability surface a later extractor consumes; `ValueNone` is the bare form.
-    | Extern of
-        typeName: TypeName<'T> *
-        equals: 'T *
-        externToken: 'T *
-        // Optional `class` / `interface` tag. `class` (`type Attribute = extern class`)
-        // marks a HERITABLE external reference base (type id extracted from the paired
-        // `.fs`'s `(# class "…" #)`); `interface` (`type disposable = extern interface
-        // with …`) marks a capability INTERFACE (all-abstract surface, published as an
-        // `IntrinsicInterface`). Both are distinct from the bare `extern` opaque value
-        // capability. `ValueNone` is the bare form (`type int = extern`). The parser
-        // admits `interface` only when a `with` follows it, so it never collides with an
-        // `interface …` capability member (which always carries a type name).
-        kindTag: ExternKind<'T> voption *
-        members: TypeExtensionElementsSignature<'T> voption
 
 // Represents: type-signatures := type-signature ... and ... type-signature
 // The first item has no preceding 'and'; subsequent items each carry their 'and' token.

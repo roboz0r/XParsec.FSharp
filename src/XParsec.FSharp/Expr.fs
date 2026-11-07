@@ -85,11 +85,6 @@ type Type<'T> =
     | UnionType of left: Type<'T> * bar: 'T * right: Type<'T>
     | ILIntrinsic of
         lHashParen: 'T *
-        // Optional `class`/`interface` tag (`(# class "System.Attribute" #)`):
-        // marks a HERITABLE external reference base (resolved to a TypeRef, usable as
-        // an `inherit` parent), distinct from the untagged form which is an opaque
-        // value repr. `ValueNone` is the opaque form (`(# "System.Int32" #)`).
-        kindTag: ExternKind<'T> voption *
         instruction: StringKind<'T> *
         instrParts: ImArr<StringPart<'T>> *
         instrClose: 'T *
@@ -98,18 +93,6 @@ type Type<'T> =
     | MeasureType of measure: Measure<'T>
     | Missing
     | SkipsTokens of skippedTokens: ImArr<'T>
-
-// The species keyword on an external type declaration: `class` or `interface`,
-// carried on both `Type.ILIntrinsic` (`(# class "…" #)`) and `TypeSignature.Extern`
-// (`type X = extern class` / `type X = extern interface with …`). A two-case tag
-// (rather than a bare token) so consumers dispatch on the species by construction
-// instead of re-reading the token kind. On `TypeSignature.Extern`, `Interface`
-// drives capability-interface publication (an `IntrinsicInterface`); on
-// `Type.ILIntrinsic`, `interface` as a HERITABLE base is parse-accepted but
-// not-yet-emitted (see NameResolution registration).
-and [<RequireQualifiedAccess>] ExternKind<'T> =
-    | Class of classTok: 'T
-    | Interface of interfaceTok: 'T
 
 and AnonRecordField<'T> = | AnonRecordField of ident: 'T * colon: 'T * typ: Type<'T>
 

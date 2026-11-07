@@ -267,7 +267,7 @@ module TypeExtensionElementsSignature =
         }
 
     /// The optional trailing `with …` augmentation (explicit `parse` or light-syntax
-    /// `parseLightAt`) shared by the extern / record / union signature surfaces.
+    /// `parseLightAt`) shared by the record / union signature surfaces.
     let parseOptAt (anchor: SyntaxToken) =
         opt (choiceL [ parse; parseLightAt anchor ] "Type Extension")
 
@@ -382,41 +382,6 @@ module TypeSignature =
                 | Token.KWDelegate ->
                     let! d = DelegateSig.parse
                     return TypeSignature.Delegate(typeName, equals, d)
-
-                | Token.KWExtern ->
-                    // `type int = extern` — intrinsic primitive (no Vesper representation).
-                    // Optional `with member … / interface …` publishes the capability
-                    // surface a later extractor consumes; parsed unconditionally here —
-                    // the opt-in gate lives at the extractor, not the parser.
-                    let! ext = pExtern
-
-                    // Optional `class` / `interface` tag: `type Attribute = extern class`
-                    // marks a HERITABLE external reference base (type id extracted from the
-                    // paired `.fs`'s `(# class "…" #)`); `type disposable = extern interface
-                    // with …` marks a capability INTERFACE (an all-abstract surface published
-                    // as an `IntrinsicInterface`). The tag introduces the type BODY, so
-                    // `interface` is admitted only when `with` follows it: a bare
-                    // `interface <Type> …` capability MEMBER (an interface implementation)
-                    // below always carries a type name where the tag has `with`, so it is
-                    // never mis-eaten. `choiceL` rewinds on the failed branch, leaving such
-                    // a member for `parseOpt`.
-                    let! kindTag =
-                        opt (
-                            choiceL
-                                [
-                                    pClass |>> ExternKind.Class
-                                    parser {
-                                        let! interfaceTok = pInterface
-                                        let! _ = lookAhead pWith
-                                        return ExternKind.Interface interfaceTok
-                                    }
-                                ]
-                                "external class/interface tag"
-                        )
-
-                    let! members = TypeExtensionElementsSignature.parseOptAt next
-
-                    return TypeSignature.Extern(typeName, equals, ext, kindTag, members)
 
                 | _ when isImplicitClassStart next ->
                     // Implicit anonymous body: no explicit class/struct/begin keyword.
