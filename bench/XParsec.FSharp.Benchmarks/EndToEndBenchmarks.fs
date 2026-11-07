@@ -27,9 +27,13 @@ type EndToEndBenchmarks() =
         sourceText <- SourceText.ofString source
         fcsChecker <- FSharpChecker.Create()
 
+        // The large fixture is FSharp.Core's prim-types.fs, which uses library-only syntax
+        // (inline IL with `type ('T)` operands) that FCS only parses when compiling FSharp.Core.
+        // Without this flag FCS takes its error-recovery path on that fixture.
         fcsOptions <-
             { FSharpParsingOptions.Default with
                 SourceFiles = [| fileName |]
+                CompilingFSharpCore = true
             }
 
     [<Benchmark(Baseline = true)>]
