@@ -7,8 +7,7 @@ open XParsec.FSharp
 // Post-lexing interpretation of a numeric-literal token: its value, read from the
 // `NumericBase` / `NumericKind` flags the lexer has already classified onto it.
 
-/// One of F#'s integral primitive types, by its width and signedness. Shared by the literal
-/// reader, the semantic constant model and both backends.
+/// One of F#'s integral primitive types, by its width and signedness.
 [<RequireQualifiedAccess>]
 type IntKind =
     | SByte
@@ -19,7 +18,7 @@ type IntKind =
     | UInt32
     | Int64
     | UInt64
-    /// Pointer-width. Has no JS representation, and cannot underlie a CLR enum.
+    /// Pointer-width: its size depends on the platform.
     | NativeInt
     | UNativeInt
 
@@ -204,8 +203,8 @@ module IntValue =
         | IntValue.NativeInt n -> string n
         | IntValue.UNativeInt n -> string n
 
-    /// The value boxed at its own .NET primitive type, as a CLR enum-case field constant must
-    /// carry it: the metadata writer reads the box's runtime type.
+    /// The value boxed at its own .NET primitive type, so the box's runtime type
+    /// records the width.
     let boxed (v: IntValue) : obj =
         match v with
         | IntValue.SByte n -> box n

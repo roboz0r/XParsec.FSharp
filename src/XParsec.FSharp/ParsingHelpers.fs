@@ -863,7 +863,7 @@ module Parsing =
         // `%` in every string flavor, so this is the only place to keep those
         // chars verbatim — mirrors `pString`'s `isStringInvalidText` handling. It
         // matters for IL-intrinsic instruction strings (the sole consumer of this
-        // helper), e.g. a JS-template `(# "$0 % $1" #)`: the string is opaque to
+        // helper), e.g. `(# "$0 % $1" #)`: the string is opaque to
         // the front end, and only a printf-family consumer would care about format
         // validity.
         | Token.InvalidFormatPlaceholder

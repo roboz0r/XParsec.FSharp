@@ -26,8 +26,8 @@ type SyntaxToken =
 
 /// WHERE something is, in the token space of the file that produced it. Declared HERE, in
 /// the parser layer, because a position in a token stream is the parser's own notion: a
-/// `DiagnosticCode` identifies one, and every later layer (the semantic passes, the frozen
-/// format) shares the same space rather than a translation of it.
+/// `DiagnosticCode` identifies one, and any consumer shares the same space rather than a
+/// translation of it.
 [<RequireQualifiedAccess>]
 type Site =
     /// No place in the file: a whole-file lex/parse failure, a conformance verdict
@@ -223,11 +223,9 @@ module Offside =
         | _ -> false
 
 /// WHAT the parser could not accept. Every payload here is a `Token`, a `Site` or a string
-/// — never a CST node. That is what lets a consumer forward the code whole (the semantic
-/// layer wraps it as its own `Kind.Parse`) and freeze it alongside the rest of a
-/// diagnostic: a node would drag raw char offsets and virtual tokens across a boundary
-/// built to keep them out. The tokens a code is ABOUT are identified by `Site`, in the same
-/// token space every later layer shares.
+/// — never a CST node. That is what lets a consumer forward or store the code whole: a
+/// node would drag raw char offsets and virtual tokens along with it. The tokens a code is
+/// ABOUT are identified by `Site`, in the same token space every consumer shares.
 [<RequireQualifiedAccess>]
 type DiagnosticCode =
     // TODO: Use F# error codes

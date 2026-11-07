@@ -3,9 +3,8 @@ namespace XParsec.FSharp
 open System
 
 /// The compiled member name F# gives each specially-named operator, and the
-/// per-character spellings that mint a name for every other operator. Lexer,
-/// parser, semantic analysis and codegen all read an operator's name from here, so a
-/// name cannot drift between them.
+/// per-character spellings that mint a name for every other operator. Every
+/// consumer reads an operator's name from here, so a name cannot drift between them.
 module OperatorData =
 
     [<Literal>]

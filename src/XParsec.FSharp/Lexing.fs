@@ -2623,8 +2623,8 @@ module Lexing =
             p reader
 
         // TODO: consider caching the parsed `FormatPlaceholder` in a side-table
-        // on `LexBuilder` (token index -> FormatPlaceholder) so semantic
-        // analysis / codegen can read the structured spec without re-parsing
+        // on `LexBuilder` (token index -> FormatPlaceholder) so downstream
+        // consumers can read the structured spec without re-parsing
         // via `parseFormatSpecifier`. Deferred deliberately: re-parsing a few
         // short specifier strings on demand is plausibly cheaper than carrying
         // these records on every lexed token — measure before adding the table.
@@ -2715,7 +2715,7 @@ module Lexing =
     /// `FormatSpecifier` token (see `Lexed.GetTokenReadable`), so no substring
     /// is copied out at all. This is the canonical implementation of the
     /// `%[flags][width][.precision][type]` grammar; downstream consumers
-    /// (semantic analysis, codegen) reuse it rather than re-deriving the scan.
+    /// reuse it rather than re-deriving the scan.
     /// Any leading `%` characters are skipped (by advancing the reader index,
     /// not by re-slicing). `ValueNone` when the body isn't a well-formed
     /// placeholder.
