@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/bench/">
+    <Project Path="bench/XParsec.FSharp.Benchmarks/XParsec.FSharp.Benchmarks.fsproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/XParsec.FSharp/XParsec.FSharp.fsproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/XParsec.FSharp.Tests/XParsec.FSharp.Tests.fsproj" />
+  </Folder>
+</Solution>
