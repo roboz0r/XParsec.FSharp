@@ -2,13 +2,6 @@ namespace XParsec.FSharp.Parser
 
 open XParsec.FSharp
 
-// Represents: access := private | internal | public
-[<RequireQualifiedAccess>]
-type Access<'T> =
-    | Private of privateToken: 'T
-    | Internal of internalToken: 'T
-    | Public of publicToken: 'T
-
 // Represents: import-decl := open long-ident | open type long-ident
 type ImportDecl<'T> =
     | ImportDecl of openToken: 'T * longIdent: LongIdent<'T>
@@ -34,7 +27,7 @@ type ModuleFunctionOrValueDefn<'T> =
 // Represents: module-elem
 type ModuleElem<'T> =
     | FunctionOrValue of ModuleFunctionOrValueDefn<'T>
-    | Type of ImArr<TypeDefn<'T>>
+    | Type of typeToken: 'T * typeDefns: ImArr<TypeDefn<'T>>
     | Exception of ExceptionDefn<'T>
     | Module of ModuleDefn<'T>
     | ModuleAbbrev of ModuleAbbrev<'T>

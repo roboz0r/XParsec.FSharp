@@ -11,7 +11,7 @@ open XParsec.FSharp.Lexer
 [<RequireQualifiedAccess>]
 module AttributeTarget =
     let private pContextualKeyword s ctor =
-        // Hoist err out of the parser CE body — allocated once per (s) at module load.
+        // Pre-allocate error message per target keyword at module load.
         let err: ErrorType<PositionedToken, ParseState> = Message(sprintf "Expected '%s'" s)
 
         parser {
@@ -47,9 +47,8 @@ module AttributeTarget =
 module Attribute =
     let parse: FSParser<Attribute<SyntaxToken>> =
         parser {
-            // Attempt to parse the target (e.g. "assembly:")
-            // We need `opt` because "assembly" could also be the start of the ObjectConstruction (the Attribute Type name)
-            // if the colon is missing.
+            // Target prefix is optional (e.g. "assembly:").
+            // Without a colon, target keywords are treated as the attribute type name.
             let! target =
                 opt (
                     parser {
@@ -94,11 +93,8 @@ module Attributes =
 
 [<RequireQualifiedAccess>]
 module RangeOpName =
-    // `.. ..` is the step-range operator name. It appears only as an operator name
-    // inside parens (e.g. `let inline (.. ..) start step finish = ...`); never infix.
-    // The lexer emits two separate `OpRange` tokens because the greedy operator scan
-    // can't span the whitespace/comments/newlines that may sit between the two `..`
-    // pieces, so the parser fuses them here instead.
+    // Matches '..' or step-range '(.. ..)'.
+    // Parsed as two tokens to permit whitespace/comments between dots in definition syntax.
     let private pRangeFirst =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.OpRange) "Expected '..'"
 
@@ -121,7 +117,7 @@ module ActivePatternOpName =
     let private pIdent = nextSyntaxIdentifierLMsg "Expected identifier"
 
     let parse: FSParser<ActivePatternOpName<SyntaxToken>> =
-        // Recursive helper to parse segments: ident | ...
+        // Parses pattern cases: Case1 | Case2 | ... (with optional trailing wildcard '_')
         let rec parseSegments (builder: ImmutableArray<_>.Builder) =
             parser {
                 let! ident = pIdent
@@ -129,26 +125,19 @@ module ActivePatternOpName =
 
                 let! bar = pBar
 
-                // Look ahead to see if we are at the end (RParen) or if there is a wildcard
                 match! opt (lookAhead pRParen) with
-                | ValueSome _ ->
-                    // Found ')', so 'bar' is the rBar
-                    return (builder.ToImmutable(), ValueNone, bar)
+                | ValueSome _ -> return (builder.ToImmutable(), ValueNone, bar)
                 | ValueNone ->
-                    // Check for wildcard '_'
                     match! opt (lookAhead pWildcard) with
                     | ValueSome _ ->
-                        let! underscore = nextSyntaxToken // Consume '_'
+                        let! underscore = nextSyntaxToken
                         let! finalBar = pBar
                         return (builder.ToImmutable(), ValueSome underscore, finalBar)
-                    | ValueNone ->
-                        // Must be another identifier, loop
-                        return! parseSegments builder
+                    | ValueNone -> return! parseSegments builder
             }
 
         parser {
-            // Parses the inside of (| ... |). The surrounding parens are handled by IdentOrOp.ParenOp.
-            // Starts with '|'
+            // Parses the interior of (| Case1 | Case2 |). Outer parens handled by caller.
             let! lBar = pBar
 
             let! idents, underscore, rBar = parseSegments (ImmutableArray.CreateBuilder())
@@ -164,7 +153,7 @@ module OpName =
             "Expected symbolic operator"
         |>> OpName.SymbolicOp
 
-    // [] — op_Nil. Internal FSharp.Core syntax for `type List<'T> = | ([]) : 'T list`.
+    // Matches '[]' as an operator name (e.g. `type List<'T> = | ([])`).
     let private pNilOp =
         parser {
             let! lBracket = pLBracket
@@ -176,7 +165,7 @@ module OpName =
         choiceL
             [
                 RangeOpName.parse |>> OpName.RangeOp
-                // Attempt active pattern first because it starts with '|', which is also a symbolic op
+                // Active patterns must be checked before symbolic ops since both start with '|'.
                 ActivePatternOpName.parse |>> OpName.ActivePatternOp
                 pNilOp
                 pSymbolicOp
@@ -190,10 +179,9 @@ module IdentOrOp =
     let parse: FSParser<IdentOrOp<SyntaxToken>> =
         choiceL
             [
-                // Simple Identifier (including backticked)
                 pIdentOrOpIdent |>> IdentOrOp.Ident
 
-                // Parenthesized Operator (op) or Active Pattern (| ... |)
+                // Parenthesized operator, e.g. (+) or (|Even|Odd|)
                 parser {
                     let! l = pLParen
                     let! op = OpName.parse
@@ -205,22 +193,16 @@ module IdentOrOp =
 
 [<RequireQualifiedAccess>]
 module LongIdent =
-    // Simple parser for A.B.C — every identifier pattern, type reference, and module
-    // path goes through here, so this is hot.
     let private pIdent = nextSyntaxIdentifierLMsg "Expected Identifier"
 
-    /// Build a singleton LongIdent (one ident, no dots). For the common bare-identifier
-    /// case, lets callers avoid threading an empty dots array through manually.
+    /// Creates a single-identifier LongIdent with no separator dots.
     let inline single (ident: 'T) : LongIdent<'T> =
         {
             Idents = ImmutableArray.Create(ident)
             Dots = ImmutableArray.Empty
         }
 
-    // Direct implementation rather than `sepBy1 pIdent pDot`: the dots ARE part of
-    // the AST (CST-style — kept for downstream tooling), but writing a single loop
-    // with two SmallArrayBuilders lets the common count=1 case stay entirely on the
-    // stack (single-ident lids get `ImmutableArray.Empty` for dots, no allocation).
+    // Custom loop preserves dot tokens for the CST while avoiding allocations for single identifiers.
     let parse: FSParser<LongIdent<SyntaxToken>> =
         fun reader ->
             match pIdent reader with
@@ -259,16 +241,32 @@ module LongIdent =
 
 [<RequireQualifiedAccess>]
 module Access =
-    let parse: FSReader -> ParseResult<Access<SyntaxToken>, PositionedToken, ParseState> =
-        nextSyntaxTokenSatisfiesLMsg
-            (fun t ->
-                t.Token = Token.KWPrivate
-                || t.Token = Token.KWInternal
-                || t.Token = Token.KWPublic
-            )
-            "Access modifier"
-        |>> function
-            | t when t.Token = Token.KWPrivate -> Access.Private t
-            | t when t.Token = Token.KWInternal -> Access.Internal t
-            | t when t.Token = Token.KWPublic -> Access.Public t
-            | _ -> failwith "Unreachable"
+
+    let tokenOf (access: Access<'T>) : 'T =
+        match access with
+        | Access.Private t
+        | Access.Internal t
+        | Access.Public t -> t
+
+    let private errExpectedAccess: ErrorType<PositionedToken, ParseState> =
+        Message "Expected access modifier (private, public or internal)"
+
+    let private failAccess = fail errExpectedAccess
+
+    let ofToken (t: SyntaxToken) : Access<SyntaxToken> voption =
+        match t.Token with
+        | Token.KWPrivate -> ValueSome(Access.Private t)
+        | Token.KWInternal -> ValueSome(Access.Internal t)
+        | Token.KWPublic -> ValueSome(Access.Public t)
+        | _ -> ValueNone
+
+    let parse =
+        parser {
+            let! token = peekNextSyntaxToken
+
+            match ofToken token with
+            | ValueSome access ->
+                let! _ = consumePeeked token
+                return access
+            | ValueNone -> return! failAccess
+        }

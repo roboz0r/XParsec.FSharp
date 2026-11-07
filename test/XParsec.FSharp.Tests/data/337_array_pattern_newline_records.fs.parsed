@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                   'type'            KWType              tok=   5  pos= 155
 TypeDefn.Record:
   TypeName                             'Item'            Identifier          tok=   7  pos= 160
   =                                    '='               OpEquality          tok=   9  pos= 165

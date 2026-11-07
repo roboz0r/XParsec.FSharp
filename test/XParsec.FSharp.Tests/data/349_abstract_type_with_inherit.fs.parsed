@@ -2,6 +2,7 @@ AnonymousModule:
 Import:
   open                   'open'            KWOpen              tok=   6  pos= 180
                          'System'          Identifier          tok=   8  pos= 185
+type                     'type'            KWType              tok=  11  pos= 193
 TypeDefn.Anon:
   TypeName               'ILModuleRe...'   Identifier          tok=  13  pos= 198
   =                      '='               OpEquality          tok=  15  pos= 213
@@ -22,6 +23,7 @@ TypeDefn.Anon:
     NamedType:
       Ident              'IDisposabl...'   Identifier          tok=  45  pos= 427
   end                    <virt>            KWEnd               tok=virt  pos= 440
+type                     'type'            KWType              tok=  52  pos= 451
 TypeDefn.Anon:
   [<                     '[<'              KWLAttrBracket      tok=  48  pos= 440
   NamedType:

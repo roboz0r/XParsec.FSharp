@@ -17,27 +17,32 @@ module Constant =
     let private errExpectedLtMeasure: ErrorType<PositionedToken, ParseState> =
         Message "Expected '<' for measure"
 
+    /// `__SOURCE_DIRECTORY__`, `__SOURCE_FILE__` and `__LINE__` are string constants (spec §3.11).
     let isLiteralToken (t: Token) =
-
-        t.IsNumeric || t = Token.KWTrue || t = Token.KWFalse || t = Token.CharLiteral
+        match t with
+        | Token.KWTrue
+        | Token.KWFalse
+        | Token.CharLiteral
+        | Token.SourceDirectoryIdentifier
+        | Token.SourceFileIdentifier
+        | Token.LineIdentifier -> true
+        | _ -> t.IsNumeric
 
     let private pLiteral: FSParser<_> =
         nextSyntaxTokenSatisfiesLMsg
             (fun (synTok: SyntaxToken) -> isLiteralToken synTok.Token)
             "Expected constant literal"
 
-    // Accept either standalone '>' or '>]' (KWRAttrBracket).
-    // When '>]' is encountered, we split it: return a virtual '>' for the measure close
-    // and set SplitRAttrBracket so the next token read yields ']' for the enclosing indexer.
+    /// Parses the closing '>' for a measure.
+    ///
+    /// Handles indexer boundaries (e.g. `arr.[0<m>]`) where `>` and `]` were lexed
+    /// together as `>]` (KWRAttrBracket). In that case, returns a virtual `>` and
+    /// sets a state flag so the next read yields the trailing `]`.
     let private pMeasureRAngle =
         parser {
             match! peekNextSyntaxToken with
-            // Token.OpGreaterThan has a unique family-ID value, so matching by
-            // enum identity is sufficient — no need to check the span text.
             | t when t.Token = Token.OpGreaterThan -> return! consumePeeked t
             | t when t.Token = Token.KWRAttrBracket ->
-                // Don't consume the >] token. Set the flag so the next read
-                // rewrites it from KWRAttrBracket to KWRBracket (yielding `]`).
                 do!
                     updateUserState (fun s ->
                         ParseState.ifTrace s (fun tc -> tc.SplitRAttrBracketSet(t.StartIndex))
@@ -48,17 +53,17 @@ module Constant =
             | _ -> return! fail errExpectedGtMeasure
         }
 
+    /// Parses a measure suffix on a literal (e.g. `1.0<kg>`).
+    ///
+    /// F# requires the opening `<` to be immediately adjacent to the numeric
+    /// literal with no intervening whitespace or comments.
     let private pMeasure =
-        // '<' must be truly adjacent to the preceding literal — verify previous raw token is not trivia,
-        // then check raw token (no trivia skip) and verify string is exactly "<"
         parser {
             let! canBeMeasure = isPrevTokenSyntax >> Ok
 
             if canBeMeasure then
                 let! pos = getPosition
 
-                // Token.OpLessThan carries its unique family-ID, so the enum
-                // value distinguishes `<` from `<<`, `<=`, `<|`, etc.
                 let! lAngle =
                     satisfyL (fun (t: PositionedToken) -> t.Token = Token.OpLessThan) "Expected '<' for measure"
 
@@ -70,35 +75,23 @@ module Constant =
                 return! fail errExpectedLtMeasure
         }
 
-    /// <summary>
-    /// Traverses the measure AST and collects all Type Variable nodes (e.g. 'u).
-    /// Used to validate that a measure literal (e.g. float<...>) does not contain type variables.
-    /// </summary>
+    /// Collects all type variables (e.g. `'u`) in a measure expression.
     let collectTypars (measure: Measure<'T>) : ResizeArray<Typar<'T>> =
         let results = ResizeArray()
 
         let rec visit m =
             match m with
-            // The Target: Found a type variable
             | Measure.Typar token -> results.Add(token)
-
-            // Base cases: Clean
             | Measure.Named _
             | Measure.One _
             | Measure.Anonymous _ -> ()
-
-            // Unary recursive cases
             | Measure.Paren(_, inner, _)
             | Measure.Reciprocal(_, inner)
             | Measure.Power(inner, _, _, _) -> visit inner
-
-            // Binary recursive cases
             | Measure.Product(l, _, r)
             | Measure.Quotient(l, _, r) ->
                 visit l
                 visit r
-
-            // N-ary recursive case
             | Measure.Juxtaposition(ms, ops) ->
                 for m in ms do
                     visit m
@@ -106,6 +99,7 @@ module Constant =
         visit measure
         results
 
+    /// Ensures literal measures (e.g. `1.0<m>`) do not contain type variables (e.g. `1.0<'u>`).
     let validateMeasureNoTypars (measure: Measure<SyntaxToken>) (reader: Reader<_, _, _>) =
         let typars = collectTypars measure
 
@@ -129,7 +123,6 @@ module Constant =
 
     let parse: FSParser<Constant<_>> =
         parser {
-
             let! literal = pLiteral
 
             if literal.Token.IsNumeric then

@@ -2,6 +2,7 @@ AnonymousModule:
 Import:
   open                       'open'            KWOpen              tok=   8  pos= 222
                              'System'          Identifier          tok=  10  pos= 227
+type                         'type'            KWType              tok=  13  pos= 235
 TypeDefn.Anon:
   TypeName                   'T'               Identifier          tok=  15  pos= 240
   (                          '('               KWLParen            tok=  16  pos= 241

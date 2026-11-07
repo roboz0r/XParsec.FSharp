@@ -29,11 +29,10 @@ module Pat =
         | Type of Type<SyntaxToken>
         | AsIdent of SyntaxToken
 
-    // --- Shared Precedence / Helpers for pattern Pratt parsing ---
-    // These are referenced by both `PatOperatorParser` (which models F#'s
-    // `parenPattern` grammar, including `:` as a type-annotation operator) and
-    // `PatHeadOperatorParser` (which models `headBindingPattern`, where `:` is
-    // not part of the pattern and belongs to the binding's `optReturnType`).
+    // --- Operator Precedence & Pratt Helpers ---
+    // Used by:
+    // - `PatOperatorParser`: Standard patterns (including `:` type annotations).
+    // - `PatHeadOperatorParser`: Head patterns for `let` bindings (excludes `:` so type annotations attach to the binding).
 
     let private tuplePrecedence = BindingPower.fromLevel (int PrecedenceLevel.Comma)
     let private asPrecedence = BindingPower.fromLevel (int PrecedenceLevel.As)
@@ -74,12 +73,10 @@ module Pat =
         match r with
         | Pat.EnclosedBlock(ParenKind.Paren l, Pat.Tuple(elements, ops), r) -> Pat.StructTuple(op, l, elements, ops, r)
         | Pat.EnclosedBlock(ParenKind.Paren l, inner, r) ->
-            // `struct (x)` (one element in parens) — emit as 1-element StructTuple
-            // for downstream uniformity; the type checker rejects 1-element struct tuples.
+            // `struct (x)`: parsed as a 1-element struct tuple (rejected later during type checking).
             Pat.StructTuple(op, l, ImmutableArray.Create(inner), ImmutableArray.Empty, r)
         | _ ->
-            // `struct x` without parens — malformed but accepted per parser policy
-            // (defer to type checker). Synthesize virtual parens around the RHS.
+            // `struct x`: malformed without parens, but parsed with synthetic parens for error recovery.
             let lParen = virtualToken (PositionedToken.Create(Token.KWLParen, op.StartIndex))
             let rParen = virtualToken (PositionedToken.Create(Token.KWRParen, op.StartIndex))
             Pat.StructTuple(op, lParen, ImmutableArray.Create(r), ImmutableArray.Empty, rParen)
@@ -87,9 +84,8 @@ module Pat =
     let private completeElems (exprs: ResizeArray<Pat<_>>) ops =
         Pat.Elems(ImmutableArray.CreateRange(exprs), ImmutableArray.CreateRange(ops))
 
-    /// Emits a virtual `;` in pattern SeqBlock contexts when the next non-trivia token
-    /// is at the current offside indent and can start a pattern. Mirrors `pSepVirt` in
-    /// ExpressionParsing.fs so list/array patterns accept newline-separated elements.
+    /// Emits a virtual ';' for newline-separated pattern elements in lists or arrays
+    /// when the next token is at the current offside indentation.
     let private pSepVirtPat: FSParser<SyntaxToken> =
         let failSep =
             fail (Message "Expected ';' or newline at the same indent for pattern sequencing")
@@ -116,12 +112,11 @@ module Pat =
                     return! failSep
         }
 
-    /// Subsequent-separator parser for InfixNary tuple patterns.
+    /// Separator parser for tuple pattern elements (',').
     let private pPatTupleComma: FSParser<SyntaxToken> =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.OpComma) "','"
 
-    /// Subsequent-separator parser for InfixNary element patterns. Matches a
-    /// real `;` or a virtual one emitted by `pSepVirtPat`.
+    /// Separator parser for sequence pattern elements (';' or a virtual newline separator).
     let private pPatSemicolon: FSParser<SyntaxToken> =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.OpSemicolon) "';'"
         <|> pSepVirtPat
@@ -130,8 +125,7 @@ module Pat =
 
     let private pAsRhs =
         parser {
-            // NOTE: the 'as' token was already consumed by rhsParser's nextSyntaxToken.
-            // We only need to consume the identifier that follows.
+            // 'as' was already consumed by the operator parser; consume the binding identifier.
             let! ident = nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token.IsIdentifier) "identifier after 'as'"
             return PatAux.AsIdent ident
         }
@@ -142,24 +136,20 @@ module Pat =
 
             match token.Token with
             | Token.KWLParen ->
-                // Start of tuple pattern ( ... )
-                // This is a Prefix Operator on a pattern
+                // Prefix operator for parenthesized patterns: ( ... )
                 let p = preturn token
                 let rParen = virtualToken (PositionedToken.Create(Token.KWRParen, 0))
                 let op = Enclosed(token, p, parenPrecedence, rParen, pRParen, completeParen)
                 return op
             | Token.KWStruct ->
+                // Prefix operator for struct patterns: struct (...)
                 let p = preturn token
-                // Create Prefix operator
-                // This will parse the immediate next pattern (e.g. Paren, or erroneously Literal/List)
                 let op = Prefix(token, p, structPrecedence, completeStruct)
                 return op
             | _ -> return! fail errNotPrefixPatOp
         }
 
-    // RHS-operator constructors for pattern Pratt parsing. Hoisted as module-level
-    // `let private` functions (NOT closures) so the dispatch tables below hold
-    // direct method-group references rather than freshly-allocated closures.
+    // RHS operator factories. Kept as top-level functions to avoid closure allocations.
     let private mkOpBar (tok: SyntaxToken) =
         InfixLeft(tok, preturn tok, pipePrecedence, completeInfix)
 
@@ -184,12 +174,7 @@ module Pat =
     let private mkSemiBare (tok: SyntaxToken) =
         InfixNary(tok, pPatSemicolon, semiPrecedence, false, completeElems)
 
-    // Static dispatch tables — one per parameterization. The `match` on Token enum
-    // values is compiled by F# into a chain of small range-`switch` IL opcodes
-    // (the values are non-contiguous: 136, 140, 159, 162, 183, 184, 40961…), which
-    // amounts to ~6 sequential conditional jumps. A linear scan over a 6-7 entry
-    // struct-tuple array is a tighter JIT-friendly loop and lets the branch
-    // predictor see the common patterns.
+    // Static route tables for RHS pattern operators.
     let private patRhsRoutesFull
         : struct (Token *
           (SyntaxToken -> RHSOperator<SyntaxToken, PatAux, Pat<SyntaxToken>, PositionedToken, ParseState, FSReadable>))[] =
@@ -215,11 +200,7 @@ module Pat =
             struct (Token.KWAs, mkKWAs)
         |]
 
-    // Specialist RHS dispatcher for pattern Pratt parsing. Peeks once, scans the
-    // (small, static) routes array, then advances + invokes the handler. The
-    // virtual-`;` slow path inlines `pSepVirtPat`'s offside check so it doesn't
-    // re-peek either. `semiCompletesElems` is needed by the slow path for the
-    // synthesized InfixNary.
+    // Dispatches RHS operators by looking up the next token in the route table.
     let private patRhsParserSpecialist
         (routes:
             struct (Token *
@@ -251,7 +232,7 @@ module Pat =
                     if token = Token.EOF then
                         fail errNotValidRhsPatOp reader
                     elif TokenInfo.canStartPattern token then
-                        // Virtual `;` if the next pattern-starter sits at the current context indent.
+                        // Insert virtual ';' if the next pattern starts at the current indentation context.
                         let state = reader.State
                         let idx = int reader.Index * 1<token>
                         let indent = ParseState.getIndent state idx
@@ -270,9 +251,8 @@ module Pat =
                     else
                         fail errNotValidRhsPatOp reader
 
-    /// Matches F#'s `parenPattern` grammar rule: includes `:` as a type-annotation
-    /// operator so that `(x : int)`, `(x : int, y : float)`, etc. parse as
-    /// per-element `Pat.Typed` inside the paren.
+    /// Operator parser for standard patterns (e.g. `(x : int)`).
+    /// Includes `:` for inline type annotations.
     type PatOperatorParser() =
         static let rhsParser = patRhsParserSpecialist patRhsRoutesFull true
 
@@ -280,12 +260,8 @@ module Pat =
             member _.LhsParser = patLhsParser
             member _.RhsParser = rhsParser
 
-    /// Matches F#'s `headBindingPattern` grammar rule: same operators as
-    /// `PatOperatorParser` except `:` is not consumed. In the F# grammar `:`
-    /// is a production of `parenPattern` (and `simplePat` for primary-ctor
-    /// arg lists), not of `headBindingPattern`; a top-level `let x : int = 5`
-    /// puts the `: int` into the binding's `optReturnType`, not the bound
-    /// pattern. Used by `Pat.parseHead` for a `let`-value's bound pattern.
+    /// Operator parser for `let` binding head patterns (e.g. `let x : int = 5`).
+    /// Excludes `:` so type annotations belong to the binding return type instead of the pattern.
     type PatHeadOperatorParser() =
         static let rhsParser = patRhsParserSpecialist patRhsRoutesHead false
 
@@ -333,10 +309,8 @@ module Pat =
             DiagnosticCode.ExpectedRArrayBracket
             refPatSeqBlock.Parser
 
-    // Shared '|' / 'as' chain handling for field-like patterns (record fields,
-    // union case args). The Pratt parsers for those contexts exclude '|' and
-    // 'as' via their min-binding-power cutoff, so we reapply them manually
-    // here around a parsed base pattern.
+    // Handles trailing '|' and 'as' clauses for record and union fields.
+    // (These operators have lower precedence than field delimiters, so they are handled separately).
     let private pBarToken =
         nextSyntaxTokenSatisfiesLMsg (fun t -> t.Token = Token.OpBar) "'|'"
 
@@ -346,9 +320,7 @@ module Pat =
                 many (
                     parser {
                         let! barTok = pBarToken
-                        // Each Or-alternative gets its own SeqBlock boundary so `pNamed`'s
-                        // optional parameter/arg parsers don't overrun past the alternative
-                        // into a following field at a lower column.
+                        // Isolate each '|' alternative in a SeqBlock so argument parsing doesn't spill into lower-indented fields.
                         let! altPat = withContext OffsideContext.SeqBlock altParser
                         return struct (barTok, altPat)
                     }
@@ -395,7 +367,7 @@ module Pat =
             | Ok l ->
                 let savedState = reader.State
 
-                // Push Brace context (indent 0) so closing } is not blocked by offside check
+                // Brace context disables offside checks so closing '}' is not blocked by indentation rules.
                 let braceEntry: Offside =
                     {
                         Context = OffsideContext.Brace
@@ -420,7 +392,7 @@ module Pat =
                     reader.State <- savedState
                     fail errRecordPattern reader
 
-    /// Parse a single named field in a union case pattern: fieldName = pat (excludes comma).
+    /// Parses a single named field in a union case pattern (e.g. `FieldName = pat`).
     let private pUnionNamedArgPat =
         parser {
             let! lid = LongIdent.parse
@@ -430,7 +402,7 @@ module Pat =
             return UnionArgPat.Named(lid, eq, p)
         }
 
-    /// Parse a single positional argument in a union case pattern: pat (excludes comma).
+    /// Parses a single positional argument in a union case pattern.
     let private pUnionPositionalArgPat =
         parser {
             let! basePat = withContext OffsideContext.SeqBlock refUnionFieldPat.Parser
@@ -438,16 +410,11 @@ module Pat =
             return UnionArgPat.Positional p
         }
 
-    /// Parse a union case argument: either a named field (tried first) or a positional pattern.
+    /// Parses a union case argument (either named or positional).
     let private pUnionArgPat = pUnionNamedArgPat <|> pUnionPositionalArgPat
 
-    /// Parse named field patterns AFTER a long-ident has already been consumed:
-    /// `( field1 = pat1, _, field2 = pat2, ... )`. Accepts an arbitrary mix of named
-    /// and positional args in any order, separated by commas, semicolons, or
-    /// newline-at-indent. Commits to this AST shape only when at least one argument
-    /// is a named field; otherwise fails (restoring state + position) so the caller
-    /// can fall back to the standard `Pat.Named(lid, args)` positional shape with
-    /// the same already-parsed lid.
+    /// Parses constructor arguments with named fields: `(field1 = pat1, field2 = pat2)`.
+    /// Backtracks if no arguments are named fields so the caller can fall back to positional arguments.
     let private tryNamedFieldPatsAfterLid
         (lid: LongIdent<SyntaxToken>)
         (postLidPos: Position<ParseState>)
@@ -456,11 +423,7 @@ module Pat =
             match pLParen reader with
             | Error e -> Error e
             | Ok lParen ->
-                // Push Paren context (indent=0) so inner args can appear at any column
-                // relative to any enclosing SeqBlock — matches pParenPat/pRecordPat. Without
-                // this, a recursive call from inside a RHS `withContext SeqBlock` (set by
-                // pUnionNamedArgPat to the RHS column) would offside-fail on inner fields
-                // indented below the RHS column.
+                // Paren context disables offside checks so inner arguments can span multiple lines.
                 let parenEntry: Offside =
                     {
                         Context = OffsideContext.Paren
@@ -497,17 +460,13 @@ module Pat =
                     reader.State <- ParseState.popOffside parenEntry reader.State
                     Ok result
                 | Error _ as e ->
-                    // Roll back state + position so the caller's positional fallback can
-                    // re-parse the `(` as part of an atomic binding arg.
+                    // Restore state and position so the positional fallback can re-parse the '('.
                     reader.State <- savedState
                     reader.Position <- postLidPos
                     e
 
-    // pNamed shares one `LongIdent.parse` call between the named-field-pat path and the
-    // positional path — the prior `choiceL [pNamedFieldPats; …]` re-parsed the long-ident
-    // on backtrack (each alternative started with `let! lid = LongIdent.parse`). Every
-    // identifier-shaped pattern (match-arm variables, fn args, let-bound names, record
-    // fields) goes through here, so the duplicated long-ident parse was hot.
+    /// Parses identifier patterns, resolving between named-field constructor patterns
+    /// and standard positional patterns without re-parsing the leading identifier.
     let pNamed: FSParser<Pat<SyntaxToken>> =
         fun reader ->
             match LongIdent.parse reader with
@@ -515,15 +474,11 @@ module Pat =
             | Ok lid ->
                 let postLidPos = reader.Position
 
-                // Try named-field-pat shape first; on failure, fall through to positional
-                // with the same already-parsed lid (state + position restored to postLid).
+                // Try named-field pattern (e.g. `MyType(Field = pat)`); fall back to positional args.
                 match tryNamedFieldPatsAfterLid lid postLidPos reader with
                 | Ok result -> Ok result
                 | Error _ ->
-                    // Positional path: parses a curried list of atomic argument patterns.
-                    // This is what enables parameterized active patterns like
-                    // `CustomOpId (fn a) (fn b) boundVar`. `many` never fails — empty
-                    // results yield Pat.NamedSimple / Pat.Named with no args.
+                    // Positional path: parses trailing curried arguments for active patterns or constructors.
                     match many refPatAtomicBindingArg.Parser reader with
                     | Error e -> Error e
                     | Ok args ->
@@ -531,11 +486,7 @@ module Pat =
                         | 1, true -> Ok(Pat.NamedSimple(lid.Idents.[0]))
                         | _ -> Ok(Pat.Named(lid, args))
 
-    // Parses `(op) atomicArg*` in pattern position. Enables parameterized
-    // active pattern calls whose parameter is an expression-shaped pattern, e.g.
-    // `| NLambdas ((-) n 1) (vs, b) -> ...`. F# parses the expression argument as a
-    // pattern and the type checker reinterprets it as an expression in active-pattern
-    // parameter positions (matching pars.fsy's `atomicPatternLongIdent` handling).
+    /// Parses parenthesized operator patterns with trailing arguments (e.g. `(|Op|) arg1 arg2` or `((+) x)`).
     let private pParenOpHeadPat =
         parser {
             let! l = pLParen
@@ -556,7 +507,7 @@ module Pat =
         parser {
             let! op = pTypeTest
             let! t = Type.parseAtomic
-            // Check optional 'as pat' — accepts any pattern, not just an identifier
+            // Parse optional ':? Type as pat' clause.
             let! asClause =
                 opt (
                     parser {
@@ -675,8 +626,7 @@ module Pat =
             | Pat.EnclosedBlock(ParenKind.Paren l, inner, r) ->
                 return Pat.StructTuple(structTok, l, ImmutableArray.Create(inner), ImmutableArray.Empty, r)
             | _ ->
-                // pParenPat always returns Pat.EnclosedBlock(Paren …), so the
-                // recovery path is for Missing / SkipsTokens shapes.
+                // Synthesize virtual parentheses for error recovery if pParenPat produced a missing/skipped block.
                 let lParen =
                     virtualToken (PositionedToken.Create(Token.KWLParen, structTok.StartIndex))
 
@@ -693,12 +643,7 @@ module Pat =
             return Pat.Optional(qmark, pat)
         }
 
-    // Active patterns can take quotation arguments: `MyPattern <@ x + 1 @> bound`.
-    // The quotation body is an *expression*; the type checker reinterprets it
-    // when binding the active-pattern parameter (spec patterns:60-61). The
-    // parser delegates to the existing expression-side seq-block parser and
-    // wraps the result in `Pat.Expr` so it can be carried inside a regular
-    // `Pat.EnclosedBlock(ParenKind.Quoted | ParenKind.DoubleQuoted, …)`.
+    // Parses quotation patterns (e.g. `<@ expr @>`), wrapping the inner expression in Pat.Expr.
     let private pInnerQuotedExpr = refExprSeqBlock.Parser |>> Pat.Expr
 
     let private pQuoteTypedPat =
@@ -719,9 +664,7 @@ module Pat =
             DiagnosticCode.ExpectedQuotationUntypedRight
             pInnerQuotedExpr
 
-    /// Named pattern parser that does NOT consume trailing arguments.
-    /// Used for function/member binding argument positions where each
-    /// parameter should be an independent atomic pattern.
+    /// Parses an identifier pattern without consuming trailing arguments (for parameter lists).
     let private pNamedNoArgs =
         parser {
             let! lid = LongIdent.parse
@@ -759,25 +702,18 @@ module Pat =
 
     let parseSeqBlock = withContext OffsideContext.SeqBlock parse
 
-    /// Matches F#'s `headBindingPattern` grammar rule. Same operators as `parse`
-    /// except `:` is not consumed (the surrounding binding's `optReturnType`
-    /// owns any trailing `: type`). Used by `Binding.parseValue` for a
-    /// `let`-value's bound pattern.
+    /// Parses head patterns for `let` bindings (excludes `:` so return type annotations are not captured).
     let parseHead = Operator.parser parseAtomic (PatHeadOperatorParser())
 
-    // For record field patterns, we want to allow the same operators as the top-level, but not semicolon since that separates fields.
+    // Record field values: allows standard pattern operators except ';' (which separates fields).
     let private parseFieldPat =
         Operator.parserAt (BindingPower.fromLevel (int PrecedenceLevel.Semicolon + 1)) parseAtomic (PatOperatorParser())
 
-    // For named union case field patterns (comma-separated), exclude both comma and semicolon.
+    // Union field values: allows standard pattern operators except ',' and ';'.
     let private parseUnionFieldPat =
         Operator.parserAt (BindingPower.fromLevel (int PrecedenceLevel.Comma + 1)) parseAtomic (PatOperatorParser())
 
-    let parseMany1 = many1 parse
-    let parseAtomicMany1 = many1 parseAtomic
-
-    /// Atomic pattern parser for function/member binding argument positions.
-    /// Identifiers are parsed as simple names without consuming trailing arguments.
+    /// Atomic pattern parser for parameter lists (identifiers do not consume trailing arguments).
     let parseAtomicBindingArg =
         dispatchNextSyntaxTokenFallback
             [
@@ -816,8 +752,7 @@ module PatternGuard =
     let parse: FSParser<PatternGuard<SyntaxToken>> =
         parser {
             let! w = pWhen
-            // Use refExprGuard (bounded at Arrow precedence) so '->' is not consumed
-            // as part of the guard expression and remains for Rule.parse's pArrowRight.
+            // Bounded at `->` precedence so `->` is not consumed as part of the guard expression.
             let! e =
                 refExprGuard.Parser
                 |> recoverWith
@@ -830,6 +765,7 @@ module PatternGuard =
 
 [<RequireQualifiedAccess>]
 module Rule =
+    /// Parses a single match rule: `pattern [when guard] -> expression`
     let parse: FSParser<Rule<SyntaxToken>> =
         parser {
             let! pat =
@@ -842,7 +778,6 @@ module Rule =
             let! guard = opt PatternGuard.parse
             let! arrow = pArrowRight
 
-            // Grammar: patternAndGuard RARROW typedSeqExprBlock
             let! expr =
                 refTypedSeqExprBlock.Parser
                 |> recoverWith
@@ -861,7 +796,6 @@ module Rules =
             DiagnosticCode.MissingRule
             (missingOrSkipped Rule.Missing Rule.SkipsTokens)
             Rule.parse
-
 
     let parse: FSParser<Rules<SyntaxToken>> =
         parser {

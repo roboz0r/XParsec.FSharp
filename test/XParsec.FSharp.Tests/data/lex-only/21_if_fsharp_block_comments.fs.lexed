@@ -1,35 +1,43 @@
 0, LineComment
-27, Newline
-28, KWLet
-31, Whitespace
-32, Identifier
-33, Whitespace
-34, OpEquality
-35, Whitespace
-36, NumInt32
-37, Newline
-38, StartFSharpBlockComment
-42, Newline
-43, KWLet
-46, Whitespace
-47, Identifier
-48, Whitespace
-49, OpEquality
-50, Whitespace
-51, NumInt32
-52, Newline
-53, EndFSharpBlockComment
-57, Newline
-58, StartFSharpBlockComment
-69, Newline
-70, KWLet
-73, Whitespace
-74, Identifier
-75, Whitespace
-76, OpEquality
-77, Whitespace
-78, NumInt32
-79, Newline
-80, EndFSharpBlockComment
-94, Newline
-95, EOF
+81, Newline
+82, KWLet
+85, Whitespace
+86, Identifier
+87, Whitespace
+88, OpEquality
+89, Whitespace
+90, NumInt32
+91, Newline
+92, BlockCommentStart
+94, ReservedIdentifierHash (in comment)
+96, Newline (in comment)
+97, KWLet (in comment)
+100, Whitespace (in comment)
+101, Identifier (in comment)
+102, Whitespace (in comment)
+103, OpEquality (in comment)
+104, Whitespace (in comment)
+105, NumInt32 (in comment)
+106, Newline (in comment)
+107, ReservedIdentifierHash (in comment)
+109, BlockCommentEnd
+111, Newline
+112, BlockCommentStart
+114, Identifier (in comment)
+116, OpSubtraction (in comment)
+117, Identifier (in comment)
+123, Newline (in comment)
+124, KWLet (in comment)
+127, Whitespace (in comment)
+128, Identifier (in comment)
+129, Whitespace (in comment)
+130, OpEquality (in comment)
+131, Whitespace (in comment)
+132, NumInt32 (in comment)
+133, Newline (in comment)
+134, Identifier (in comment)
+139, OpSubtraction (in comment)
+140, Identifier (in comment)
+146, BlockCommentEnd
+148, Newline
+149, EOF

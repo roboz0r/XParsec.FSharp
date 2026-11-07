@@ -1,4 +1,5 @@
 AnonymousModule:
+type                             'type'            KWType              tok=   8  pos= 184
 TypeDefn.Union:
   TypeName                       'Conv'            Identifier          tok=  10  pos= 189
   =                              '='               OpEquality          tok=  12  pos= 194

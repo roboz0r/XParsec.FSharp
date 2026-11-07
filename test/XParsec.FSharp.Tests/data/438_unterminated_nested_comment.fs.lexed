@@ -1,0 +1,29 @@
+0, LineComment
+87, Newline
+88, KWLet
+91, Whitespace
+92, Identifier
+93, Whitespace
+94, OpEquality
+95, Whitespace
+96, NumInt32
+97, Newline
+98, BlockCommentStart
+100, Whitespace (in comment)
+101, Identifier (in comment)
+106, Whitespace (in comment)
+107, BlockCommentStart (in comment)
+109, Whitespace (in comment)
+110, Identifier (in comment)
+115, Whitespace (in comment)
+116, BlockCommentEnd (in comment)
+118, Newline (in comment)
+119, KWLet (in comment)
+122, Whitespace (in comment)
+123, Identifier (in comment)
+124, Whitespace (in comment)
+125, OpEquality (in comment)
+126, Whitespace (in comment)
+127, NumInt32 (in comment)
+128, Newline (in comment)
+129, EOF

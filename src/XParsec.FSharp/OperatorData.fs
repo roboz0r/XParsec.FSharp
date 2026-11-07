@@ -2,9 +2,7 @@ namespace XParsec.FSharp
 
 open System
 
-/// The compiled member name F# gives each specially-named operator, and the
-/// per-character spellings that mint a name for every other operator. Every
-/// consumer reads an operator's name from here, so a name cannot drift between them.
+/// Defines the mapping between F# operator symbols and their compiled IL member names (e.g., `+` <-> `op_Addition`).
 module OperatorData =
 
     [<Literal>]
@@ -154,11 +152,11 @@ module OperatorData =
     [<Literal>]
     let OpRangeStep = "op_RangeStep"
 
-    /// Function application, whose "operator" is whitespace.
+    /// Compiled name for whitespace function application.
     [<Literal>]
     let OpSpace = "op_Space"
 
-    /// Source spelling ⇒ compiled name, for the operators F# names specially.
+    /// Predefined F# operators and their standard compiled names.
     let private symbolNames: (string * string)[] =
         [|
             "[]", OpNil
@@ -215,16 +213,14 @@ module OperatorData =
     let private symbolOfCompiledName: Map<string, string> =
         symbolNames |> Seq.map (fun (symbol, compiled) -> compiled, symbol) |> Map.ofSeq
 
-    /// The source spelling of a compiled operator member name (`op_Addition` ⇒ `+`),
-    /// for a diagnostic to show the operator the user wrote rather than the
-    /// member it compiled to.
+    /// Gets the original source symbol for a standard compiled operator name (e.g., `op_Addition` -> `+`).
+    /// Returns `ValueNone` if the name is not in the predefined operator table.
     let sourceSpelling (compiledName: string) : string voption =
         match Map.tryFind compiledName symbolOfCompiledName with
         | Some symbol -> ValueSome symbol
         | None -> ValueNone
 
-    /// Per-character spelling for an operator with no `symbolNames` entry
-    /// (`<+>` ⇒ `op_LessPlusGreater`).
+    /// Character-to-identifier mappings used to generate compiled names for custom operators.
     let private charNames: (char * string)[] =
         [|
             '>', "Greater"
@@ -254,7 +250,10 @@ module OperatorData =
             ']', "RBrack"
         |]
 
-    /// The compiled name of an operator written as `s` (`&&&` ⇒ `op_BitwiseAnd`).
+    /// Returns the compiled name for an operator symbol.
+    ///
+    /// Uses standard predefined names when available (e.g., `+` -> `op_Addition`),
+    /// or generates an encoded name for custom operators (e.g., `<+>` -> `op_LessPlusGreater`).
     let nameOfSymbol (s: string) =
         if String.IsNullOrEmpty s then
             invalidArg (nameof s) "Operator cannot be null or empty."
@@ -268,7 +267,7 @@ module OperatorData =
 
                 for c in s do
                     match Array.tryFind (fun (ch, _) -> ch = c) charNames with
-                    | Some(_, spelling) -> sb.Append(spelling) |> ignore
+                    | Some(_, charName) -> sb.Append(charName) |> ignore
                     | None -> invalidArg (nameof s) (sprintf "Operator %s contains invalid character '%c'." s c)
 
                 sb.ToString()

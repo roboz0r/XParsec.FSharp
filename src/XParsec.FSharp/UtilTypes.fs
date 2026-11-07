@@ -5,38 +5,7 @@ open XParsec
 
 type ImArr<'T> = ImmutableArray<'T>
 
-[<Struct>]
-type ImmutableArrayM<'T, [<Measure>] 'M>(arr: ImmutableArray<'T>) =
-    member this.Length = arr.Length
-    member this.LengthM = LanguagePrimitives.Int32WithMeasure<'M> arr.Length
-
-    member this.Item
-        with get (i: int<'M>) = arr[int i]
-
-    member this.AsImmutableArray() = arr
-
-    interface System.Collections.Generic.IReadOnlyList<'T> with
-        member this.Count = arr.Length
-
-        member this.Item
-            with get (i: int) =
-                if i < 0 || i >= arr.Length then
-                    invalidArg (nameof i) "Index out of range"
-
-                arr[i]
-
-    interface System.Collections.IEnumerable with
-        member this.GetEnumerator() =
-            (arr :> System.Collections.IEnumerable).GetEnumerator()
-
-    interface System.Collections.Generic.IEnumerable<'T> with
-        member this.GetEnumerator() =
-            (arr :> System.Collections.Generic.IEnumerable<'T>).GetEnumerator()
-
-
-/// Measure-typed wrapper over a ReadableArray slice. Mirrors ImmutableArrayM
-/// but uses a partial-view backing so Lexed output can avoid the copy the
-/// ImmutableArray.Builder.ToImmutable finaliser would otherwise perform.
+/// A unit-of-measure wrapper around a ReadableArray slice.
 [<Struct>]
 type ReadableArrayM<'T, [<Measure>] 'M>(arr: ReadableArray<'T>) =
     member _.Length = arr.Length

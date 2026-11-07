@@ -7,8 +7,8 @@ FunctionOrValue:
       Parts:
         Text              'literal '        InterpolatedStringFragment  tok=   7  pos=  10
         Text              '{{'              EscapeLBrace        tok=   8  pos=  18
-        Text              ' and }}'         InterpolatedStringFragment  tok=   9  pos=  20
-        Text              ''                EscapeRBrace        tok=  10  pos=  27
+        Text              ' and '           InterpolatedStringFragment  tok=   9  pos=  20
+        Text              '}}'              EscapeRBrace        tok=  10  pos=  25
                           '"'               InterpolatedStringClose  tok=  11  pos=  27
 FunctionOrValue:
   let                     'let'             KWLet               tok=  13  pos=  29
@@ -23,6 +23,6 @@ FunctionOrValue:
         Expr:
           Ident           'x'               Identifier          tok=  24  pos=  50
         }                 '}'               InterpolatedExpressionClose  tok=  25  pos=  51
-        Text              ' after }}'       InterpolatedStringFragment  tok=  26  pos=  52
-        Text              ''                EscapeRBrace        tok=  27  pos=  61
+        Text              ' after '         InterpolatedStringFragment  tok=  26  pos=  52
+        Text              '}}'              EscapeRBrace        tok=  27  pos=  59
                           '"'               InterpolatedStringClose  tok=  28  pos=  61

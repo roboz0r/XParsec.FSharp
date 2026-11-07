@@ -55,7 +55,7 @@ module ValSig =
                 opt (
                     parser {
                         let! eq = pEquals
-                        let! e = Expr.parseAtomic
+                        let! e = Expr.parse
                         return (eq, e)
                     }
                 )
@@ -256,8 +256,7 @@ module TypeExtensionElementsSignature =
     /// Light-syntax variant: synthesises a virtual `with` when member tokens follow
     /// without an explicit `with` keyword (e.g. record/union augmentations in light mode).
     let parseLightAt (anchor: SyntaxToken) : FSParser<TypeExtensionElementsSignature<SyntaxToken>> =
-        // Without an explicit `with` there is no new block, so `anchor` (the first token of
-        // the representation), `{` / `|` / the abbreviated type is the offside line.
+        // The members' offside line is `anchor`, the first token after `=` (`TypeDefn.BodyStart.Anchor`).
         // An explicit `with` opens its own block instead, floored by the enclosing context.
         parser {
             let! withTok = nextSyntaxTokenVirtualIfNot Token.KWWith
@@ -277,20 +276,6 @@ module TypeExtensionElementsSignature =
 
 [<RequireQualifiedAccess>]
 module TypeSignature =
-
-    // Record fields use SeqBlock offside so the type's postfix loop doesn't eat the next field's identifier.
-    // Mirrors TypeDefnParsing.fs pRecordField.
-    let private pRecordField =
-        parser {
-            let! attrs = opt Attributes.parse
-            let! mut = opt pMutable
-            let! acc = opt pAccessModifier
-            let! id = pIdent
-            let! col = pColon
-            let! t = withContext OffsideContext.SeqBlock Type.parse
-            let! _ = opt pSemi
-            return RecordField.RecordField(attrs, mut, acc, id, col, t)
-        }
 
     /// Tokens that, when seen right after `type T =`, indicate an implicit anonymous
     /// type signature body (no explicit `class`/`struct`/`begin`/`interface` keyword).
@@ -318,11 +303,14 @@ module TypeSignature =
                 let! ext = TypeExtensionElementsSignature.parse
                 return TypeSignature.TypeExtension(typeName, ext)
             elif next2.Token <> Token.OpEquality then
-                // No `=` — opaque sig (e.g. `[<Measure>] type kg`, `type T`)
+                // Opaque / abstract type without '=' (e.g. `type T` or `[<Measure>] type kg`)
                 return TypeSignature.AbstractType(typeName)
             else
                 let! equals = pEquals
-                let! next = peekNextSyntaxToken
+
+                let! bodyStart = TypeDefn.pBodyStart
+                let next = bodyStart.Kind
+                let bodyAnchor = bodyStart.Anchor
 
                 match next.Token with
                 | Token.KWStruct ->
@@ -331,12 +319,10 @@ module TypeSignature =
                     return TypeSignature.Struct(typeName, equals, str, elems, endTok)
 
                 | Token.KWInterface ->
-                    // Two forms share the `interface` keyword after `=`:
-                    //   1. Explicit body: `type IFoo = interface <members> end`
-                    //   2. Implicit class: `type Unit = interface IComparable` (interface as first member).
-                    // Disambiguate by peeking the token AFTER `interface`: a member-start or `end`
-                    // means the explicit body form; anything else (a type-start ident, `'a`, etc.)
-                    // means the implicit-class form.
+                    // Disambiguate between:
+                    // 1. Explicit interface definition: `type IFoo = interface <members> end`
+                    // 2. Implicit class implementing an interface first: `type Foo = interface IBar`
+                    // Peeking a member keyword or 'end' indicates an explicit interface body.
                     let! isExplicitInterface =
                         lookAhead (
                             parser {
@@ -384,35 +370,36 @@ module TypeSignature =
                     return TypeSignature.Delegate(typeName, equals, d)
 
                 | _ when isImplicitClassStart next ->
-                    // Implicit anonymous body: no explicit class/struct/begin keyword.
-                    // Synthesize virtual begin/end and use offside rule (OffsideContext.Type)
-                    // to delimit the body. Mirrors parseAbbrevOrImplicitClass in TypeDefnParsing.fs.
+                    // Implicit class body without explicit 'class'/'begin' keywords (delimited by indentation).
                     let! beginTok = nextSyntaxTokenVirtualIfNot Token.KWBegin
                     let! elems = withContext OffsideContext.Type TypeElementsSignature.parseMany
                     let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
                     return TypeSignature.Anon(typeName, equals, beginTok, elems, endTok)
 
                 | Token.KWLBrace ->
+                    let! representationAccess = TypeDefn.pRepresentationAccess
                     let! lBrace = pLBrace
-                    let! fields = many1 pRecordField
+                    let! fields = many1 TypeDefn.pRecordField
                     let! rBrace = pRBrace
 
-                    let! ext = TypeExtensionElementsSignature.parseOptAt next
+                    let! ext = TypeExtensionElementsSignature.parseOptAt bodyAnchor
 
-                    return TypeSignature.Record(typeName, equals, lBrace, fields, rBrace, ext)
+                    return TypeSignature.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext)
 
                 | Token.OpBar ->
+                    let! representationAccess = TypeDefn.pRepresentationAccess
+
                     return!
                         choiceL
                             [
                                 parser {
                                     let! cases, _bars = EnumTypeCases.parse
-                                    return TypeSignature.Enum(typeName, equals, cases)
+                                    return TypeSignature.Enum(typeName, equals, representationAccess, cases)
                                 }
                                 parser {
                                     let! cases, _bars = UnionTypeCases.parse
-                                    let! ext = TypeExtensionElementsSignature.parseOptAt next
-                                    return TypeSignature.Union(typeName, equals, cases, ext)
+                                    let! ext = TypeExtensionElementsSignature.parseOptAt bodyAnchor
+                                    return TypeSignature.Union(typeName, equals, representationAccess, cases, ext)
                                 }
                             ]
                             "Union or Enum signature"
@@ -422,6 +409,7 @@ module TypeSignature =
                         choiceL
                             [
                                 parser {
+                                    let! representationAccess = TypeDefn.pRepresentationAccess
                                     let! cases, _bars = UnionTypeCases.parse
 
                                     match cases.Length with
@@ -432,27 +420,19 @@ module TypeSignature =
                                         ->
                                         return! fail errSingleNullaryUnionCaseIsAbbrev
                                     | _ ->
-                                        let! ext = TypeExtensionElementsSignature.parseOptAt next
-                                        return TypeSignature.Union(typeName, equals, cases, ext)
+                                        let! ext = TypeExtensionElementsSignature.parseOptAt bodyAnchor
+                                        return TypeSignature.Union(typeName, equals, representationAccess, cases, ext)
                                 }
                                 parser {
+                                    // Abbreviation: `type T = [access] TargetType`
+                                    let! representationAccess = TypeDefn.pRepresentationAccess
                                     let! t = TypeDefn.parseAbbrevRhs
-                                    // An abbreviation's augmentation needs an explicit `with`:
-                                    // `type Shown = int` followed by a bare `member` is invalid.
+                                    // Type abbreviations require an explicit 'with' to define members (e.g. `type T = int with member ...`).
                                     let! ext = opt TypeExtensionElementsSignature.parse
-                                    return TypeSignature.Abbrev(typeName, equals, t, ext)
+                                    return TypeSignature.Abbrev(typeName, equals, representationAccess, t, ext)
                                 }
                             ]
                             "Union or Type abbreviation"
-        }
-
-    let parse: FSParser<TypeSignature<SyntaxToken>> =
-        parser {
-            let! attrs = opt Attributes.parse
-            let! _ = pType
-            let! attrsAfter = opt Attributes.parse
-            let merged = mergeAttrs attrs attrsAfter
-            return! parseBody merged
         }
 
     /// Parses an `and`-continuation: `and [attrs] TypeName = ...`. Returns the

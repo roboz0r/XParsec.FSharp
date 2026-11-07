@@ -1,5 +1,6 @@
 module               'module'          KWModule            tok=   0  pos=   0
                      'Test155'         Identifier          tok=   2  pos=   7
+type                 'type'            KWType              tok=   9  pos=  27
 TypeDefn.Record:
   [<                 '[<'              KWLAttrBracket      tok=   5  pos=  16
   NamedType:
@@ -19,6 +20,7 @@ TypeDefn.Record:
       NamedType:
         Ident        'float'           Identifier          tok=  26  pos=  55
   }                  '}'               KWRBrace            tok=  28  pos=  61
+type                 'type'            KWType              tok=  35  pos=  91
 TypeDefn.Union:
   [<                 '[<'              KWLAttrBracket      tok=  31  pos=  64
   NamedType:
@@ -32,6 +34,7 @@ TypeDefn.Union:
       Ident          'Green'           Identifier          tok=  49  pos= 120
     Case:
       Ident          'Blue'            Identifier          tok=  54  pos= 132
+type                 'type'            KWType              tok=  61  pos= 156
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok=  57  pos= 138
   NamedType:
@@ -49,6 +52,7 @@ TypeDefn.Anon:
     NamedType:
       Ident          'float'           Identifier          tok=  78  pos= 198
   end                <virt>            KWEnd               tok=virt  pos= 205
+type                 'type'            KWType              tok=  85  pos= 216
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok=  81  pos= 205
   NamedType:
@@ -83,6 +87,7 @@ TypeDefn.Anon:
           Ident      'radius'          Identifier          tok= 121  pos= 304
         Ident        'radius'          Identifier          tok= 125  pos= 313
   end                <virt>            KWEnd               tok=virt  pos= 321
+type                 'type'            KWType              tok= 132  pos= 335
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok= 128  pos= 321
   NamedType:

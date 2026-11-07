@@ -5,6 +5,7 @@ Import:
                                        'System'          Identifier          tok=   7  pos=  18
                                        'Collection...'   Identifier          tok=   9  pos=  25
                                        'Generic'         Identifier          tok=  11  pos=  37
+type                                   'type'            KWType              tok=  14  pos=  46
 TypeDefn.Anon:
   TypeName                             'Foo'             Identifier          tok=  16  pos=  51
   (                                    '('               KWLParen            tok=  17  pos=  54

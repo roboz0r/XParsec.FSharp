@@ -9,12 +9,16 @@
     <DeterministicSourcePaths>false</DeterministicSourcePaths>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="ParserDebugFixtures.fs" />
+    <Compile Include="GoldenFiles.fs" />
     <Compile Include="TestHelpers.fs" />
     <Compile Include="KeywordTests.fs" />
     <Compile Include="NumericTests.fs" />
     <Compile Include="LexingTests.fs" />
     <Compile Include="ParserTests.fs" />
+    <Compile Include="ConstructorBodyTests.fs" />
     <Compile Include="CorpusReport.fs" />
+    <Compile Include="InitializationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

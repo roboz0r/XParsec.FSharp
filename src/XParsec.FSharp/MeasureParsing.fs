@@ -116,12 +116,11 @@ module Measure =
                     preturn op
                 | _ -> fail errNotPrefixMeasureOp
 
-        /// Detects a fused `^-` operator token (the lexer merges `^-` into a single custom
-        /// operator at Append precedence when there is no whitespace between them). Sets
-        /// SplitPowerMinus so the `-` half is presented as OpSubtraction on the next read,
-        /// and returns a virtual `^` token so the enclosing rhsParser dispatches normally
-        /// to the power operator path. The underlying `^-` token is not consumed here; it
-        /// is rewritten and advanced past by the subsequent `pPowerRhs` read.
+        /// Splits a fused `^-` token (e.g. `x^-1`) into separate `^` and `-` operators.
+        ///
+        /// Because the lexer treats unspaced `^-` as a single custom operator, this parser:
+        /// 1. Returns a synthetic `^` power token for the current expression.
+        /// 2. Sets `SplitPowerMinus` so the parser treats the trailing `-` as a minus operator on the next read.
         static let pSplitPowerOp =
             parser {
                 let! peeked = peekNextSyntaxToken
@@ -196,4 +195,7 @@ module Measure =
     let parse: Parser<Measure<SyntaxToken>, _, _, _> =
         Operator.parser atomMeasureParser measureOperatorParser
 
-    do refMeasure.Set parse
+    /// Initializes the forward parser used for measure-valued type arguments.
+    let internal init () = refMeasure.Set parse
+
+    do init ()

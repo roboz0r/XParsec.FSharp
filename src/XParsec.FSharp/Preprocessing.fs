@@ -5,17 +5,14 @@ open XParsec.OperatorParsing
 open XParsec.Parsers
 open XParsec.FSharp.Lexer
 
-/// Reader state for #if expression parsers.
-/// Carries the absolute token index of the slice start so that
-/// SyntaxToken.Index can be set to the correct absolute position
-/// for later text extraction via ParseState.tokenString.
+/// Tracks the slice's starting offset so token indices can be mapped
+/// back to their absolute positions in the source file.
 [<Struct>]
 type IfExprState = { AbsoluteStart: int }
 
 [<RequireQualifiedAccess>]
 module IfExpr =
     open SyntaxToken
-    // Operator precedence parser for #if expressions
 
     let private errNotValidLhsIfOp: ErrorType<PositionedToken, IfExprState> =
         Message "Not a valid LHS #if operator"
@@ -36,8 +33,7 @@ module IfExpr =
             | Token.Tab -> true
             | _ -> false
 
-    /// Ignores trivia tokens and returns the next non-trivia token, or fails if the end of input is reached.
-    /// Only for use on #if directive lines.
+    /// Skips whitespace and comments, returning the next significant token in the #if line.
     let rec nextSyntaxIfToken (reader: Reader<PositionedToken, IfExprState, 'Input>) =
         match reader.Peek() with
         | ValueNone -> fail EndOfInput reader
@@ -45,7 +41,7 @@ module IfExpr =
             reader.Skip()
             nextSyntaxIfToken reader
         | ValueSome token ->
-            // AbsoluteStart + slice-relative index = absolute token index in the full Lexed.Tokens array.
+            // Map the slice-relative index back to the absolute token array index.
             let absoluteIndex = reader.State.AbsoluteStart + reader.Index
             let t = syntaxToken token absoluteIndex
             reader.Skip()
@@ -54,14 +50,14 @@ module IfExpr =
     [<RequireQualifiedAccess>]
     type IfExprAux = unit
 
-    // The main expression type for #if expressions, with auxiliary data for operators.
-    // We use a generic type here to allow the parser to be generic over the input type (e.g. FSReadable).
+    /// Operator precedence parser for boolean expressions in `#if` directives (`!`, `&&`, `||`, and `()`).
     type IfExprParser<'Input when 'Input :> IReadable<PositionedToken, 'Input>>() =
         static let orPrecedence = BindingPower.fromLevel 1 // ||
         static let andPrecedence = BindingPower.fromLevel 2 // &&
         static let notPrecedence = BindingPower.fromLevel 3 // !
         static let parenPrecedence = BindingPower.fromLevel 4 // ( )
-        // --- Completion Functions ---
+
+        // --- AST Node Builders ---
 
         static let completeInfix (l: IfExpr<SyntaxToken>) (op: SyntaxToken) (r: IfExpr<SyntaxToken>) =
             match op.Token with
@@ -83,12 +79,12 @@ module IfExpr =
             >>= fun token ->
                 match token.Token with
                 | Token.OpDereference ->
-                    // Parenthesized measure
+                    // Prefix negation (`!FOO`)
                     let p = preturn token
                     let op = Prefix(token, p, notPrecedence, completePrefix)
                     preturn op
                 | Token.KWLParen ->
-                    // Parenthesized expression
+                    // Grouping `( ... )`
                     let p = preturn token
 
                     let rParen =
@@ -116,8 +112,7 @@ module IfExpr =
             nextSyntaxIfToken
             >>= fun token ->
                 match token.Token with
-                // The lexer emits `Token.Identifier` for identifiers and keywords on
-                // an #if directive line.
+                // In #if expressions, the lexer tags all symbols and keywords as Identifiers.
                 | Token.Identifier -> preturn (IfExpr.Term token)
                 | _ -> fail errNotValidIfTerm
 

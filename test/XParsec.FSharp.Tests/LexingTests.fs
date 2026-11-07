@@ -5,6 +5,7 @@ open System.IO
 
 open Expecto
 open FsCheck
+open FsCheck.FSharp
 
 open XParsec
 open XParsec.Parsers
@@ -43,6 +44,7 @@ let private lexemes =
         // Comments and directives.
         "(*"
         "*)"
+        "(*)"
         "//"
         "#if"
         "#else"
@@ -99,7 +101,10 @@ type LexerSource = | LexerSource of string
 /// Generates from `lexemes` and shrinks as an ordinary string, so a counterexample reduces to
 /// the shortest text that still reproduces it whether or not that text is a whole lexeme.
 let private arbLexerSource =
-    Arb.fromGenShrink (Gen.listOf (Gen.elements lexemes) |> Gen.map (String.concat ""), Arb.shrink)
+    Arb.fromGenShrink (
+        Gen.listOf (Gen.elements lexemes) |> Gen.map (String.concat ""),
+        ArbMap.defaults |> ArbMap.arbitrary<string> |> Arb.toShrink
+    )
     |> Arb.convert LexerSource (fun (LexerSource source) -> source)
 
 /// FsCheck discovers registered generators by reflecting over public static members.
@@ -174,6 +179,96 @@ let tests =
                 ]
 
             testList
+                "Block comments"
+                [
+                    test "Nested delimiters are comment text and the outermost close ends the comment" {
+                        let flagged (tok: Token) =
+                            LanguagePrimitives.EnumOfValue<_, Token>(uint16 tok ||| TokenRepresentation.InComment)
+
+                        let expected =
+                            [
+                                0, Token.BlockCommentStart
+                                2, flagged Token.BlockCommentStart
+                                4, flagged Token.BlockCommentEnd
+                                6, Token.BlockCommentEnd
+                                8, Token.Identifier
+                                9, Token.EOF
+                            ]
+                            |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos))
+
+                        testLexed "(*(**)*)x" expected
+                    }
+
+                    test "A close delimiter outside a comment is an operator and a paren" {
+                        let expected =
+                            [ 0, Token.OpMultiply; 1, Token.KWRParen; 2, Token.EOF ]
+                            |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos))
+
+                        testLexed "*)" expected
+                    }
+
+                    test "A closed comment leaves nothing unclosed" {
+                        Expect.equal (lexString "(* (* *) *)").UnclosedComment ValueNone "Both comments close"
+                    }
+
+                    test "Input ending in nested comment text names the outermost opener" {
+                        Expect.equal
+                            (lexString "x (* (* *)").UnclosedComment
+                            (ValueSome
+                                {
+                                    Opener = 2<token>
+                                    Ending = CommentEnding.Text
+                                })
+                            "The outer comment is token 2"
+                    }
+
+                    test "Input ending in a string inside a comment names the string's style" {
+                        for source, ending in
+                            [
+                                "(* \"*)", CommentEnding.String
+                                "(* @\"*)", CommentEnding.VerbatimString
+                                "(* \"\"\"*)", CommentEnding.TripleQuoteString
+                            ] do
+                            let lexed = lexString source
+
+                            Expect.equal
+                                lexed.UnclosedComment
+                                (ValueSome { Opener = 0<token>; Ending = ending })
+                                $"%A{source}: the string contains the close"
+
+                            Expect.all
+                                (lexed.Tokens |> Seq.filter (fun t -> t.Token <> Token.EOF) |> Seq.skip 1)
+                                (fun t -> t.InComment)
+                                $"%A{source}: the unterminated string token is comment text"
+                    }
+
+                    // Each source closes its comment in fsc: `'"'` is a character literal, and the
+                    // other apostrophes are plain characters.
+                    test "Apostrophes in comment text follow fsc's character literal rule" {
+                        for source in
+                            [
+                                "(* a'\"' *)"
+                                "(* 1'\"' *)"
+                                "(* '\\u1234'\"' *)"
+                                "(* '\\065'\"' *)"
+                                "(* '\\x41'\"' *)"
+                                "(* '\\q'\"' *)"
+                                "(* 'ab'\"' *)"
+                                "(* '\t'\"' *)"
+                            ] do
+                            Expect.equal (lexString source).UnclosedComment ValueNone $"%A{source} closes"
+                    }
+
+                    test "A character literal in comment text hides a double quote" {
+                        for source in [ "(* 'a'\"' *)"; "(* '''\"' *)"; "(* '\\n'\"' *)"; "(* '\\''\"' *)" ] do
+                            Expect.equal
+                                ((lexString source).UnclosedComment |> ValueOption.map (fun u -> u.Ending))
+                                (ValueSome CommentEnding.String)
+                                $"%A{source} opens a string after the character literal"
+                    }
+                ]
+
+            testList
                 "Totality"
                 [
                     // `lexString` returns a `Lexed` for any string, so every truncation of a
@@ -227,7 +322,7 @@ let tests =
                             let lexed = lexString prefix
                             let tokens = List.ofSeq lexed.Tokens
 
-                            Expect.equal lexed.Input prefix "the stream carries the source it was built from"
+                            Expect.equal lexed.Input prefix "the stream retains the source it was built from"
 
                             match tokens with
                             | [] -> failtestf "%A lexed to no tokens, not even EOF" prefix
@@ -278,6 +373,54 @@ let tests =
                 testLexed snippet expected
             }
 
+            // F# starts an identifier with a letter (Lu, Ll, Lt, Lm, Lo, Nl) or `_`, and continues it
+            // with those, `'`, digits (Nd), connectors (Pc), combining marks (Mn, Mc) and format
+            // characters (Cf).
+            testList
+                "UnicodeIdentifiers"
+                [
+                    // fsi accepts `let <name> = 1` and reads the value back for each.
+                    test "Format, connector and combining characters continue an identifier" {
+                        for name in
+                            [
+                                "a\u00ADb"
+                                "a\u200Bb"
+                                "a\u200Db"
+                                "a\uFEFFb"
+                                "a\u00AD'"
+                                "i\u203Fj"
+                                "k\u0301"
+                                "k\u0903"
+                                "\u216Bab"
+                                "\u02B0ab"
+                            ] do
+                            testLexed
+                                name
+                                ([ 0, Token.Identifier; name.Length, Token.EOF ]
+                                 |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos)))
+                    }
+
+                    // fsi accepts `let k\u0663 = 8` (an Arabic-Indic digit, Nd) and reads back `8`.
+                    ptest
+                        "GAP (an identifier continues with ASCII digits only): a decimal digit continues an identifier" {
+                        testLexed
+                            "k\u0663"
+                            ([ 0, Token.Identifier; 2, Token.EOF ]
+                             |> List.map (fun (pos, tok) -> PositionedToken.Create(tok, pos)))
+                    }
+
+                    // fsi: FS0010 "Unexpected character" at the first character of each.
+                    test "Format, connector and combining characters do not start an identifier" {
+                        for name in [ "\u00ADab"; "\u200Dab"; "\u203Fab"; "\u0301ab"; "\u0903ab" ] do
+                            let first = (lexString name).Tokens |> Seq.head
+
+                            Expect.notEqual
+                                first.TokenWithoutCommentFlags
+                                Token.Identifier
+                                $"%A{name} starts no identifier"
+                    }
+                ]
+
             testList
                 "EscapeDecoding"
                 [
@@ -314,9 +457,14 @@ let tests =
                             "U+1F600 is two UTF-16 code units"
                     }
 
-                    test "A surrogate code point decodes to U+FFFD, as fsc's string context does" {
-                        Expect.equal (decodeStringEscape "\\uD800") (DecodedEscape.Text "\uFFFD") "\\uD800"
-                        Expect.equal (decodeStringEscape "\\U0000DFFF") (DecodedEscape.Text "\uFFFD") "\\U0000DFFF"
+                    test "A surrogate code point decodes to its half, which the literal pairs or replaces" {
+                        Expect.equal (decodeStringEscape "\\uD800") (DecodedEscape.Surrogate '\uD800') "\\uD800"
+                        Expect.equal (decodeStringEscape "\\U0000DFFF") (DecodedEscape.Surrogate '\uDFFF') "\\U0000DFFF"
+                    }
+
+                    test "A line continuation decodes to no text" {
+                        for raw in [ "\\\n"; "\\\n    "; "\\\r\n\t " ] do
+                            Expect.equal (decodeStringEscape raw) (DecodedEscape.Text "") $"%A{raw}"
                     }
 
                     test "An unknown or truncated escape stays raw text verbatim" {

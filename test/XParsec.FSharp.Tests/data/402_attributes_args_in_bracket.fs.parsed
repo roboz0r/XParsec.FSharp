@@ -1,5 +1,6 @@
 module               'module'          KWModule            tok=   0  pos=   0
                      'Test402'         Identifier          tok=   2  pos=   7
+type                 'type'            KWType              tok=  24  pos= 269
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok=  12  pos= 235
   NamedType:
@@ -29,6 +30,7 @@ TypeDefn.Anon:
       ParenBlock     '('               KWLParen            tok=  43  pos= 299
                      ')'               KWRParen            tok=  44  pos= 300
   end                <virt>            KWEnd               tok=virt  pos= 303
+type                 'type'            KWType              tok=  64  pos= 348
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok=  47  pos= 303
   NamedType:
@@ -64,6 +66,7 @@ TypeDefn.Anon:
       ParenBlock     '('               KWLParen            tok=  83  pos= 378
                      ')'               KWRParen            tok=  84  pos= 379
   end                <virt>            KWEnd               tok=virt  pos= 382
+type                 'type'            KWType              tok= 106  pos= 409
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok=  87  pos= 382
   NamedType:
@@ -99,6 +102,7 @@ TypeDefn.Anon:
       ParenBlock     '('               KWLParen            tok= 125  pos= 439
                      ')'               KWRParen            tok= 126  pos= 440
   end                <virt>            KWEnd               tok=virt  pos= 443
+type                 'type'            KWType              tok= 141  pos= 480
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok= 129  pos= 443
   NamedType:
@@ -149,6 +153,7 @@ FunctionOrValue:
   do                 'do'              KWDo                tok= 183  pos= 559
     ParenBlock       '('               KWLParen            tok= 185  pos= 562
                      ')'               KWRParen            tok= 186  pos= 563
+type                 'type'            KWType              tok= 200  pos= 601
 TypeDefn.Anon:
   [<                 '[<'              KWLAttrBracket      tok= 189  pos= 566
   NamedType:

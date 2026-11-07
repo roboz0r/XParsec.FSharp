@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                     'type'            KWType              tok=  10  pos= 347
 TypeDefn.Union:
   TypeName                               'MyDU'            Identifier          tok=  12  pos= 352
   =                                      '='               OpEquality          tok=  14  pos= 357
@@ -12,6 +13,7 @@ TypeDefn.Union:
       of                                 'of'              KWOf                tok=  30  pos= 382
       NamedType:
         Ident                            'int'             Identifier          tok=  32  pos= 385
+type                                     'type'            KWType              tok=  35  pos= 390
 TypeDefn.Record:
   TypeName                               'Record'          Identifier          tok=  37  pos= 395
   =                                      '='               OpEquality          tok=  39  pos= 402

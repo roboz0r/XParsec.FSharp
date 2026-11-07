@@ -1,0 +1,33 @@
+module               'module'          KWModule            tok=   0  pos=   0
+                     'MyModule'        Identifier          tok=   2  pos=   7
+type                 'type'            KWType              tok=  10  pos= 160
+TypeDefn.Anon:
+  TypeName           'D'               Identifier          tok=  12  pos= 165
+  =                  '='               OpEquality          tok=  14  pos= 167
+  begin              <virt>            KWBegin             tok=virt  pos= 173
+    AdditionalConstructor:
+      new            'new'             KWNew               tok=  17  pos= 173
+      ParenBlock     '('               KWLParen            tok=  18  pos= 176
+                     ')'               KWRParen            tok=  19  pos= 177
+      =              '='               OpEquality          tok=  21  pos= 179
+      Record         '{'               KWLBrace            tok=  23  pos= 181
+                     '}'               KWRBrace            tok=  24  pos= 182
+  end                <virt>            KWEnd               tok=virt  pos= 185
+FunctionOrValue:
+  let                'let'             KWLet               tok=  27  pos= 185
+    Pat.NamedSimple  's'               Identifier          tok=  29  pos= 189
+    ReturnColon      ':'               OpColon             tok=  30  pos= 190
+    GenericType:
+      Ident          'seq'             Identifier          tok=  32  pos= 192
+      <              '<'               op_LessThan         tok=  33  pos= 195
+      TypeArg.Type:
+        NamedType:
+          Ident      'int'             Identifier          tok=  34  pos= 196
+      >              '>'               op_GreaterThan      tok=  35  pos= 199
+    =                '='               OpEquality          tok=  37  pos= 201
+      App:
+        Func:
+          Ident      'seq'             Identifier          tok=  39  pos= 203
+        Args:
+          Record     '{'               KWLBrace            tok=  41  pos= 207
+                     '}'               KWRBrace            tok=  42  pos= 208

@@ -1,0 +1,16 @@
+0, LineComment
+100, Newline
+101, KWLet
+104, Whitespace
+105, Identifier
+106, Whitespace
+107, OpEquality
+108, Whitespace
+109, NumInt32
+110, Newline
+111, BlockCommentStart
+113, Whitespace (in comment)
+114, StringOpen (in comment)
+115, StringFragment (in comment)
+132, UnterminatedStringLiteral (in comment)
+132, EOF

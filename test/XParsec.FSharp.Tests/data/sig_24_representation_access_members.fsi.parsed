@@ -1,0 +1,74 @@
+module           'module'          KWModule            tok=   0  pos=   0
+                 'Representa...'   Identifier          tok=   2  pos=   7
+Type:
+  type           'type'            KWType              tok=  10  pos= 157
+  TypeSig.Record:
+    TypeName     'R'               Identifier          tok=  12  pos= 162
+    =            '='               OpEquality          tok=  14  pos= 164
+    access       'private'         KWPrivate           tok=  17  pos= 170
+    {            '{'               KWLBrace            tok=  20  pos= 186
+      Field:
+        ident    'X'               Identifier          tok=  23  pos= 200
+        :        ':'               OpColon             tok=  24  pos= 201
+        NamedType:
+          Ident  'int'             Identifier          tok=  26  pos= 203
+    }            '}'               KWRBrace            tok=  29  pos= 215
+    with         <virt>            KWWith              tok=virt  pos= 222
+      Member:
+        member   'member'          KWMember            tok=  33  pos= 222
+        Ident    'Y'               Identifier          tok=  35  pos= 229
+        :        ':'               OpColon             tok=  36  pos= 230
+        NamedType:
+          Ident  'int'             Identifier          tok=  38  pos= 232
+    end          <virt>            KWEnd               tok=virt  pos= 237
+Type:
+  type           'type'            KWType              tok=  41  pos= 237
+  TypeSig.Record:
+    TypeName     'R2'              Identifier          tok=  43  pos= 242
+    =            '='               OpEquality          tok=  45  pos= 245
+    access       'private'         KWPrivate           tok=  48  pos= 251
+    {            '{'               KWLBrace            tok=  50  pos= 259
+      Field:
+        ident    'X2'              Identifier          tok=  52  pos= 261
+        :        ':'               OpColon             tok=  53  pos= 263
+        NamedType:
+          Ident  'int'             Identifier          tok=  55  pos= 265
+    }            '}'               KWRBrace            tok=  57  pos= 269
+    with         <virt>            KWWith              tok=virt  pos= 275
+      Member:
+        member   'member'          KWMember            tok=  60  pos= 275
+        Ident    'Y'               Identifier          tok=  62  pos= 282
+        :        ':'               OpColon             tok=  63  pos= 283
+        NamedType:
+          Ident  'int'             Identifier          tok=  65  pos= 285
+    end          <virt>            KWEnd               tok=virt  pos= 290
+Type:
+  type           'type'            KWType              tok=  68  pos= 290
+  TypeSig.Union:
+    TypeName     'U'               Identifier          tok=  70  pos= 295
+    =            '='               OpEquality          tok=  72  pos= 297
+    access       'private'         KWPrivate           tok=  75  pos= 303
+      Case:
+        Ident    'A'               Identifier          tok=  80  pos= 321
+        of       'of'              KWOf                tok=  82  pos= 323
+        NamedType:
+          Ident  'int'             Identifier          tok=  84  pos= 326
+      Case:
+        Ident    'B'               Identifier          tok=  89  pos= 340
+    with         <virt>            KWWith              tok=virt  pos= 347
+      Member:
+        member   'member'          KWMember            tok=  93  pos= 347
+        Ident    'Y'               Identifier          tok=  95  pos= 354
+        :        ':'               OpColon             tok=  96  pos= 355
+        NamedType:
+          Ident  'int'             Identifier          tok=  98  pos= 357
+    end          <virt>            KWEnd               tok=virt  pos= 362
+Val:
+  val            'val'             KWVal               tok= 101  pos= 362
+  Ident          'make'            Identifier          tok= 103  pos= 366
+  :              ':'               OpColon             tok= 104  pos= 370
+  NamedType:
+    Ident        'int'             Identifier          tok= 106  pos= 372
+  ->             '->'              OpArrowRight        tok= 108  pos= 376
+  NamedType:
+    Ident        'R'               Identifier          tok= 110  pos= 379

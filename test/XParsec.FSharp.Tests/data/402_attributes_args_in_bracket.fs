@@ -1,7 +1,7 @@
 module Test402
 
 // `159_attributes_targets_and_multiple.fs` covers a bracket of argument-FREE attributes. Here
-// the leading attribute carries an argument, so `;` must still separate the bracket rather
+// the first attribute has a string argument, so `;` must still separate the bracket rather
 // than sequence the argument.
 
 [<CompiledName("first"); Sealed>]

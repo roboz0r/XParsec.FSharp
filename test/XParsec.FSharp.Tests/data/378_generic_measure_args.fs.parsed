@@ -1,23 +1,27 @@
 module                     'module'          KWModule            tok=   0  pos=   0
                            'Test'            Identifier          tok=   2  pos=   7
+type                       'type'            KWType              tok=  14  pos= 154
 TypeDefn.Abstract:
   [<                       '[<'              KWLAttrBracket      tok=  10  pos= 142
   NamedType:
     Ident                  'Measure'         Identifier          tok=  11  pos= 144
   >]                       '>]'              KWRAttrBracket      tok=  12  pos= 151
   TypeName                 'kg'              Identifier          tok=  16  pos= 159
+type                       'type'            KWType              tok=  23  pos= 175
 TypeDefn.Abstract:
   [<                       '[<'              KWLAttrBracket      tok=  19  pos= 163
   NamedType:
     Ident                  'Measure'         Identifier          tok=  20  pos= 165
   >]                       '>]'              KWRAttrBracket      tok=  21  pos= 172
   TypeName                 'm'               Identifier          tok=  25  pos= 180
+type                       'type'            KWType              tok=  32  pos= 195
 TypeDefn.Abstract:
   [<                       '[<'              KWLAttrBracket      tok=  28  pos= 183
   NamedType:
     Ident                  'Measure'         Identifier          tok=  29  pos= 185
   >]                       '>]'              KWRAttrBracket      tok=  30  pos= 192
   TypeName                 's'               Identifier          tok=  34  pos= 200
+type                       'type'            KWType              tok=  37  pos= 203
 TypeDefn.Record:
   TypeName                 'Vector'          Identifier          tok=  39  pos= 208
   TyparDefns:
@@ -217,6 +221,7 @@ FunctionOrValue:
                            ')'               KWRParen            tok= 230  pos= 940
     =                      '='               OpEquality          tok= 232  pos= 942
       Ident                'x'               Identifier          tok= 234  pos= 944
+type                       'type'            KWType              tok= 239  pos= 990
 TypeDefn.Record:
   TypeName                 'Pair'            Identifier          tok= 241  pos= 995
   TyparDefns:
@@ -278,6 +283,7 @@ FunctionOrValue:
         Types:
           VarType:
             Typar.Anon     '_'               Wildcard            tok= 296  pos=1099
+type                       'type'            KWType              tok= 302  pos=1143
 TypeDefn.Record:
   TypeName                 'FlipPair'        Identifier          tok= 304  pos=1148
   TyparDefns:

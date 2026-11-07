@@ -87,7 +87,7 @@ module Parsing =
             else
                 lexed.Tokens.LengthM - 1<_> // EOF, will be handled gracefully by nextSyntaxToken
 
-        // Create a slice of just the #if directive line, carrying the absolute start index
+        // Create a slice of just the #if directive line, retaining the absolute start index
         // so the IfExpr parser can compute absolute token indices for symbol name extraction.
         let sliceLen = (nextLineTokenIndex * 1< / token>) - reader.Index
         let sliceReader = reader.Slice(0, sliceLen, { AbsoluteStart = reader.Index })
@@ -151,38 +151,33 @@ module Parsing =
                 let text = lexed.GetTokenString(tIdx)
                 reader.Skip()
 
-                match token.Token with
-                | Token.NumInt32 ->
-                    match System.Int32.TryParse(text) with
-                    | true, n ->
+                let record (code: WarnCode voption) =
+                    match code with
+                    | ValueSome code ->
                         warnDirectives <-
                             {
                                 Line = currentLine
-                                WarningNumber = n
+                                Code = code
                                 Suppress = isSuppress
                             }
                             :: warnDirectives
+                    | ValueNone -> ()
+
+                match token.Token with
+                | Token.NumInt32 ->
+                    match System.Int32.TryParse(text) with
+                    | true, n -> record (ValueSome(WarnCode.FSharp n))
                     | _ -> ()
                 | Token.StringOpen ->
                     // String is now fragmented: StringOpen, StringFragment*, StringClose
-                    // Look for a single StringFragment containing the warning number
+                    // Look for a single StringFragment containing the warning code
                     if reader.Index < int nextLineTokenIndex then
                         match reader.Peek() with
                         | ValueSome fragToken when fragToken.Token = Token.StringFragment ->
                             let fragIdx = tokenIndex reader
                             let fragText = lexed.GetTokenString(fragIdx)
                             reader.Skip()
-
-                            match System.Int32.TryParse(fragText) with
-                            | true, n ->
-                                warnDirectives <-
-                                    {
-                                        Line = currentLine
-                                        WarningNumber = n
-                                        Suppress = isSuppress
-                                    }
-                                    :: warnDirectives
-                            | _ -> ()
+                            record (WarnCode.ofText fragText)
                         | _ -> ()
                 | _ -> ()
 
@@ -206,6 +201,47 @@ module Parsing =
             t1.StartIndex - t0.StartIndex
         else
             0
+
+    /// Checks if an operator has leading whitespace but no trailing whitespace (F# spec 3.8.1),
+    /// as in `f -x`, which makes a dual-use operator a prefix operator.
+    let isAdjacentPrefixOp (state: ParseState) (rawIndex: int<token>) =
+        let tokens = state.Lexed.Tokens
+
+        let rightAdjacent =
+            rawIndex + 1<token> < tokens.Length * 1<token>
+            && not (ParseState.isTriviaToken state tokens[rawIndex + 1<token>])
+
+        let leftSeparated =
+            rawIndex = 0<token>
+            || (rawIndex > 0<token>
+                && ParseState.isTriviaToken state tokens[rawIndex - 1<token>])
+
+        rightAdjacent && leftSeparated
+
+    let private isPrefixCapable (token: Token) =
+        match token with
+        | Token.OpAmp
+        | Token.OpAmpAmp -> true
+        | _ -> TokenInfo.isOperator token && TokenInfo.canBePrefix token
+
+    /// The operators that are both prefix and infix and that fsc treats as infix at the start of a
+    /// line (LexFilter `isInfix`): `+`/`-`-led operators and `&&`. `%`-, `&`- and `~`-led operators
+    /// start a new expression instead.
+    let private isDualUseInfixOperator (token: Token) =
+        match token with
+        | Token.OpAmpAmp -> true
+        | _ ->
+            TokenInfo.isOperator token
+            && TokenInfo.canBePrefix token
+            && TokenInfo.operatorPrecedence token = PrecedenceLevel.InfixAdd
+
+    /// Whether a dual-use operator at the start of a line continues the preceding expression as an
+    /// infix operator. An adjacent operator (`-x`, `&&x`) is a prefix operator and starts a new
+    /// expression.
+    let continuesAsInfixAtLineStart (state: ParseState) (token: SyntaxToken) =
+        match token.Index with
+        | TokenIndex.Regular rawIndex -> isDualUseInfixOperator token.Token && not (isAdjacentPrefixOp state rawIndex)
+        | TokenIndex.Virtual -> false
 
     /// Returns true if the token can appear as an infix operator in expressions.
     /// Used for the SeqBlock infix undentation exception (F# spec 15.1.9).
@@ -446,8 +482,13 @@ module Parsing =
 
             // --- 15.1.9: Exceptions to Offside Rules ---
 
-            // SeqBlock infix: an infix token may be offside by (tokenSize + 1)
-            elif current.Context = OffsideContext.SeqBlock && isInfixToken token then
+            // SeqBlock infix: an infix token may be offside by (tokenSize + 1). The exception
+            // excludes an adjacent prefix operator (`-x`, `&&x`).
+            elif
+                current.Context = OffsideContext.SeqBlock
+                && isInfixToken token
+                && not (isPrefixCapable token && isAdjacentPrefixOp state (int readerIndex * 1<token>))
+            then
                 let tokenLength = getTokenLength state (int readerIndex * 1<token>)
 
                 if tokenCol >= current.Indent - (tokenLength + 1) then
@@ -701,11 +742,6 @@ module Parsing =
     /// Allows parser to avoid re-skipping trivia tokens when it needs to look ahead at the next token to decide what to parse.
     let peekNextSyntaxToken (reader: Reader<PositionedToken, ParseState, _>) = nextSyntaxTokenImpl true reader
 
-    /// Emits a trace message. Use with `do!` inside a `parser { }` CE for debugging.
-    let trace (msg: string) (reader: Reader<PositionedToken, ParseState, _>) =
-        ParseState.ifTrace reader.State (fun tc -> tc.Message msg)
-        preturn () reader
-
     /// Consumes the given token, which must have been previously returned by `peekNextSyntaxToken`, and returns it.
     let consumePeeked (token: SyntaxToken) (reader: Reader<PositionedToken, ParseState, _>) =
         match token.Index with
@@ -790,7 +826,7 @@ module Parsing =
             | ValueNone -> ()
 
             // The substitute stands where `diagToken` does; past end of input that is
-            // offset 0, which is what `nowhere` carries.
+            // offset 0, which is the offset of `nowhere`.
             let pt = mkVirtualPT t diagToken.StartIndex
 
             ParseState.ifTrace reader.State (fun tc -> tc.VirtualToken(pt.Token, pt.StartIndex))
@@ -892,7 +928,7 @@ module Parsing =
         | Token.VerbatimEscapeQuote -> StringPart.Text t
         | Token.FormatPlaceholder -> StringPart.FormatSpecifier t
         // A malformed `%` (or run of `%`) in a plain / IL-intrinsic string is not a
-        // valid placeholder, so it is literal text — carried verbatim, NOT an error.
+        // valid placeholder, so it is literal text — kept verbatim, NOT an error.
         // The lexer scans `%` in every string flavor, so this is the one place to
         // keep it; only a printf-family consumer would interpret format validity.
         | Token.InvalidFormatPlaceholder
@@ -992,35 +1028,6 @@ module Parsing =
         let index = int reader.Index * 1<token>
         let indent = ParseState.getIndent state index
         preturn indent reader
-
-    /// Returns the column (0-based) of the next non-trivia token without consuming it.
-    /// Returns -1 at EOF.
-    let peekSyntaxIndent: FSParser<int> =
-        lookAhead (fun r ->
-            match nextSyntaxToken r with
-            | Error _ -> preturn -1 r
-            | Ok token ->
-                match token.Index with
-                | TokenIndex.Virtual -> preturn 0 r
-                | TokenIndex.Regular tokenIdx ->
-                    let indent = ParseState.getIndent r.State tokenIdx
-                    preturn indent r
-        )
-
-    /// Synthesises a VirtualSep (virtual `;`) token at the current reader position
-    /// without consuming any input.
-    let makeVirtualSep (reader: Reader<PositionedToken, ParseState, _>) =
-        match reader.Peek() with
-        | ValueNone -> fail EndOfInput reader
-        | ValueSome token ->
-            ParseState.ifTrace reader.State (fun tc -> tc.VirtualToken(Token.VirtualSep, token.StartIndex))
-
-            preturn
-                {
-                    PositionedToken = PositionedToken.Create(Token.VirtualSep, token.StartIndex)
-                    Index = TokenIndex.Virtual
-                }
-                reader
 
     /// Like nextSyntaxTokenVirtualIfNot but emits a UnclosedDelimiter diagnostic
     /// when the token must be synthesised.
@@ -1211,7 +1218,7 @@ module Parsing =
             | _ -> false
 
     /// THE placeholder shape `recoverWith` hands back: the node's own "missing" case when
-    /// the skip swallowed nothing, and its token-carrying case when it swallowed something,
+    /// the skip swallowed nothing, and its case holding the skipped tokens when it swallowed something,
     /// so the skipped tokens survive into the tree instead of vanishing from it.
     let missingOrSkipped (missing: 'Parsed) (skipsTokens: ImArr<SyntaxToken> -> 'Parsed) (toks: ImArr<SyntaxToken>) =
         match toks.Length with

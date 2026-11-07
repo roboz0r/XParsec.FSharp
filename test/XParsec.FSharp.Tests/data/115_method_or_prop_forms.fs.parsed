@@ -1,5 +1,6 @@
 module                       'module'          KWModule            tok=   0  pos=   0
                              'MethodOrPr...'   Identifier          tok=   2  pos=   7
+type                         'type'            KWType              tok=   5  pos=  26
 TypeDefn.Anon:
   TypeName                   'C'               Identifier          tok=   7  pos=  31
   (                          '('               KWLParen            tok=   8  pos=  32

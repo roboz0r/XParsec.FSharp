@@ -17,6 +17,7 @@ FunctionOrValue:
       Pat.NamedSimple  'x'               Identifier          tok=  19  pos=  71
     =                  '='               OpEquality          tok=  21  pos=  73
       Ident            'x'               Identifier          tok=  23  pos=  75
+type                   'type'            KWType              tok=  38  pos= 135
 TypeDefn.Anon:
   [<                   '[<'              KWLAttrBracket      tok=  26  pos=  78
   NamedType:

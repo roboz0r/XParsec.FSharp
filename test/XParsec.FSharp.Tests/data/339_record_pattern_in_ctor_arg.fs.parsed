@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                           'type'            KWType              tok=   4  pos= 134
 TypeDefn.Union:
   TypeName                                     'Kind'            Identifier          tok=   6  pos= 139
   =                                            '='               OpEquality          tok=   8  pos= 144
@@ -8,6 +9,7 @@ TypeDefn.Union:
       Ident                                    'Getter'          Identifier          tok=  14  pos= 153
     Case:
       Ident                                    'Setter'          Identifier          tok=  18  pos= 162
+type                                           'type'            KWType              tok=  20  pos= 169
 TypeDefn.Record:
   TypeName                                     'Flags'           Identifier          tok=  22  pos= 174
   =                                            '='               OpEquality          tok=  24  pos= 180
@@ -18,6 +20,7 @@ TypeDefn.Record:
       NamedType:
         Ident                                  'Kind'            Identifier          tok=  31  pos= 196
   }                                            '}'               KWRBrace            tok=  33  pos= 201
+type                                           'type'            KWType              tok=  35  pos= 203
 TypeDefn.Record:
   TypeName                                     'Data'            Identifier          tok=  37  pos= 208
   =                                            '='               OpEquality          tok=  39  pos= 213

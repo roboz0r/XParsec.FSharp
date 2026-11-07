@@ -28,6 +28,27 @@ module internal Indents =
     [<Literal>]
     let UseLineStarts = 255uy
 
+/// The part of a block comment that input ends in.
+[<RequireQualifiedAccess>]
+type CommentEnding =
+    /// Comment text (FS0516).
+    | Text
+    /// A string literal (FS0517).
+    | String
+    /// A verbatim string literal (FS0518).
+    | VerbatimString
+    /// A triple-quoted string literal (FS1233).
+    | TripleQuoteString
+
+/// A block comment still open at the end of input.
+[<Struct>]
+type UnclosedComment =
+    {
+        /// The index of the outermost `(*` token.
+        Opener: int<token>
+        Ending: CommentEnding
+    }
+
 [<CustomEquality; NoComparison>]
 type Lexed =
     {
@@ -37,6 +58,7 @@ type Lexed =
         Indents: ReadableArrayM<byte, token>
         /// Every symbol referenced by a `#if` directive in this file.
         MentionedDefines: Set<string>
+        UnclosedComment: UnclosedComment voption
     }
 
     // Lexing is a total function of `Input` and `lexString` is the only way you build one.
@@ -55,13 +77,6 @@ type Lexed =
     /// Creates a `ParseInput` by taking the intersection of `compilationDefines` and `MentionedDefines`
     member this.WithDefines(compilationDefines: Set<string>) =
         ParseInput(this, ActiveDefines(Set.intersect compilationDefines this.MentionedDefines))
-
-    member this.FirstTokenOnLine(lineIndex: int<line>) =
-        if lineIndex < 0<_> || int lineIndex >= this.LineStarts.Length then
-            invalidArg (nameof lineIndex) "Index out of range"
-
-        let tokenIndex = this.LineStarts[lineIndex]
-        this.Tokens[tokenIndex]
 
     member this.GetLineForToken(i: int<token>) =
         if i < 0<_> || int i >= this.Tokens.Length then
@@ -189,7 +204,7 @@ type Lexed =
     /// Token `i`'s text, with a backtick-escaped identifier read as the NAME it spells
     /// (`` ``my value`` `` ⇒ `my value`); every other token comes back verbatim, so this
     /// serves wherever `GetTokenString` does. F# emits the bare name to metadata, so a
-    /// consumer that reads a name through this one cannot carry the escape into an identity.
+    /// consumer that reads a name through this one never includes the escape in an identity.
     member this.GetTokenName(i: int<token>) : string =
         let tokens = this.Tokens
 
@@ -213,19 +228,6 @@ and [<NoComparison>] ParseInput =
     member this.ActiveDefines =
         let (ParseInput(_, activeDefines)) = this
         activeDefines
-
-// Format specifications for printf formats are strings with % markers
-// that indicate format. Format placeholders consist of %[flags][width][.precision][type]
-
-type InterpolationFlags =
-    {
-        // '0' '+' '-' ' '
-        // TODO: It's an error to have duplicate flags but not really a problem for lexing
-        Flags: string
-        PadZeros: bool
-        AlignLeft: bool
-        PositiveChar: char option
-    }
 
 [<RequireQualifiedAccess>]
 type FormatType =
@@ -293,12 +295,11 @@ type LexBuilder =
         Tokens: ReadableArrayBuilder<PositionedToken>
         mutable AtStartOfLine: bool
         Context: Stack<LexContext>
-        // Track whether we are inside a block comment
-        // These flags are used to mark tokens as being inside a block comment
-        // The lexer doesn't care if we are in a block comment or not
-        // but flagging tokens allows the parser or later stages to handle them easily
-        mutable IsInBlockComment: bool
-        mutable IsInOCamlBlockComment: bool
+        /// The nesting depth of block comments at the current position. Every token appended
+        /// while it is positive carries the `InComment` flag.
+        mutable CommentDepth: int
+        /// The index of the outermost open `(*` token while `CommentDepth` is positive.
+        mutable CommentOpener: int<token>
         mutable LastTokenWasNewLine: int<token> voption
         LineStarts: ReadableArrayBuilder<int<token>> // indices of tokens that start lines
         mutable MentionedDefines: Set<string>
@@ -337,26 +338,64 @@ module LexBuilder =
     let private estimateLineCapacity (sourceLength: int) =
         roundUpToPowerOf2 (max 16 (sourceLength / 32))
 
+    let inline isInComment (state: LexBuilder) = state.CommentDepth > 0
+
+    /// The non-interpolated string literal contexts, which are the only contexts comment text opens.
+    let private isPlainStringContext (ctx: LexContext) =
+        match ctx with
+        | LexContext.PlainString
+        | LexContext.VerbatimString
+        | LexContext.TripleQuotedString -> true
+        | _ -> false
+
+    /// Adds `token` with the `InComment` flag when the position is inside a block comment.
+    let addFlagged (token: Token) (idx: int) (state: LexBuilder) =
+        let token =
+            if isInComment state then
+                uint16 token ||| TokenRepresentation.InComment |> Token.ofUInt16
+            else
+                token
+
+        state.Tokens.Add(PositionedToken.Create(token, idx))
+
     let private emitUnterminatedStrings idx (state: LexBuilder) =
         // TODO: Handle other unclosed contexts (e.g. unterminated #if) — currently we just ignore them and let the parser handle any resulting errors
         // Stack enumerates top-to-bottom, matching the old list traversal from index 0.
         for ctx in state.Context do
             match ctx with
-            | LexContext.PlainString -> state.Tokens.Add(PositionedToken.Create(Token.UnterminatedStringLiteral, idx))
-            | LexContext.VerbatimString ->
-                state.Tokens.Add(PositionedToken.Create(Token.UnterminatedVerbatimStringLiteral, idx))
-            | LexContext.TripleQuotedString ->
-                state.Tokens.Add(PositionedToken.Create(Token.UnterminatedString3Literal, idx))
+            | LexContext.PlainString -> addFlagged Token.UnterminatedStringLiteral idx state
+            | LexContext.VerbatimString -> addFlagged Token.UnterminatedVerbatimStringLiteral idx state
+            | LexContext.TripleQuotedString -> addFlagged Token.UnterminatedString3Literal idx state
             | LexContext.InterpolatedString
             | LexContext.VerbatimInterpolatedString
-            | LexContext.Interpolated3String _ ->
-                state.Tokens.Add(PositionedToken.Create(Token.UnterminatedInterpolatedString, idx))
+            | LexContext.Interpolated3String _ -> addFlagged Token.UnterminatedInterpolatedString idx state
             | _ ->
                 // InterpolatedExpression, BracedExpression, ParenthesExpression, etc.
                 // are expression contexts nested inside an interpolated string — skip past them
                 ()
 
+    let private unclosedComment (state: LexBuilder) =
+        match state.CommentDepth with
+        | 0 -> ValueNone
+        | _ ->
+            let ending =
+                match state.Context.Count with
+                | 0 -> CommentEnding.Text
+                | _ ->
+                    match state.Context.Peek() with
+                    | LexContext.PlainString -> CommentEnding.String
+                    | LexContext.VerbatimString -> CommentEnding.VerbatimString
+                    | LexContext.TripleQuotedString -> CommentEnding.TripleQuoteString
+                    | _ -> CommentEnding.Text
+
+            ValueSome
+                {
+                    Opener = state.CommentOpener
+                    Ending = ending
+                }
+
     let complete idx (state: LexBuilder) =
+        let unclosed = unclosedComment state
         emitUnterminatedStrings idx state
         state.Tokens.Add(PositionedToken.Create(Token.EOF, idx))
         let tokens = ReadableArrayM(state.Tokens.ToReadableArray())
@@ -402,6 +441,7 @@ module LexBuilder =
             LineStarts = lineStarts
             Indents = indents
             MentionedDefines = state.MentionedDefines
+            UnclosedComment = unclosed
         }
 
     let init (input: string) =
@@ -414,8 +454,8 @@ module LexBuilder =
                 Tokens = ReadableArrayBuilder(tokenCapacity)
                 AtStartOfLine = true
                 Context = Stack<LexContext>()
-                IsInBlockComment = false
-                IsInOCamlBlockComment = false
+                CommentDepth = 0
+                CommentOpener = 0<token>
                 LastTokenWasNewLine = ValueNone
                 LineStarts = ReadableArrayBuilder(lineCapacity)
                 MentionedDefines = Set.empty
@@ -482,10 +522,6 @@ module LexBuilder =
             | Token.Whitespace
             | Token.BlockCommentStart
             | Token.BlockCommentEnd
-            | Token.StartFSharpBlockComment
-            | Token.EndFSharpBlockComment
-            | Token.StartOCamlBlockComment
-            | Token.EndOCamlBlockComment
             | Token.Newline
             | Token.Tab -> true
             | _ -> false
@@ -547,22 +583,20 @@ module LexBuilder =
 
 
         match token with
-        | Token.EndOCamlBlockComment -> state.IsInOCamlBlockComment <- false
-        | Token.BlockCommentEnd -> state.IsInBlockComment <- false
+        | Token.BlockCommentEnd when isInComment state -> state.CommentDepth <- state.CommentDepth - 1
         | _ -> ()
 
-        if addToken then
-            let token =
-                if state.IsInBlockComment || state.IsInOCamlBlockComment then
-                    uint16 token ||| TokenRepresentation.InComment |> Token.ofUInt16
-                else
-                    token
+        let commentText = isInComment state
 
-            state.Tokens.Add(PositionedToken.Create(token, idx))
+        if addToken then
+            addFlagged token idx state
 
         match token with
-        | Token.StartOCamlBlockComment -> state.IsInOCamlBlockComment <- true
-        | Token.BlockCommentStart -> state.IsInBlockComment <- true
+        | Token.BlockCommentStart ->
+            if not commentText then
+                state.CommentOpener <- tokenIdx
+
+            state.CommentDepth <- state.CommentDepth + 1
         | _ -> ()
 
         match state.LastTokenWasNewLine with
@@ -577,7 +611,11 @@ module LexBuilder =
             state.LastTokenWasNewLine <- ValueSome tokenIdx
         | _ -> state.AtStartOfLine <- false
 
+        // In comment text, only string literals push and pop contexts; brackets and quotations
+        // leave the context stack unchanged.
         match ctxOp with
+        | CtxOp.Push ctx
+        | CtxOp.Pop ctx when commentText && not (isPlainStringContext ctx) -> state
         | CtxOp.Push ctx -> pushContext ctx state
         | CtxOp.Pop ctx -> popExactContext ctx state
         | CtxOp.NoOp -> state
@@ -601,14 +639,7 @@ module internal Errors =
     // Centralized error messages. Explicit type annotations are mandatory: without
     // them the F# value restriction compiles each binding as a thunk that re-allocates
     // the `Message` every time it's accessed.
-    let expectedEndOfIdent = Message "Expected end of identifier"
-
-    let expectedNewline = Message "Expected newline"
-
     let expectedStringLiteral = Message "Expected string literal"
-
-    let expectedIdentStartChar: ErrorType<char, LexBuilder> =
-        Message "Expected identifier start character"
 
     let expectedBacktickedIdent: ErrorType<char, LexBuilder> =
         Message "Expected backticked identifier"
@@ -869,8 +900,6 @@ module Lexing =
 
     // let (><-*/=~%.&|@^!?:) a b = a + b
 
-    let private parenChars = [| '('; ')'; '{'; '}'; '['; ']' |]
-
     // Hoisted character predicates and counting/skipping sub-parsers.
     // These are allocated once at module initialization so each invocation of
     // a `parser { }` body that references them reuses the same closure instead
@@ -1046,12 +1075,6 @@ module Lexing =
 
         d
 
-    // 19.1 Conditional Compilation for ML Compatibility — these sentinel strings
-    // close an OCaml-compatibility block comment when encountered in identifier
-    // position.
-    let private fSharpBlockCommentEnd1 = "F#*)"
-    let private fSharpBlockCommentEnd2 = "ENDIF-FSHARP*)"
-
     // Scan an identifier body starting at `reader.Position` (caller has verified
     // the first char is an ident-start char — we consume it and the following
     // ident chars, then look up the resulting span in `keywordsDict`.
@@ -1068,8 +1091,10 @@ module Lexing =
         reader.Skip()
         let span = reader.PeekN(Int32.MaxValue)
         let mutable i = 0
+        // In comment text an identifier ends before an apostrophe.
+        let inComment = LexBuilder.isInComment reader.State
 
-        while i < span.Length && isIdentChar span.[i] do
+        while i < span.Length && isIdentChar span.[i] && not (inComment && span.[i] = '\'') do
             i <- i + 1
 
         reader.SkipN(i)
@@ -1121,33 +1146,6 @@ module Lexing =
 
         match reader.Peek() with
         | ValueNone -> fail EndOfInput reader
-        // Sentinel fast path: F#*) and ENDIF-FSHARP*) can only start with F or E.
-        // Skip the 2 long PeekN calls entirely for the 99%+ of identifiers that
-        // don't start with one of those letters.
-        | ValueSome 'F' ->
-            let peek1 = reader.PeekN(fSharpBlockCommentEnd1.Length)
-
-            if
-                peek1.Length = fSharpBlockCommentEnd1.Length
-                && peek1.SequenceEqual(fSharpBlockCommentEnd1.AsSpan())
-            then
-                reader.SkipN(fSharpBlockCommentEnd1.Length)
-                reader.State <- LexBuilder.append Token.EndFSharpBlockComment pos CtxOp.NoOp reader.State
-                Ok()
-            else
-                lexIdentifierBody reader pos source startIdx
-        | ValueSome 'E' ->
-            let peek2 = reader.PeekN(fSharpBlockCommentEnd2.Length)
-
-            if
-                peek2.Length = fSharpBlockCommentEnd2.Length
-                && peek2.SequenceEqual(fSharpBlockCommentEnd2.AsSpan())
-            then
-                reader.SkipN(fSharpBlockCommentEnd2.Length)
-                reader.State <- LexBuilder.append Token.EndFSharpBlockComment pos CtxOp.NoOp reader.State
-                Ok()
-            else
-                lexIdentifierBody reader pos source startIdx
         | ValueSome _ -> lexIdentifierBody reader pos source startIdx
 
 
@@ -1187,6 +1185,11 @@ module Lexing =
 
         match span.Length with
         | 0 -> fail EndOfInput reader
+        | _ when LexBuilder.isInComment reader.State ->
+            // A backtick in comment text is a single character.
+            reader.Skip()
+            reader.State <- LexBuilder.append Token.KWReservedBacktick pos CtxOp.NoOp reader.State
+            preturn () reader
         | 1 when span[0] = '`' ->
             reader.Skip()
             reader.State <- LexBuilder.append Token.UnterminatedBacktickedIdentifier pos CtxOp.NoOp reader.State
@@ -1208,11 +1211,6 @@ module Lexing =
                 preturn () reader
             | _ -> fail expectedBacktickedIdent reader
 
-
-    let peekNewLine (reader: Reader<char, LexBuilder, ReadableString>) =
-        match reader.Peek() with
-        | ValueSome('\n' | '\r') -> preturn () reader
-        | _ -> fail expectedNewline reader
 
     let pLineComment = pstring "//" >>. pSkipUntilNewline
     let pLineCommentToken = pToken pLineComment Token.LineComment
@@ -1363,27 +1361,30 @@ module Lexing =
                 | _ -> EscapeCode.Malformed
             | _ -> EscapeCode.Malformed
 
-    /// One string-context escape token, decoded. `Text` is the only case a well-formed
-    /// program produces; the other two denote no character and exist for the caller to
-    /// diagnose at the token.
+    /// One string-context escape token, decoded. `Text` and `Surrogate` are the cases a
+    /// well-formed program produces; the other two denote no character and exist for the
+    /// caller to diagnose at the token.
     [<RequireQualifiedAccess>]
     type DecodedEscape =
         /// The replacement text: the decoded character, a surrogate pair for an astral
-        /// `\UXXXXXXXX`, U+FFFD for a `\u`/`\U` in the surrogate range, or the raw text
-        /// verbatim for a malformed escape fsc keeps literally (`\q`, a truncated `\u12`).
+        /// `\UXXXXXXXX`, nothing for a line continuation, or the raw text verbatim for a
+        /// malformed escape fsc keeps literally (`\q`, a truncated `\u12`).
         | Text of text: string
+        /// A `\u`/`\U` in the surrogate range. It denotes `half` when the escape beside it in
+        /// the literal's decoded text supplies the other half of a pair, and U+FFFD otherwise.
+        | Surrogate of half: char
         /// `\DDD` above 255.
         | TrigraphOutOfRange
         /// `\UXXXXXXXX` above 0x10FFFF: fsc's error FS1245.
         | NotUnicodeScalar
 
     /// Decode one string-context escape token's text. Matches fsc's string-literal decoding
-    /// except for the two non-`Text` cases, which fsc wraps (FS1252) or refuses (FS1245).
+    /// except for the two error cases, which fsc wraps (FS1252) or refuses (FS1245).
     let decodeStringEscape (raw: string) : DecodedEscape =
         match decodeEscapeCode raw with
+        | _ when raw.Length >= 2 && raw.[0] = '\\' && (raw.[1] = '\n' || raw.[1] = '\r') -> DecodedEscape.Text ""
         | EscapeCode.Char c -> DecodedEscape.Text(string c)
-        // fsc substitutes U+FFFD for a lone surrogate in a string literal.
-        | EscapeCode.LoneSurrogate _ -> DecodedEscape.Text "\uFFFD"
+        | EscapeCode.LoneSurrogate c -> DecodedEscape.Surrogate c
         | EscapeCode.Astral codePoint -> DecodedEscape.Text(Char.ConvertFromUtf32 codePoint)
         | EscapeCode.TrigraphOutOfRange -> DecodedEscape.TrigraphOutOfRange
         | EscapeCode.NotUnicodeScalar -> DecodedEscape.NotUnicodeScalar
@@ -1525,6 +1526,30 @@ module Lexing =
             | 'f'
             | 'v' ->
                 reader.SkipN(2)
+                updateUserState (LexBuilder.append Token.EscapeSequence pos CtxOp.NoOp) reader
+            | '\n'
+            | '\r' ->
+                // A line continuation: the backslash, the line break and the leading spaces and tabs
+                // of the next line, which together denote no character.
+                let full = reader.PeekN(3)
+
+                let breakLength =
+                    if c1 = '\r' && full.Length = 3 && full.[2] = '\n' then
+                        3
+                    else
+                        2
+
+                reader.SkipN(breakLength)
+                let mutable indented = true
+
+                while indented do
+                    let next = reader.PeekN(1)
+
+                    if next.Length = 1 && (next.[0] = ' ' || next.[0] = '\t') then
+                        reader.Skip()
+                    else
+                        indented <- false
+
                 updateUserState (LexBuilder.append Token.EscapeSequence pos CtxOp.NoOp) reader
             | 'u' ->
                 // \uXXXX — consume when 4 hex digits follow, else the 2-char unknown-escape form
@@ -1865,10 +1890,9 @@ module Lexing =
 
                     while count > 1 do
                         // }} is an escape sequence for '}'
-                        // TODO: Investigate order of imperative operations in a while loop
+                        state <- LexBuilder.appendI Token.EscapeRBrace idx CtxOp.NoOp state
                         idx <- idx + 2
                         count <- count - 2
-                        state <- LexBuilder.appendI Token.EscapeRBrace idx CtxOp.NoOp state
 
                     state
                 )
@@ -2169,29 +2193,40 @@ module Lexing =
         // `exprCtxDispatchChars` fast-path. Mid-operator `:` IS consumed greedily by the
         // scan and the span is classified as `Token.ReservedOperator` by
         // `Token.ofCustomOperator` (per dotnet/fsharp#15923, unless the op starts with `>`).
-        // Inside a block comment we additionally truncate at `*)` to avoid crossing the
-        // close delimiter.
+        // Inside a block comment the span also ends before a `*)` close delimiter and before
+        // a verbatim string opener `@"`, which comment text recognises after any character.
         fun (reader: Reader<char, LexBuilder, ReadableString>) ->
             let state = reader.State
             let startIdx = reader.Position.Index
-            let inComment = state.IsInBlockComment || state.IsInOCamlBlockComment
 
             let fullSpan = reader.PeekN(Int32.MaxValue)
             let idx = fullSpan.IndexOfAnyExcept(customOperatorSearchValues)
             let rawLen = if idx < 0 then fullSpan.Length else idx
 
             let len =
-                if inComment then
-                    // Probe one char past rawLen to catch the `* | )` boundary case:
-                    // operator span ends at `*`, the char that stopped the scan is `)`.
+                if LexBuilder.isInComment state then
+                    // The probe extends one char past rawLen, because `)` and `"` end the scan.
                     let probeLen = min (rawLen + 1) fullSpan.Length
                     let probe = fullSpan.Slice(0, probeLen)
                     let starIdx = probe.IndexOf("*)".AsSpan())
+                    // A span starting with `@"` belongs to `pAtToken`; the search starts at index 1.
+                    let verbatimIdx =
+                        match probeLen with
+                        | 0 -> -1
+                        | _ ->
+                            match probe.Slice(1).IndexOf("@\"".AsSpan()) with
+                            | -1 -> -1
+                            | i -> i + 1
 
-                    if starIdx >= 0 && starIdx <= rawLen then
-                        starIdx
-                    else
-                        rawLen
+                    let mutable len = rawLen
+
+                    if starIdx >= 0 && starIdx < len then
+                        len <- starIdx
+
+                    if verbatimIdx >= 0 && verbatimIdx < len then
+                        len <- verbatimIdx
+
+                    len
                 else
                     rawLen
 
@@ -2240,12 +2275,6 @@ module Lexing =
             do! updateUserState (fun state -> LexBuilder.append token pos ctxOp state)
         }
 
-
-    // This is a fallback, we shouldn't see any Other tokens in output
-    let private peekEndOfIdent (reader: Reader<char, LexBuilder, ReadableString>) =
-        match reader.Peek() with
-        | ValueSome c when isIdentChar c -> fail expectedEndOfIdent reader
-        | _ -> preturn () reader
 
     // Any single char that doesn't start another token
     // Multiple OtherUnlexed tokens will be combined in the append step
@@ -2449,13 +2478,15 @@ module Lexing =
             | _ -> Token.ReservedNumericLiteral
 
         /// Consumes a run of identifier characters (the numeric-literal suffix)
-        /// and returns its span. Zero chars is a success.
+        /// and returns its span. Zero chars is a success. In comment text the run ends before an apostrophe.
         let inline private skipSuffixAndGetSpan (reader: Reader<char, LexBuilder, ReadableString>) =
             let startIdx = int reader.Position.Index
+            let inComment = LexBuilder.isInComment reader.State
             let mutable more = true
 
             while more do
                 match reader.Peek() with
+                | ValueSome '\'' when inComment -> more <- false
                 | ValueSome c when isIdentChar c -> reader.Skip()
                 | _ -> more <- false
 
@@ -2512,22 +2543,6 @@ module Lexing =
                     let! token = parseIntSuffixToken numBase
                     do! updateUserState (LexBuilder.append token pos CtxOp.NoOp)
             }
-
-    module Operator =
-        open System.Collections.Concurrent
-        let generatedNameCache = ConcurrentDictionary<string, string>()
-
-        let generateOperatorName (t: Token) (operatorText: string) =
-            if operatorText.Length = 0 then
-                invalidArg "operatorText" "Operator text cannot be empty."
-
-            if not t.IsOperator then
-                invalidArg "t" (sprintf "Token %A is not an operator token." t)
-
-            if t.IsKeyword then
-                operatorText // Keywords are not renamed
-            else
-                generatedNameCache.GetOrAdd(operatorText, (fun op -> OperatorData.nameOfSymbol op))
 
     [<AutoOpen>]
     module internal FormatStrings =
@@ -2589,12 +2604,8 @@ module Lexing =
                 preturn (struct (FormatType.Text, c)) reader
             | ValueSome c -> fail (Unexpected c) reader
 
-        // Parses the `[flags][width][.precision][type]` body that follows the
-        // `%`. Written as an explicit reader function (rather than a single
-        // allocated parser value) so it stays generic over the user state:
-        // the lexer runs it with `LexBuilder`, while the public
-        // `parseFormatSpecifier` reuses it with unit state — the format
-        // grammar therefore lives in exactly one place.
+        // Parses the `[flags][width][.precision][type]` body after `%` for both
+        // lexing and semantic analysis.
         let lFormatPlaceholder
             (reader: Reader<char, 'State, ReadableString>)
             : ParseResult<FormatPlaceholder, char, 'State> =
@@ -2625,8 +2636,8 @@ module Lexing =
         // TODO: consider caching the parsed `FormatPlaceholder` in a side-table
         // on `LexBuilder` (token index -> FormatPlaceholder) so downstream
         // consumers can read the structured spec without re-parsing
-        // via `parseFormatSpecifier`. Deferred deliberately: re-parsing a few
-        // short specifier strings on demand is plausibly cheaper than carrying
+        // via `parseFormatSpecifierView`. Deferred deliberately: re-parsing a few
+        // short specifier strings on demand is plausibly cheaper than storing
         // these records on every lexed token — measure before adding the table.
         // NOTE: any side-table indexed in lockstep with `Tokens` must also be fed by
         // `pFormatSpecifierTokens` below, whose local `addToken` bypasses `appendI`.
@@ -2641,16 +2652,7 @@ module Lexing =
                 let! pos = getPosition
                 let! percentCount = pPeekCountPercents
                 let! state = getUserState
-                let tokens = state.Tokens
-
-                let addToken (token: Token) (idx: int) =
-                    let token =
-                        if state.IsInBlockComment || state.IsInOCamlBlockComment then
-                            uint16 token ||| TokenRepresentation.InComment |> Token.ofUInt16
-                        else
-                            token
-
-                    tokens.Add(PositionedToken.Create(token, idx))
+                let addToken (token: Token) (idx: int) = LexBuilder.addFlagged token idx state
 
                 match LexBuilder.level state with
                 | 1 ->
@@ -2731,45 +2733,15 @@ module Lexing =
         | Ok placeholder -> ValueSome placeholder
         | Error _ -> ValueNone
 
-    /// Convenience overload of `parseFormatSpecifierView` for a specifier
-    /// already held as a `string` (e.g. tests). Wraps the string in a
-    /// `ReadableString` view; the body itself is still parsed in place.
-    let parseFormatSpecifier (specifier: string) : FormatPlaceholder voption =
-        parseFormatSpecifierView (ReadableString specifier)
-
-    let (|ExpressionCtx|_|) (ctx: LexContext) =
-        match ctx with
-        | LexContext.Normal
-        | LexContext.BracedExpression
-        | LexContext.BraceBarExpression
-        | LexContext.ParenthesExpression
-        | LexContext.BracketedExpression
-        | LexContext.QuotedExpression
-        | LexContext.TypedQuotedExpression
-        | LexContext.InterpolatedExpression -> true
-        | _ -> false
-
-    let (|NonInterpolatedExpressionCtx|_|) (ctx: LexContext) =
-        match ctx with
-        | LexContext.Normal
-        | LexContext.BracedExpression
-        | LexContext.BraceBarExpression
-        | LexContext.ParenthesExpression
-        | LexContext.BracketedExpression
-        | LexContext.QuotedExpression
-        | LexContext.TypedQuotedExpression -> true
-        | _ -> false
-
     let pTabToken = pToken (pchar '\t') Token.Tab
     let pCommaToken = pToken (pchar ',') Token.OpComma
 
     let pLParenToken =
-        // Dispatch on span[1]: `*` → block-comment / ML-compat prefixes, then (*) then (*;
-        //                     `#` → (# IL intrinsic; else (  expression open (hot path).
-        // For the `*` branch, PeekN(15) once and use span.StartsWith on each alternative
-        // rather than letting each pstring do its own PeekN.
+        // Dispatch on span[1]: `*` → (*) then (*; `#` → (# IL intrinsic; else ( expression open (hot path).
+        // The ML compatibility markers `(*IF-FSHARP`, `(*F#`, `(*IF-OCAML*)` and `(*ENDIF-OCAML*)` open
+        // ordinary block comments.
         fun (reader: Reader<char, LexBuilder, ReadableString>) ->
-            let span = reader.PeekN(15)
+            let span = reader.PeekN(3)
 
             if span.Length < 2 then
                 pOpenParenExpressionContext reader
@@ -2778,30 +2750,9 @@ module Lexing =
                 | '*' ->
                     let pos = reader.Position
 
-                    if span.StartsWith("(*ENDIF-OCAML*)".AsSpan()) then
-                        reader.SkipN(15)
-                        reader.State <- LexBuilder.append Token.EndOCamlBlockComment pos CtxOp.NoOp reader.State
-                        Ok()
-                    elif span.StartsWith("(*IF-OCAML*)".AsSpan()) then
-                        reader.SkipN(12)
-
-                        reader.State <- LexBuilder.append Token.StartOCamlBlockComment pos CtxOp.NoOp reader.State
-
-                        Ok()
-                    elif span.StartsWith("(*IF-FSHARP".AsSpan()) then
-                        reader.SkipN(11)
-
-                        reader.State <- LexBuilder.append Token.StartFSharpBlockComment pos CtxOp.NoOp reader.State
-
-                        Ok()
-                    elif span.StartsWith("(*F#".AsSpan()) then
-                        reader.SkipN(4)
-
-                        reader.State <- LexBuilder.append Token.StartFSharpBlockComment pos CtxOp.NoOp reader.State
-
-                        Ok()
-                    elif span.StartsWith("(*)".AsSpan()) then
-                        // Parenthesized * operator — emits 3 tokens (LParen, *, RParen).
+                    if span.Length = 3 && span.[2] = ')' then
+                        // Parenthesized * operator — emits 3 tokens (LParen, *, RParen). Inside a
+                        // comment it leaves the nesting depth unchanged.
                         let idx = int pos.Index
                         reader.SkipN(3)
 
@@ -2870,10 +2821,62 @@ module Lexing =
             else
                 pStringOpenToken reader
 
-    let pSingleQuoteToken =
+    let private pSingleQuoteOutsideComment =
         choiceL [ pCharToken; pTypeParamToken; pToken (pchar '\'') Token.KWSingleQuote ] "Single quote"
 
-    let pDollarToken =
+    /// The length of the character literal at the start of `span` under fsc's comment rule: one
+    /// character other than `\`, CR, LF, tab or backspace, or a simple escape, between apostrophes.
+    /// Zero when `span` starts with a lone apostrophe.
+    let private commentCharLength (span: ReadOnlySpan<char>) =
+        let single =
+            span.Length >= 3
+            && span.[2] = '\''
+            && match span.[1] with
+               | '\\'
+               | '\n'
+               | '\r'
+               | '\t'
+               | '\b' -> false
+               | _ -> true
+
+        let escaped =
+            span.Length >= 4
+            && span.[1] = '\\'
+            && span.[3] = '\''
+            && match span.[2] with
+               | '\\'
+               | '"'
+               | '\''
+               | 'a'
+               | 'f'
+               | 'v'
+               | 'n'
+               | 't'
+               | 'b'
+               | 'r' -> true
+               | _ -> false
+
+        if single then 3
+        elif escaped then 4
+        else 0
+
+    let pSingleQuoteToken =
+        fun (reader: Reader<char, LexBuilder, ReadableString>) ->
+            if LexBuilder.isInComment reader.State then
+                let pos = reader.Position
+
+                let token, length =
+                    match commentCharLength (reader.PeekN 4) with
+                    | 0 -> Token.KWSingleQuote, 1
+                    | n -> Token.CharLiteral, n
+
+                reader.SkipN length
+                reader.State <- LexBuilder.append token pos CtxOp.NoOp reader.State
+                Ok()
+            else
+                pSingleQuoteOutsideComment reader
+
+    let private pDollarOutsideComment =
         choiceL
             [
                 pInterpolated3StartToken
@@ -2884,12 +2887,25 @@ module Lexing =
             ]
             "Interpolated string or operator"
 
+    let pDollarToken =
+        // In comment text `$` is an operator char, and a following `"` opens a plain string.
+        fun (reader: Reader<char, LexBuilder, ReadableString>) ->
+            if LexBuilder.isInComment reader.State then
+                pOperatorToken reader
+            else
+                pDollarOutsideComment reader
+
     let pAtToken =
-        // @$" → verbatim interpolated; @" → verbatim string; else operator.
+        // @$" → verbatim interpolated, outside comments; @" → verbatim string; else operator.
         fun (reader: Reader<char, LexBuilder, ReadableString>) ->
             let span = reader.PeekN(3)
 
-            if span.Length >= 3 && span.[1] = '$' && span.[2] = '"' then
+            if
+                span.Length >= 3
+                && span.[1] = '$'
+                && span.[2] = '"'
+                && not (LexBuilder.isInComment reader.State)
+            then
                 pVerbatimInterpolatedStartToken reader
             elif span.Length >= 2 && span.[1] = '"' then
                 pVerbatimStringOpenToken reader
@@ -2899,10 +2915,7 @@ module Lexing =
     let pSlashToken =
         // 3.2 Comments — dispatch on next char instead of try/fallback via choiceL.
         fun (reader: Reader<char, LexBuilder, ReadableString>) ->
-            let state = reader.State
-            let inComment = state.IsInBlockComment || state.IsInOCamlBlockComment
-
-            if inComment then
+            if LexBuilder.isInComment reader.State then
                 // Inside a block comment, '/' is just an operator char (line comments don't exist).
                 pOperatorToken reader
             else
@@ -2958,7 +2971,7 @@ module Lexing =
                     Ok()
                 elif c0 = '|' && c1 = '}' then
                     pCloseBraceBarExpressionContext reader
-                elif c0 = '*' && c1 = ')' then
+                elif c0 = '*' && c1 = ')' && LexBuilder.isInComment reader.State then
                     let pos = reader.Position
                     reader.SkipN(2)
                     reader.State <- LexBuilder.append Token.BlockCommentEnd pos CtxOp.NoOp reader.State
@@ -3068,7 +3081,7 @@ module Lexing =
 
     let pHashToken =
         // #) (IL intrinsic close) wins outright; otherwise try directive (start-of-line
-        // check happens inside pDirectiveToken), fall back to bare #.
+        // check happens inside pDirectiveToken), fall back to bare #. In comment text `#` is always bare.
         fun (reader: Reader<char, LexBuilder, ReadableString>) ->
             let span = reader.PeekN(2)
             let pos = reader.Position
@@ -3076,6 +3089,10 @@ module Lexing =
             if span.Length >= 2 && span.[1] = ')' then
                 reader.SkipN(2)
                 reader.State <- LexBuilder.append Token.KWRHashParen pos CtxOp.NoOp reader.State
+                Ok()
+            elif LexBuilder.isInComment reader.State then
+                reader.Skip()
+                reader.State <- LexBuilder.append Token.KWHash pos CtxOp.NoOp reader.State
                 Ok()
             else
                 match pDirectiveToken reader with
@@ -3098,7 +3115,6 @@ module Lexing =
             else
                 pOpenBraceExpressionContext reader
 
-    // Fast-path dispatch for the dominant ExpressionCtx (non-Interpolated) bucket:
     // String.IndexOf(char) is SIMD-vectorized; a hit returns an index into the
     // parallel `exprCtxDispatchers` array. The pair list keeps the two in sync.
     //
@@ -3179,11 +3195,9 @@ module Lexing =
                 | LexContext.TypedQuotedExpression -> dispatchExprCtx c
 
                 | LexContext.InterpolatedExpression ->
-                    // Same as vanilla ExpressionCtx except `}` ends the expression
-                    // and `:` opens a format clause.
                     match c with
-                    | '}' -> pInterpolatedExpressionEndToken
-                    | ':' -> pInterpolatedFormatClause
+                    | '}' when not (LexBuilder.isInComment state) -> pInterpolatedExpressionEndToken
+                    | ':' when not (LexBuilder.isInComment state) -> pInterpolatedFormatClause
                     | _ -> dispatchExprCtx c
 
                 | LexContext.IfDirective ->

@@ -1,4 +1,5 @@
 AnonymousModule:
+type                         'type'            KWType              tok=  10  pos= 315
 TypeDefn.Anon:
   TypeName                   'Dependency...'   Identifier          tok=  12  pos= 320
   (                          '('               KWLParen            tok=  17  pos= 352
@@ -63,27 +64,29 @@ TypeDefn.Anon:
               Ident          'int'             Identifier          tok=  76  pos= 471
                              ')'               KWRParen            tok=  77  pos= 474
       =                      '='               OpEquality          tok=  79  pos= 476
-      new                    'new'             KWNew               tok=  81  pos= 478
-      NamedType:
-        Ident                'Dependency...'   Identifier          tok=  83  pos= 482
-      ParenBlock             '('               KWLParen            tok=  84  pos= 500
-        Tuple:
-          Ident              'a'               Identifier          tok=  85  pos= 501
-          Ident              'b'               Identifier          tok=  88  pos= 504
-          Const              'true'            KWTrue              tok=  91  pos= 507
+      New                    'new'             KWNew               tok=  81  pos= 478
+        NamedType:
+          Ident              'Dependency...'   Identifier          tok=  83  pos= 482
+        Arg:
+          ParenBlock         '('               KWLParen            tok=  84  pos= 500
+            Tuple:
+              Ident          'a'               Identifier          tok=  85  pos= 501
+              Ident          'b'               Identifier          tok=  88  pos= 504
+              Const          'true'            KWTrue              tok=  91  pos= 507
                              ')'               KWRParen            tok=  92  pos= 511
     AdditionalConstructor:
       new                    'new'             KWNew               tok=  96  pos= 518
       ParenBlock             '('               KWLParen            tok=  97  pos= 521
                              ')'               KWRParen            tok=  98  pos= 522
       =                      '='               OpEquality          tok= 100  pos= 524
-      new                    'new'             KWNew               tok= 102  pos= 526
-      NamedType:
-        Ident                'Dependency...'   Identifier          tok= 104  pos= 530
-      ParenBlock             '('               KWLParen            tok= 105  pos= 548
-        Tuple:
-          Const              '0'               NumInt32            tok= 106  pos= 549
-          Const              '0'               NumInt32            tok= 109  pos= 552
-          Const              'true'            KWTrue              tok= 112  pos= 555
+      New                    'new'             KWNew               tok= 102  pos= 526
+        NamedType:
+          Ident              'Dependency...'   Identifier          tok= 104  pos= 530
+        Arg:
+          ParenBlock         '('               KWLParen            tok= 105  pos= 548
+            Tuple:
+              Const          '0'               NumInt32            tok= 106  pos= 549
+              Const          '0'               NumInt32            tok= 109  pos= 552
+              Const          'true'            KWTrue              tok= 112  pos= 555
                              ')'               KWRParen            tok= 113  pos= 559
   end                        <virt>            KWEnd               tok=virt  pos= 561

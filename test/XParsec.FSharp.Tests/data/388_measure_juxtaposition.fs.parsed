@@ -1,23 +1,27 @@
 module               'module'          KWModule            tok=   0  pos=   0
                      'Test'            Identifier          tok=   2  pos=   7
+type                 'type'            KWType              tok=  28  pos= 668
 TypeDefn.Abstract:
   [<                 '[<'              KWLAttrBracket      tok=  24  pos= 656
   NamedType:
     Ident            'Measure'         Identifier          tok=  25  pos= 658
   >]                 '>]'              KWRAttrBracket      tok=  26  pos= 665
   TypeName           'kg'              Identifier          tok=  30  pos= 673
+type                 'type'            KWType              tok=  37  pos= 689
 TypeDefn.Abstract:
   [<                 '[<'              KWLAttrBracket      tok=  33  pos= 677
   NamedType:
     Ident            'Measure'         Identifier          tok=  34  pos= 679
   >]                 '>]'              KWRAttrBracket      tok=  35  pos= 686
   TypeName           'm'               Identifier          tok=  39  pos= 694
+type                 'type'            KWType              tok=  46  pos= 709
 TypeDefn.Abstract:
   [<                 '[<'              KWLAttrBracket      tok=  42  pos= 697
   NamedType:
     Ident            'Measure'         Identifier          tok=  43  pos= 699
   >]                 '>]'              KWRAttrBracket      tok=  44  pos= 706
   TypeName           's'               Identifier          tok=  48  pos= 714
+type                 'type'            KWType              tok=  57  pos= 756
 TypeDefn.Abbrev:
   [<                 '[<'              KWLAttrBracket      tok=  53  pos= 744
   NamedType:
@@ -29,6 +33,7 @@ TypeDefn.Abbrev:
       NamedType:
         Ident        'kg'              Identifier          tok=  63  pos= 767
       Ident          'm'               Identifier          tok=  65  pos= 770
+type                 'type'            KWType              tok=  74  pos= 812
 TypeDefn.Abbrev:
   [<                 '[<'              KWLAttrBracket      tok=  70  pos= 800
   NamedType:
@@ -42,6 +47,7 @@ TypeDefn.Abbrev:
           Ident      'kg'              Identifier          tok=  80  pos= 824
         Ident        'm'               Identifier          tok=  82  pos= 827
       Ident          's'               Identifier          tok=  84  pos= 829
+type                 'type'            KWType              tok=  93  pos= 894
 TypeDefn.Abbrev:
   [<                 '[<'              KWLAttrBracket      tok=  89  pos= 882
   NamedType:
@@ -59,6 +65,7 @@ TypeDefn.Abbrev:
                      '/'               OpDivision          tok= 103  pos= 916
         Measure.Named:
           Ident      's'               Identifier          tok= 105  pos= 918
+type                 'type'            KWType              tok= 114  pos= 977
 TypeDefn.Abbrev:
   [<                 '[<'              KWLAttrBracket      tok= 110  pos= 965
   NamedType:
@@ -75,6 +82,7 @@ TypeDefn.Abbrev:
                      '2'               NumInt32            tok= 122  pos= 990
         Measure.Named:
           Ident      's'               Identifier          tok= 124  pos= 992
+type                 'type'            KWType              tok= 133  pos=1046
 TypeDefn.Abbrev:
   [<                 '[<'              KWLAttrBracket      tok= 129  pos=1034
   NamedType:

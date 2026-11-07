@@ -1,4 +1,5 @@
 AnonymousModule:
+type                       'type'            KWType              tok=  35  pos= 949
 TypeDefn.Anon:
   TypeName                 'Builder'         Identifier          tok=  37  pos= 954
   =                        '='               OpEquality          tok=  39  pos= 962

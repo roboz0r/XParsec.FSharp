@@ -1,5 +1,6 @@
 module       'module'          KWModule            tok=   0  pos=   0
              'MyModule'        Identifier          tok=   2  pos=   7
+type         'type'            KWType              tok=   5  pos=  17
 TypeDefn.Abbrev:
   TypeName   'Alias'           Identifier          tok=   7  pos=  22
   TyparDefns:
@@ -13,6 +14,7 @@ TypeDefn.Abbrev:
         Typar.Named:
              ''T'              TypeParameter       tok=  14  pos=  34
       Ident  'list'            Identifier          tok=  16  pos=  37
+type         'type'            KWType              tok=  19  pos=  43
 TypeDefn.Abbrev:
   TypeName   'Pair'            Identifier          tok=  21  pos=  48
   TyparDefns:

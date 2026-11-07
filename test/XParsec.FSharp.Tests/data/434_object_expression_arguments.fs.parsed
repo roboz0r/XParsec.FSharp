@@ -1,0 +1,220 @@
+module                     'module'          KWModule            tok=   0  pos=   0
+                           'MyModule'        Identifier          tok=   2  pos=   7
+type                       'type'            KWType              tok=  10  pos= 202
+TypeDefn.Anon:
+  TypeName                 'B'               Identifier          tok=  12  pos= 207
+  (                        '('               KWLParen            tok=  13  pos= 208
+  Pat.Typed:
+    Pat.NamedSimple        'xs'              Identifier          tok=  14  pos= 209
+    Colon                  ':'               OpColon             tok=  15  pos= 211
+    ArrayType:
+      NamedType:
+        Ident              'int'             Identifier          tok=  17  pos= 213
+                           '['               KWLBracket          tok=  18  pos= 216
+                           ']'               KWRBracket          tok=  19  pos= 217
+  )                        ')'               KWRParen            tok=  20  pos= 218
+  =                        '='               OpEquality          tok=  22  pos= 220
+  begin                    <virt>            KWBegin             tok=virt  pos= 226
+    abstract               'abstract'        KWAbstract          tok=  25  pos= 226
+    Ident                  'M'               Identifier          tok=  27  pos= 235
+    :                      ':'               OpColon             tok=  28  pos= 236
+    NamedType:
+      Ident                'unit'            Identifier          tok=  30  pos= 238
+    ->                     '->'              OpArrowRight        tok=  32  pos= 243
+    NamedType:
+      Ident                'int'             Identifier          tok=  34  pos= 246
+    default                'default'         KWDefault           tok=  37  pos= 254
+    self                   '_'               Wildcard            tok=  39  pos= 262
+    Pat.NamedSimple        'M'               Identifier          tok=  41  pos= 264
+    Pats:
+      ParenBlock           '('               KWLParen            tok=  42  pos= 265
+                           ')'               KWRParen            tok=  43  pos= 266
+    =                      '='               OpEquality          tok=  45  pos= 268
+      Const                '1'               NumInt32            tok=  47  pos= 270
+    AdditionalConstructor:
+      new                  'new'             KWNew               tok=  50  pos= 276
+      ParenBlock           '('               KWLParen            tok=  51  pos= 279
+        Pat.Typed:
+          Pat.NamedSimple  'n'               Identifier          tok=  52  pos= 280
+          Colon            ':'               OpColon             tok=  53  pos= 281
+          NamedType:
+            Ident          'int'             Identifier          tok=  55  pos= 283
+                           ')'               KWRParen            tok=  56  pos= 286
+      =                    '='               OpEquality          tok=  58  pos= 288
+      HighPrecedenceApp:
+        Func:
+          Ident            'B'               Identifier          tok=  60  pos= 290
+        (                  '('               KWLParen            tok=  61  pos= 291
+        Arg:
+          Array            '[|'              KWLArrayBracket     tok=  62  pos= 292
+                           '|]'              KWRArrayBracket     tok=  63  pos= 294
+                           ')'               KWRParen            tok=  64  pos= 296
+  end                      <virt>            KWEnd               tok=virt  pos= 299
+FunctionOrValue:
+  let                      'let'             KWLet               tok=  67  pos= 299
+    Pat.NamedSimple        'a'               Identifier          tok=  69  pos= 303
+    =                      '='               OpEquality          tok=  71  pos= 305
+      ObjectExpr:
+        {                  '{'               KWLBrace            tok=  73  pos= 307
+        new                'new'             KWNew               tok=  75  pos= 309
+        NamedType:
+          Ident            'B'               Identifier          tok=  77  pos= 313
+        Array              '[|'              KWLArrayBracket     tok=  79  pos= 315
+          Const            '1'               NumInt32            tok=  80  pos= 317
+                           '|]'              KWRArrayBracket     tok=  81  pos= 318
+        with               'with'            KWWith              tok=  83  pos= 321
+          member           'member'          KWMember            tok=  85  pos= 326
+          self             '_'               Wildcard            tok=  87  pos= 333
+          Pat.NamedSimple  'M'               Identifier          tok=  89  pos= 335
+          Pats:
+            ParenBlock     '('               KWLParen            tok=  90  pos= 336
+                           ')'               KWRParen            tok=  91  pos= 337
+          =                '='               OpEquality          tok=  93  pos= 339
+            Const          '2'               NumInt32            tok=  95  pos= 341
+        end                <virt>            KWEnd               tok=virt  pos= 343
+        }                  '}'               KWRBrace            tok=  97  pos= 343
+FunctionOrValue:
+  let                      'let'             KWLet               tok=  99  pos= 345
+    Pat.NamedSimple        'c'               Identifier          tok= 101  pos= 349
+    =                      '='               OpEquality          tok= 103  pos= 351
+      ComputationBlock     '{'               KWLBrace            tok= 105  pos= 353
+        New                'new'             KWNew               tok= 107  pos= 355
+          NamedType:
+            Ident          'B'               Identifier          tok= 109  pos= 359
+          Arg:
+            Array          '[|'              KWLArrayBracket     tok= 111  pos= 361
+              Const        '1'               NumInt32            tok= 112  pos= 363
+                           '|]'              KWRArrayBracket     tok= 113  pos= 364
+                           '}'               KWRBrace            tok= 115  pos= 367
+FunctionOrValue:
+  let                      'let'             KWLet               tok= 117  pos= 369
+    Pat.NamedSimple        'd'               Identifier          tok= 119  pos= 373
+    =                      '='               OpEquality          tok= 121  pos= 375
+      ComputationBlock     '{'               KWLBrace            tok= 123  pos= 377
+        New                'new'             KWNew               tok= 125  pos= 379
+          NamedType:
+            Ident          'B'               Identifier          tok= 127  pos= 383
+          Arg:
+            ParenBlock     '('               KWLParen            tok= 128  pos= 384
+              Const        '1'               NumInt32            tok= 129  pos= 385
+                           ')'               KWRParen            tok= 130  pos= 386
+                           '}'               KWRBrace            tok= 132  pos= 388
+FunctionOrValue:
+  let                      'let'             KWLet               tok= 134  pos= 390
+    Pat.NamedSimple        'e'               Identifier          tok= 136  pos= 394
+    =                      '='               OpEquality          tok= 138  pos= 396
+      ComputationBlock     '{'               KWLBrace            tok= 140  pos= 398
+        New                'new'             KWNew               tok= 142  pos= 400
+          NamedType:
+            Ident          'obj'             Identifier          tok= 144  pos= 404
+          Arg:
+            ParenBlock     '('               KWLParen            tok= 145  pos= 407
+                           ')'               KWRParen            tok= 146  pos= 408
+                           '}'               KWRBrace            tok= 148  pos= 410
+type                       'type'            KWType              tok= 151  pos= 413
+TypeDefn.Anon:
+  TypeName                 'C'               Identifier          tok= 153  pos= 418
+  (                        '('               KWLParen            tok= 154  pos= 419
+  Pat.Typed:
+    Pat.NamedSimple        'xs'              Identifier          tok= 155  pos= 420
+    Colon                  ':'               OpColon             tok= 156  pos= 422
+    ArrayType:
+      NamedType:
+        Ident              'int'             Identifier          tok= 158  pos= 424
+                           '['               KWLBracket          tok= 159  pos= 427
+                           ']'               KWRBracket          tok= 160  pos= 428
+  )                        ')'               KWRParen            tok= 161  pos= 429
+  =                        '='               OpEquality          tok= 163  pos= 431
+  begin                    <virt>            KWBegin             tok=virt  pos= 437
+    member                 'member'          KWMember            tok= 166  pos= 437
+    self                   '_'               Wildcard            tok= 168  pos= 444
+    Pat.NamedSimple        'Xs'              Identifier          tok= 170  pos= 446
+    =                      '='               OpEquality          tok= 172  pos= 449
+      Ident                'xs'              Identifier          tok= 174  pos= 451
+  end                      <virt>            KWEnd               tok=virt  pos= 455
+type                       'type'            KWType              tok= 177  pos= 455
+TypeDefn.Anon:
+  TypeName                 'G'               Identifier          tok= 179  pos= 460
+  TyparDefns:
+    <                      '<'               op_LessThan         tok= 180  pos= 461
+    Typar.Named:
+                           ''T'              TypeParameter       tok= 181  pos= 462
+    >                      '>'               op_GreaterThan      tok= 182  pos= 464
+  (                        '('               KWLParen            tok= 183  pos= 465
+  Pat.Typed:
+    Pat.NamedSimple        'xs'              Identifier          tok= 184  pos= 466
+    Colon                  ':'               OpColon             tok= 185  pos= 468
+    ArrayType:
+      VarType:
+        Typar.Named:
+                           ''T'              TypeParameter       tok= 187  pos= 470
+                           '['               KWLBracket          tok= 188  pos= 472
+                           ']'               KWRBracket          tok= 189  pos= 473
+  )                        ')'               KWRParen            tok= 190  pos= 474
+  =                        '='               OpEquality          tok= 192  pos= 476
+  begin                    <virt>            KWBegin             tok=virt  pos= 482
+    member                 'member'          KWMember            tok= 195  pos= 482
+    self                   '_'               Wildcard            tok= 197  pos= 489
+    Pat.NamedSimple        'Xs'              Identifier          tok= 199  pos= 491
+    =                      '='               OpEquality          tok= 201  pos= 494
+      Ident                'xs'              Identifier          tok= 203  pos= 496
+  end                      <virt>            KWEnd               tok=virt  pos= 500
+FunctionOrValue:
+  let                      'let'             KWLet               tok= 206  pos= 500
+    Pat.NamedSimple        'f'               Identifier          tok= 208  pos= 504
+    =                      '='               OpEquality          tok= 210  pos= 506
+      New                  'new'             KWNew               tok= 212  pos= 508
+        NamedType:
+          Ident            'C'               Identifier          tok= 214  pos= 512
+        Arg:
+          Array            '[|'              KWLArrayBracket     tok= 216  pos= 514
+                           '|]'              KWRArrayBracket     tok= 217  pos= 516
+FunctionOrValue:
+  let                      'let'             KWLet               tok= 219  pos= 519
+    Pat.NamedSimple        'g'               Identifier          tok= 221  pos= 523
+    =                      '='               OpEquality          tok= 223  pos= 525
+      New                  'new'             KWNew               tok= 225  pos= 527
+        GenericType:
+          Ident            'G'               Identifier          tok= 227  pos= 531
+          <                '<'               op_LessThan         tok= 228  pos= 532
+          TypeArg.Type:
+            NamedType:
+              Ident        'int'             Identifier          tok= 229  pos= 533
+          >                '>'               op_GreaterThan      tok= 230  pos= 536
+        Arg:
+          Array            '[|'              KWLArrayBracket     tok= 232  pos= 538
+                           '|]'              KWRArrayBracket     tok= 233  pos= 540
+type                       'type'            KWType              tok= 236  pos= 544
+TypeDefn.Anon:
+  TypeName                 'D'               Identifier          tok= 238  pos= 549
+  =                        '='               OpEquality          tok= 240  pos= 551
+  begin                    <virt>            KWBegin             tok=virt  pos= 557
+    inherit                'inherit'         KWInherit           tok= 243  pos= 557
+    NamedType:
+      Ident                'C'               Identifier          tok= 245  pos= 565
+    AdditionalConstructor:
+      new                  'new'             KWNew               tok= 248  pos= 571
+      ParenBlock           '('               KWLParen            tok= 249  pos= 574
+                           ')'               KWRParen            tok= 250  pos= 575
+      =                    '='               OpEquality          tok= 252  pos= 577
+      Record               '{'               KWLBrace            tok= 254  pos= 579
+        inherit            'inherit'         KWInherit           tok= 256  pos= 581
+        NamedType:
+          Ident            'C'               Identifier          tok= 258  pos= 589
+        Array              '[|'              KWLArrayBracket     tok= 260  pos= 591
+                           '|]'              KWRArrayBracket     tok= 261  pos= 593
+                           '}'               KWRBrace            tok= 263  pos= 596
+  end                      <virt>            KWEnd               tok=virt  pos= 599
+type                       'type'            KWType              tok= 266  pos= 599
+TypeDefn.Anon:
+  TypeName                 'E'               Identifier          tok= 268  pos= 604
+  (                        '('               KWLParen            tok= 269  pos= 605
+  )                        ')'               KWRParen            tok= 270  pos= 606
+  =                        '='               OpEquality          tok= 272  pos= 608
+  begin                    <virt>            KWBegin             tok=virt  pos= 614
+    inherit                'inherit'         KWInherit           tok= 275  pos= 614
+    NamedType:
+      Ident                'C'               Identifier          tok= 277  pos= 622
+    Array                  '[|'              KWLArrayBracket     tok= 279  pos= 624
+                           '|]'              KWRArrayBracket     tok= 280  pos= 626
+  end                      <virt>            KWEnd               tok=virt  pos= 629

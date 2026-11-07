@@ -1,0 +1,338 @@
+module                       'module'          KWModule            tok=   0  pos=   0
+                             'Attributes...'   Identifier          tok=   2  pos=   7
+FunctionOrValue:
+  let                        'let'             KWLet               tok=   5  pos=  27
+    [<                       '[<'              KWLAttrBracket      tok=   7  pos=  31
+    NamedType:
+      Ident                  'A'               Identifier          tok=   8  pos=  33
+    >]                       '>]'              KWRAttrBracket      tok=   9  pos=  34
+    Pat.NamedSimple          'f'               Identifier          tok=  11  pos=  37
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok=  13  pos=  39
+    =                        '='               OpEquality          tok=  15  pos=  41
+      InfixApp               '+'               op_Addition         tok=  19  pos=  45
+        Ident                'x'               Identifier          tok=  17  pos=  43
+        Const                '1'               NumInt32            tok=  21  pos=  47
+FunctionOrValue:
+  let                        'let'             KWLet               tok=  24  pos=  50
+  rec                        'rec'             KWRec               tok=  26  pos=  54
+    [<                       '[<'              KWLAttrBracket      tok=  28  pos=  58
+    NamedType:
+      Ident                  'A'               Identifier          tok=  29  pos=  60
+    >]                       '>]'              KWRAttrBracket      tok=  30  pos=  61
+    Pat.NamedSimple          'g'               Identifier          tok=  32  pos=  64
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok=  34  pos=  66
+    =                        '='               OpEquality          tok=  36  pos=  68
+      App:
+        Func:
+          Ident              'h'               Identifier          tok=  38  pos=  70
+        Args:
+          Ident              'x'               Identifier          tok=  40  pos=  72
+    and                      'and'             KWAnd               tok=  42  pos=  74
+    [<                       '[<'              KWLAttrBracket      tok=  44  pos=  78
+    NamedType:
+      Ident                  'B'               Identifier          tok=  45  pos=  80
+    >]                       '>]'              KWRAttrBracket      tok=  46  pos=  81
+    Pat.NamedSimple          'h'               Identifier          tok=  48  pos=  84
+    Pats:
+      Pat.NamedSimple        'y'               Identifier          tok=  50  pos=  86
+    =                        '='               OpEquality          tok=  52  pos=  88
+      App:
+        Func:
+          Ident              'g'               Identifier          tok=  54  pos=  90
+        Args:
+          Ident              'y'               Identifier          tok=  56  pos=  92
+FunctionOrValue:
+  let                        'let'             KWLet               tok=  59  pos=  95
+    [<                       '[<'              KWLAttrBracket      tok=  61  pos=  99
+    NamedType:
+      Ident                  'A'               Identifier          tok=  62  pos= 101
+    >]                       '>]'              KWRAttrBracket      tok=  63  pos= 102
+    access                   'internal'        KWInternal          tok=  65  pos= 105
+    Pat.NamedSimple          'fi'              Identifier          tok=  67  pos= 114
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok=  69  pos= 117
+    =                        '='               OpEquality          tok=  71  pos= 119
+      Ident                  'x'               Identifier          tok=  73  pos= 121
+FunctionOrValue:
+  let                        'let'             KWLet               tok=  76  pos= 124
+    [<                       '[<'              KWLAttrBracket      tok=  78  pos= 128
+    NamedType:
+      Ident                  'Literal'         Identifier          tok=  79  pos= 130
+    >]                       '>]'              KWRAttrBracket      tok=  80  pos= 137
+    Pat.NamedSimple          'Lit'             Identifier          tok=  82  pos= 140
+    =                        '='               OpEquality          tok=  84  pos= 144
+      Const                  '3'               NumInt32            tok=  86  pos= 146
+FunctionOrValue:
+  let                        'let'             KWLet               tok=  89  pos= 149
+    [<                       '[<'              KWLAttrBracket      tok=  91  pos= 153
+    NamedType:
+      Ident                  'A'               Identifier          tok=  92  pos= 155
+    >]                       '>]'              KWRAttrBracket      tok=  93  pos= 156
+    inline                   'inline'          KWInline            tok=  95  pos= 159
+    Pat.NamedSimple          'fin'             Identifier          tok=  97  pos= 166
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok=  99  pos= 170
+    =                        '='               OpEquality          tok= 101  pos= 172
+      Ident                  'x'               Identifier          tok= 103  pos= 174
+FunctionOrValue:
+  let                        'let'             KWLet               tok= 106  pos= 177
+    [<                       '[<'              KWLAttrBracket      tok= 108  pos= 181
+    NamedType:
+      Ident                  'A'               Identifier          tok= 109  pos= 183
+    >]                       '>]'              KWRAttrBracket      tok= 110  pos= 184
+    mutable                  'mutable'         KWMutable           tok= 112  pos= 187
+    Pat.NamedSimple          'mx'              Identifier          tok= 114  pos= 195
+    =                        '='               OpEquality          tok= 116  pos= 198
+      Const                  '1'               NumInt32            tok= 118  pos= 200
+FunctionOrValue:
+  let                        'let'             KWLet               tok= 121  pos= 203
+    [<                       '[<'              KWLAttrBracket      tok= 123  pos= 207
+    NamedType:
+      Ident                  'A'               Identifier          tok= 124  pos= 209
+    >]                       '>]'              KWRAttrBracket      tok= 125  pos= 210
+    access                   'private'         KWPrivate           tok= 127  pos= 213
+    Pat.NamedSimple          'fp'              Identifier          tok= 129  pos= 221
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 131  pos= 224
+    =                        '='               OpEquality          tok= 133  pos= 226
+      Ident                  'x'               Identifier          tok= 135  pos= 228
+FunctionOrValue:
+  let                        'let'             KWLet               tok= 138  pos= 231
+    [<                       '[<'              KWLAttrBracket      tok= 140  pos= 235
+    NamedType:
+      Ident                  'A'               Identifier          tok= 141  pos= 237
+    >]                       '>]'              KWRAttrBracket      tok= 142  pos= 238
+    Pat.Op:
+      ParenOp:
+                             '('               KWLParen            tok= 144  pos= 241
+        ActivePatternOp:
+          ActivePatternOp:
+                             '|'               OpBar               tok= 145  pos= 242
+                             'P'               Identifier          tok= 146  pos= 243
+                             '_'               Wildcard            tok= 148  pos= 245
+                             '|'               OpBar               tok= 149  pos= 246
+                             ')'               KWRParen            tok= 150  pos= 247
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 152  pos= 249
+    =                        '='               OpEquality          tok= 154  pos= 251
+      App:
+        Func:
+          Ident              'Some'            Identifier          tok= 156  pos= 253
+        Args:
+          Ident              'x'               Identifier          tok= 158  pos= 258
+FunctionOrValue:
+  let                        'let'             KWLet               tok= 161  pos= 261
+    [<                       '[<'              KWLAttrBracket      tok= 163  pos= 265
+    NamedType:
+      Ident                  'A'               Identifier          tok= 164  pos= 267
+    >]                       '>]'              KWRAttrBracket      tok= 165  pos= 268
+    [<                       '[<'              KWLAttrBracket      tok= 167  pos= 271
+    NamedType:
+      Ident                  'B'               Identifier          tok= 168  pos= 273
+    >]                       '>]'              KWRAttrBracket      tok= 169  pos= 274
+    Pat.NamedSimple          'fm'              Identifier          tok= 171  pos= 277
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 173  pos= 280
+    =                        '='               OpEquality          tok= 175  pos= 282
+      Ident                  'x'               Identifier          tok= 177  pos= 284
+FunctionOrValue:
+  let                        'let'             KWLet               tok= 180  pos= 287
+    [<                       '[<'              KWLAttrBracket      tok= 182  pos= 291
+    NamedType:
+      Ident                  'A'               Identifier          tok= 183  pos= 293
+    ;                        ';'               OpSemicolon         tok= 184  pos= 294
+    NamedType:
+      Ident                  'B'               Identifier          tok= 186  pos= 296
+    >]                       '>]'              KWRAttrBracket      tok= 187  pos= 297
+    Pat.Tuple:
+      Pat.NamedSimple        'a'               Identifier          tok= 189  pos= 300
+      ,                      ','               OpComma             tok= 190  pos= 301
+      Pat.NamedSimple        'b'               Identifier          tok= 192  pos= 303
+    =                        '='               OpEquality          tok= 194  pos= 305
+      Tuple:
+        Const                '1'               NumInt32            tok= 196  pos= 307
+        Const                '2'               NumInt32            tok= 199  pos= 310
+FunctionOrValue:
+  [<                         '[<'              KWLAttrBracket      tok= 202  pos= 313
+  NamedType:
+    Ident                    'A'               Identifier          tok= 203  pos= 315
+  >]                         '>]'              KWRAttrBracket      tok= 204  pos= 316
+  let                        'let'             KWLet               tok= 206  pos= 319
+    [<                       '[<'              KWLAttrBracket      tok= 208  pos= 323
+    NamedType:
+      Ident                  'B'               Identifier          tok= 209  pos= 325
+    >]                       '>]'              KWRAttrBracket      tok= 210  pos= 326
+    Pat.NamedSimple          'both'            Identifier          tok= 212  pos= 329
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 214  pos= 334
+    =                        '='               OpEquality          tok= 216  pos= 336
+      Ident                  'x'               Identifier          tok= 218  pos= 338
+FunctionOrValue:
+  [<                         '[<'              KWLAttrBracket      tok= 221  pos= 341
+  NamedType:
+    Ident                    'A'               Identifier          tok= 222  pos= 343
+  >]                         '>]'              KWRAttrBracket      tok= 223  pos= 344
+  let                        'let'             KWLet               tok= 225  pos= 347
+  rec                        'rec'             KWRec               tok= 227  pos= 351
+    [<                       '[<'              KWLAttrBracket      tok= 229  pos= 355
+    NamedType:
+      Ident                  'B'               Identifier          tok= 230  pos= 357
+    >]                       '>]'              KWRAttrBracket      tok= 231  pos= 358
+    Pat.NamedSimple          'first'           Identifier          tok= 233  pos= 361
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 235  pos= 367
+    =                        '='               OpEquality          tok= 237  pos= 369
+      App:
+        Func:
+          Ident              'second'          Identifier          tok= 239  pos= 371
+        Args:
+          Ident              'x'               Identifier          tok= 241  pos= 378
+    and                      'and'             KWAnd               tok= 243  pos= 380
+    Pat.NamedSimple          'second'          Identifier          tok= 245  pos= 384
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 247  pos= 391
+    =                        '='               OpEquality          tok= 249  pos= 393
+      App:
+        Func:
+          Ident              'first'           Identifier          tok= 251  pos= 395
+        Args:
+          Ident              'x'               Identifier          tok= 253  pos= 401
+type                         'type'            KWType              tok= 256  pos= 404
+TypeDefn.Anon:
+  TypeName                   'C'               Identifier          tok= 258  pos= 409
+  (                          '('               KWLParen            tok= 259  pos= 410
+  )                          ')'               KWRParen            tok= 260  pos= 411
+  =                          '='               OpEquality          tok= 262  pos= 413
+  begin                      <virt>            KWBegin             tok=virt  pos= 419
+    let                      'let'             KWLet               tok= 265  pos= 419
+    [<                       '[<'              KWLAttrBracket      tok= 267  pos= 423
+    NamedType:
+      Ident                  'A'               Identifier          tok= 268  pos= 425
+    >]                       '>]'              KWRAttrBracket      tok= 269  pos= 426
+    Pat.NamedSimple          'cf'              Identifier          tok= 271  pos= 429
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 273  pos= 432
+    =                        '='               OpEquality          tok= 275  pos= 434
+      Ident                  'x'               Identifier          tok= 277  pos= 436
+    static                   'static'          KWStatic            tok= 280  pos= 442
+    let                      'let'             KWLet               tok= 282  pos= 449
+    [<                       '[<'              KWLAttrBracket      tok= 284  pos= 453
+    NamedType:
+      Ident                  'A'               Identifier          tok= 285  pos= 455
+    >]                       '>]'              KWRAttrBracket      tok= 286  pos= 456
+    Pat.NamedSimple          'sf'              Identifier          tok= 288  pos= 459
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 290  pos= 462
+    =                        '='               OpEquality          tok= 292  pos= 464
+      Ident                  'x'               Identifier          tok= 294  pos= 466
+    member                   'member'          KWMember            tok= 297  pos= 472
+    self                     '_'               Wildcard            tok= 299  pos= 479
+    Pat.NamedSimple          'M'               Identifier          tok= 301  pos= 481
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 303  pos= 483
+    =                        '='               OpEquality          tok= 305  pos= 485
+      InfixApp               '+'               op_Addition         tok= 311  pos= 492
+        App:
+          Func:
+            Ident            'cf'              Identifier          tok= 307  pos= 487
+          Args:
+            Ident            'x'               Identifier          tok= 309  pos= 490
+        App:
+          Func:
+            Ident            'sf'              Identifier          tok= 313  pos= 494
+          Args:
+            Ident            'x'               Identifier          tok= 315  pos= 497
+  end                        <virt>            KWEnd               tok=virt  pos= 500
+type                         'type'            KWType              tok= 318  pos= 500
+TypeDefn.Anon:
+  TypeName                   'D'               Identifier          tok= 320  pos= 505
+  (                          '('               KWLParen            tok= 321  pos= 506
+  )                          ')'               KWRParen            tok= 322  pos= 507
+  =                          '='               OpEquality          tok= 324  pos= 509
+  begin                      <virt>            KWBegin             tok=virt  pos= 515
+    let                      'let'             KWLet               tok= 327  pos= 515
+    mutable                  'mutable'         KWMutable           tok= 329  pos= 519
+    Pat.NamedSimple          'v'               Identifier          tok= 331  pos= 527
+    =                        '='               OpEquality          tok= 333  pos= 529
+      Const                  '0'               NumInt32            tok= 335  pos= 531
+    member                   'member'          KWMember            tok= 338  pos= 537
+    ident                    'P'               Identifier          tok= 342  pos= 546
+    with                     'with'            KWWith              tok= 344  pos= 548
+    [<                       '[<'              KWLAttrBracket      tok= 346  pos= 553
+    NamedType:
+      Ident                  'A'               Identifier          tok= 347  pos= 555
+    >]                       '>]'              KWRAttrBracket      tok= 348  pos= 556
+    Pat.NamedSimple          'get'             Identifier          tok= 350  pos= 559
+    Pats:
+      ParenBlock             '('               KWLParen            tok= 352  pos= 563
+                             ')'               KWRParen            tok= 353  pos= 564
+    =                        '='               OpEquality          tok= 355  pos= 566
+      Ident                  'v'               Identifier          tok= 357  pos= 568
+    [<                       '[<'              KWLAttrBracket      tok= 361  pos= 574
+    NamedType:
+      Ident                  'B'               Identifier          tok= 362  pos= 576
+    >]                       '>]'              KWRAttrBracket      tok= 363  pos= 577
+    Pat.NamedSimple          'set'             Identifier          tok= 365  pos= 580
+    Pats:
+      Pat.NamedSimple        'x'               Identifier          tok= 367  pos= 584
+    =                        '='               OpEquality          tok= 369  pos= 586
+      Assignment             '<-'              OpArrowLeft         tok= 373  pos= 590
+        Ident                'v'               Identifier          tok= 371  pos= 588
+        Ident                'x'               Identifier          tok= 375  pos= 593
+  end                        <virt>            KWEnd               tok=virt  pos= 596
+FunctionOrValue:
+  let                        'let'             KWLet               tok= 378  pos= 596
+    Pat.NamedSimple          'outer'           Identifier          tok= 380  pos= 600
+    Pats:
+      ParenBlock             '('               KWLParen            tok= 382  pos= 606
+                             ')'               KWRParen            tok= 383  pos= 607
+    =                        '='               OpEquality          tok= 385  pos= 609
+      Let                    'let'             KWLet               tok= 388  pos= 615
+        [<                   '[<'              KWLAttrBracket      tok= 390  pos= 619
+        NamedType:
+          Ident              'A'               Identifier          tok= 391  pos= 621
+        >]                   '>]'              KWRAttrBracket      tok= 392  pos= 622
+        Pat.NamedSimple      'lf'              Identifier          tok= 394  pos= 625
+        Pats:
+          Pat.NamedSimple    'x'               Identifier          tok= 396  pos= 628
+        =                    '='               OpEquality          tok= 398  pos= 630
+          Ident              'x'               Identifier          tok= 400  pos= 632
+      in                     <virt>            KWIn                tok=virt  pos= 638
+      Body:
+        Let                  'let'             KWLet               tok= 403  pos= 638
+        rec                  'rec'             KWRec               tok= 405  pos= 642
+          [<                 '[<'              KWLAttrBracket      tok= 407  pos= 646
+          NamedType:
+            Ident            'A'               Identifier          tok= 408  pos= 648
+          >]                 '>]'              KWRAttrBracket      tok= 409  pos= 649
+          Pat.NamedSimple    'lg'              Identifier          tok= 411  pos= 652
+          Pats:
+            Pat.NamedSimple  'x'               Identifier          tok= 413  pos= 655
+          =                  '='               OpEquality          tok= 415  pos= 657
+            App:
+              Func:
+                Ident        'lh'              Identifier          tok= 417  pos= 659
+              Args:
+                Ident        'x'               Identifier          tok= 419  pos= 662
+          [<                 '[<'              KWLAttrBracket      tok= 424  pos= 672
+          NamedType:
+            Ident            'B'               Identifier          tok= 425  pos= 674
+          >]                 '>]'              KWRAttrBracket      tok= 426  pos= 675
+          Pat.NamedSimple    'lh'              Identifier          tok= 428  pos= 678
+          Pats:
+            Pat.NamedSimple  'y'               Identifier          tok= 430  pos= 681
+          =                  '='               OpEquality          tok= 432  pos= 683
+            App:
+              Func:
+                Ident        'lg'              Identifier          tok= 434  pos= 685
+              Args:
+                Ident        'y'               Identifier          tok= 436  pos= 688
+        in                   <virt>            KWIn                tok=virt  pos= 694
+        Body:
+          App:
+            Func:
+              Ident          'lf'              Identifier          tok= 439  pos= 694
+            Args:
+              Const          '1'               NumInt32            tok= 441  pos= 697

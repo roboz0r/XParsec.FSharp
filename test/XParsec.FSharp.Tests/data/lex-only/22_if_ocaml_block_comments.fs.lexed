@@ -1,23 +1,31 @@
 0, LineComment
-26, Newline
-27, KWLet
-30, Whitespace
-31, Identifier
-32, Whitespace
-33, OpEquality
-34, Whitespace
-35, NumInt32
-36, Newline
-37, StartOCamlBlockComment
-49, Newline (in comment)
-50, KWLet (in comment)
-53, Whitespace (in comment)
-54, Identifier (in comment)
-55, Whitespace (in comment)
-56, OpEquality (in comment)
-57, Whitespace (in comment)
-58, NumInt32 (in comment)
-59, Newline (in comment)
-60, EndOCamlBlockComment
-75, Newline
-76, EOF
+92, Newline
+93, KWLet
+96, Whitespace
+97, Identifier
+98, Whitespace
+99, OpEquality
+100, Whitespace
+101, NumInt32
+102, Newline
+103, BlockCommentStart
+105, Identifier (in comment)
+107, OpSubtraction (in comment)
+108, Identifier (in comment)
+113, BlockCommentEnd
+115, Newline
+116, KWLet
+119, Whitespace
+120, Identifier
+121, Whitespace
+122, OpEquality
+123, Whitespace
+124, NumInt32
+125, Newline
+126, BlockCommentStart
+128, Identifier (in comment)
+133, OpSubtraction (in comment)
+134, Identifier (in comment)
+139, BlockCommentEnd
+141, Newline
+142, EOF

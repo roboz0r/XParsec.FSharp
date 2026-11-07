@@ -29,6 +29,7 @@ FunctionOrValue:
                 Ident      'int'             Identifier          tok=  33  pos= 134
             >              '>'               op_GreaterThan      tok=  34  pos= 137
         #)                 '#)'              KWRHashParen        tok=  36  pos= 139
+type                       'type'            KWType              tok=  39  pos= 143
 TypeDefn.Abbrev:
   TypeName                 '``[]``'          BacktickedIdentifier  tok=  41  pos= 148
   TyparDefns:

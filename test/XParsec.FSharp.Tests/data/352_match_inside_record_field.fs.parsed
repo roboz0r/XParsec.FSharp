@@ -1,4 +1,5 @@
 AnonymousModule:
+type                                     'type'            KWType              tok=   8  pos= 207
 TypeDefn.Union:
   TypeName                               'Kind'            Identifier          tok=  10  pos= 212
   =                                      '='               OpEquality          tok=  12  pos= 217
@@ -9,6 +10,7 @@ TypeDefn.Union:
         Ident                            'int'             Identifier          tok=  21  pos= 237
     Case:
       Ident                              'Other'           Identifier          tok=  26  pos= 247
+type                                     'type'            KWType              tok=  29  pos= 254
 TypeDefn.Record:
   TypeName                               'Data'            Identifier          tok=  31  pos= 259
   =                                      '='               OpEquality          tok=  33  pos= 264

@@ -61,6 +61,7 @@ FunctionOrValue:
       InfixApp               '+'               op_Addition         tok=  65  pos= 145
         Ident                'x'               Identifier          tok=  63  pos= 143
         Ident                'y'               Identifier          tok=  67  pos= 147
+type                         'type'            KWType              tok=  70  pos= 150
 TypeDefn.Anon:
   TypeName                   'Container'       Identifier          tok=  72  pos= 155
   (                          '('               KWLParen            tok=  73  pos= 164

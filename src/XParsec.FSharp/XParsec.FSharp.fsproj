@@ -16,7 +16,12 @@
     <Compile Include="ProgramStructure.fs" />
     <Compile Include="AstTraversal.fs" />
     <Compile Include="ParsingTypes.fs" />
-    <Compile Include="ExprPatterns.fs" />
+    <Compile Include="CstTokens.fs" />
+    <Compile Include="CstDeclarations.fs" />
+    <Compile Include="TypeDefnPatterns.fs" />
+    <Compile Include="CstTypeWalk.fs" />
+    <Compile Include="CstWalk.fs" />
+    <Compile Include="ConstructorBody.fs" />
     <Compile Include="Preprocessing.fs" />
     <Compile Include="ParsingHelpers.fs" />
     <Compile Include="KeywordParsing.fs" />
@@ -32,7 +37,6 @@
     <Compile Include="SignatureParsing.fs" />
     <Compile Include="ProgramStructureParsing.fs" />
     <Compile Include="FSharpErrorFormatting.fs" />
-    <Compile Include="Debug.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="XParsec" />

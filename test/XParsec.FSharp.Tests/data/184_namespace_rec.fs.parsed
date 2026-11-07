@@ -1,6 +1,7 @@
 namespace        'namespace'       KWNamespace         tok=   0  pos=   0
 rec              'rec'             KWRec               tok=   2  pos=  10
                  'MyNamespac...'   Identifier          tok=   4  pos=  14
+  type           'type'            KWType              tok=   7  pos=  27
   TypeDefn.Record:
     TypeName     'Cat'             Identifier          tok=   9  pos=  32
     =            '='               OpEquality          tok=  11  pos=  36
@@ -11,6 +12,7 @@ rec              'rec'             KWRec               tok=   2  pos=  10
         NamedType:
           Ident  'string'          Identifier          tok=  18  pos=  46
     }            '}'               KWRBrace            tok=  20  pos=  53
+  type           'type'            KWType              tok=  23  pos=  56
   TypeDefn.Record:
     TypeName     'Dog'             Identifier          tok=  25  pos=  61
     =            '='               OpEquality          tok=  27  pos=  65

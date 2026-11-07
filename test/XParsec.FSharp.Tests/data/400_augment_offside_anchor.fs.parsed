@@ -5,6 +5,7 @@ Module:
   ident                          'Siblings'        Identifier          tok=   7  pos=  30
   =                              '='               OpEquality          tok=   9  pos=  39
   begin                          <virt>            KWBegin             tok=virt  pos=  45
+    type                         'type'            KWType              tok=  12  pos=  45
     TypeDefn.Record:
       TypeName                   'Shown'           Identifier          tok=  14  pos=  50
       =                          '='               OpEquality          tok=  16  pos=  56
@@ -34,6 +35,7 @@ Module:
   ident                          'Members'         Identifier          tok=  50  pos= 193
   =                              '='               OpEquality          tok=  52  pos= 201
   begin                          <virt>            KWBegin             tok=virt  pos= 207
+    type                         'type'            KWType              tok=  55  pos= 207
     TypeDefn.Record:
       TypeName                   'Augmented'       Identifier          tok=  57  pos= 212
       =                          '='               OpEquality          tok=  59  pos= 222
@@ -111,6 +113,7 @@ Module:
   ident                          'Cases'           Identifier          tok= 157  pos= 508
   =                              '='               OpEquality          tok= 159  pos= 514
   begin                          <virt>            KWBegin             tok=virt  pos= 520
+    type                         'type'            KWType              tok= 162  pos= 520
     TypeDefn.Union:
       TypeName                   'Rankged'         Identifier          tok= 164  pos= 525
       =                          '='               OpEquality          tok= 166  pos= 533

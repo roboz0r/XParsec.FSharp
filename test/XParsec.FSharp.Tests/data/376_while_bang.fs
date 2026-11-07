@@ -2,7 +2,7 @@ module TestWhileBang
 
 // F# 7+ `while!` form inside computation expressions. Body and condition both
 // produce a wrapped value (e.g. a Task<bool>). The parser shape is identical
-// to `while ... do ... done`; the keyword token slot carries the distinction.
+// to `while ... do ... done`; the keyword token slot encodes the distinction.
 
 let getCond () = task { return true }
 

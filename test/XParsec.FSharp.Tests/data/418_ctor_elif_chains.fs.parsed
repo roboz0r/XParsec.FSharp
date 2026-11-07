@@ -1,0 +1,189 @@
+module                       'module'          KWModule            tok=   0  pos=   0
+                             'MyModule'        Identifier          tok=   2  pos=   7
+type                         'type'            KWType              tok=  10  pos= 133
+TypeDefn.Anon:
+  TypeName                   'R'               Identifier          tok=  12  pos= 138
+  =                          '='               OpEquality          tok=  14  pos= 140
+  begin                      <virt>            KWBegin             tok=virt  pos= 146
+    Val:
+      val                    'val'             KWVal               tok=  17  pos= 146
+      ident                  'X'               Identifier          tok=  19  pos= 150
+      :                      ':'               OpColon             tok=  20  pos= 151
+      NamedType:
+        Ident                'int'             Identifier          tok=  22  pos= 153
+    AdditionalConstructor:
+      new                    'new'             KWNew               tok=  26  pos= 162
+      ParenBlock             '('               KWLParen            tok=  27  pos= 165
+        Pat.Typed:
+          Pat.NamedSimple    'n'               Identifier          tok=  28  pos= 166
+          Colon              ':'               OpColon             tok=  29  pos= 167
+          NamedType:
+            Ident            'int'             Identifier          tok=  31  pos= 169
+                             ')'               KWRParen            tok=  32  pos= 172
+      =                      '='               OpEquality          tok=  34  pos= 174
+      IfThenElse:
+        IfToken              'if'              KWIf                tok=  37  pos= 184
+        Condition:
+          InfixApp           '='               OpEquality          tok=  41  pos= 189
+            Ident            'n'               Identifier          tok=  39  pos= 187
+            Const            '0'               NumInt32            tok=  43  pos= 191
+        ThenToken            'then'            KWThen              tok=  45  pos= 193
+        ThenExpr:
+          Record             '{'               KWLBrace            tok=  47  pos= 198
+            Field:
+              Ident          'X'               Identifier          tok=  49  pos= 200
+              =              '='               OpEquality          tok=  51  pos= 202
+              Expr:
+                Const        '0'               NumInt32            tok=  53  pos= 204
+                             '}'               KWRBrace            tok=  55  pos= 206
+        ElifBranch:
+          ElifToken          'elif'            KWElif              tok=  58  pos= 216
+          ElifCondition:
+            InfixApp         '='               OpEquality          tok=  62  pos= 223
+              Ident          'n'               Identifier          tok=  60  pos= 221
+              Const          '1'               NumInt32            tok=  64  pos= 225
+          ThenToken          'then'            KWThen              tok=  66  pos= 227
+          ElifExpr:
+            Record           '{'               KWLBrace            tok=  68  pos= 232
+              Field:
+                Ident        'X'               Identifier          tok=  70  pos= 234
+                =            '='               OpEquality          tok=  72  pos= 236
+                Expr:
+                  Const      '1'               NumInt32            tok=  74  pos= 238
+                             '}'               KWRBrace            tok=  76  pos= 240
+        ElseToken            'else'            KWElse              tok=  79  pos= 250
+        ElseExpr:
+          Record             '{'               KWLBrace            tok=  81  pos= 255
+            Field:
+              Ident          'X'               Identifier          tok=  83  pos= 257
+              =              '='               OpEquality          tok=  85  pos= 259
+              Expr:
+                Const        '2'               NumInt32            tok=  87  pos= 261
+                             '}'               KWRBrace            tok=  89  pos= 263
+    AdditionalConstructor:
+      new                    'new'             KWNew               tok=  93  pos= 270
+      ParenBlock             '('               KWLParen            tok=  94  pos= 273
+        Pat.Tuple:
+          Pat.Typed:
+            Pat.NamedSimple  'n'               Identifier          tok=  95  pos= 274
+            Colon            ':'               OpColon             tok=  96  pos= 275
+            NamedType:
+              Ident          'int'             Identifier          tok=  98  pos= 277
+          ,                  ','               OpComma             tok=  99  pos= 280
+          Pat.Typed:
+            Pat.NamedSimple  'm'               Identifier          tok= 101  pos= 282
+            Colon            ':'               OpColon             tok= 102  pos= 283
+            NamedType:
+              Ident          'int'             Identifier          tok= 104  pos= 285
+                             ')'               KWRParen            tok= 105  pos= 288
+      =                      '='               OpEquality          tok= 107  pos= 290
+      IfThenElse:
+        IfToken              'if'              KWIf                tok= 110  pos= 300
+        Condition:
+          InfixApp           '='               OpEquality          tok= 114  pos= 305
+            Ident            'n'               Identifier          tok= 112  pos= 303
+            Const            '0'               NumInt32            tok= 116  pos= 307
+        ThenToken            'then'            KWThen              tok= 118  pos= 309
+        ThenExpr:
+          Record             '{'               KWLBrace            tok= 120  pos= 314
+            Field:
+              Ident          'X'               Identifier          tok= 122  pos= 316
+              =              '='               OpEquality          tok= 124  pos= 318
+              Expr:
+                Const        '0'               NumInt32            tok= 126  pos= 320
+                             '}'               KWRBrace            tok= 128  pos= 322
+        ElifBranch:
+          ElseToken          'else'            KWElse              tok= 131  pos= 332
+          IfToken            'if'              KWIf                tok= 133  pos= 337
+          ElifCondition:
+            InfixApp         '='               OpEquality          tok= 137  pos= 342
+              Ident          'n'               Identifier          tok= 135  pos= 340
+              Const          '1'               NumInt32            tok= 139  pos= 344
+          ThenToken          'then'            KWThen              tok= 141  pos= 346
+          ElifExpr:
+            Record           '{'               KWLBrace            tok= 143  pos= 351
+              Field:
+                Ident        'X'               Identifier          tok= 145  pos= 353
+                =            '='               OpEquality          tok= 147  pos= 355
+                Expr:
+                  Const      '1'               NumInt32            tok= 149  pos= 357
+                             '}'               KWRBrace            tok= 151  pos= 359
+        ElifBranch:
+          ElifToken          'elif'            KWElif              tok= 154  pos= 369
+          ElifCondition:
+            InfixApp         '='               OpEquality          tok= 158  pos= 376
+              Ident          'n'               Identifier          tok= 156  pos= 374
+              Const          '2'               NumInt32            tok= 160  pos= 378
+          ThenToken          'then'            KWThen              tok= 162  pos= 380
+          ElifExpr:
+            Record           '{'               KWLBrace            tok= 164  pos= 385
+              Field:
+                Ident        'X'               Identifier          tok= 166  pos= 387
+                =            '='               OpEquality          tok= 168  pos= 389
+                Expr:
+                  Const      '2'               NumInt32            tok= 170  pos= 391
+                             '}'               KWRBrace            tok= 172  pos= 393
+        ElseToken            'else'            KWElse              tok= 175  pos= 403
+        ElseExpr:
+          Record             '{'               KWLBrace            tok= 177  pos= 408
+            Field:
+              Ident          'X'               Identifier          tok= 179  pos= 410
+              =              '='               OpEquality          tok= 181  pos= 412
+              Expr:
+                Ident        'm'               Identifier          tok= 183  pos= 414
+                             '}'               KWRBrace            tok= 185  pos= 416
+    AdditionalConstructor:
+      new                    'new'             KWNew               tok= 189  pos= 423
+      ParenBlock             '('               KWLParen            tok= 190  pos= 426
+        Pat.Typed:
+          Pat.NamedSimple    'n'               Identifier          tok= 191  pos= 427
+          Colon              ':'               OpColon             tok= 192  pos= 428
+          NamedType:
+            Ident            'string'          Identifier          tok= 194  pos= 430
+                             ')'               KWRParen            tok= 195  pos= 436
+      =                      '='               OpEquality          tok= 197  pos= 438
+      IfThenElse:
+        IfToken              'if'              KWIf                tok= 200  pos= 448
+        Condition:
+          InfixApp           '='               OpEquality          tok= 204  pos= 453
+            Ident            'n'               Identifier          tok= 202  pos= 451
+            StringLiteral    '"'               StringOpen          tok= 206  pos= 455
+                             '"'               StringClose         tok= 207  pos= 456
+        ThenToken            'then'            KWThen              tok= 209  pos= 458
+        ThenExpr:
+          Record             '{'               KWLBrace            tok= 211  pos= 463
+            Field:
+              Ident          'X'               Identifier          tok= 213  pos= 465
+              =              '='               OpEquality          tok= 215  pos= 467
+              Expr:
+                Const        '0'               NumInt32            tok= 217  pos= 469
+                             '}'               KWRBrace            tok= 219  pos= 471
+        ElifBranch:
+          ElseToken          'else'            KWElse              tok= 222  pos= 481
+          IfToken            'if'              KWIf                tok= 224  pos= 486
+          ElifCondition:
+            InfixApp         '='               OpEquality          tok= 228  pos= 491
+              Ident          'n'               Identifier          tok= 226  pos= 489
+              StringLiteral  '"'               StringOpen          tok= 231  pos= 505
+              Parts:
+                Text         'a'               StringFragment      tok= 232  pos= 506
+                             '"'               StringClose         tok= 233  pos= 507
+          ThenToken          'then'            KWThen              tok= 235  pos= 509
+          ElifExpr:
+            Record           '{'               KWLBrace            tok= 237  pos= 514
+              Field:
+                Ident        'X'               Identifier          tok= 239  pos= 516
+                =            '='               OpEquality          tok= 241  pos= 518
+                Expr:
+                  Const      '1'               NumInt32            tok= 243  pos= 520
+                             '}'               KWRBrace            tok= 245  pos= 522
+        ElseToken            'else'            KWElse              tok= 248  pos= 532
+        ElseExpr:
+          Record             '{'               KWLBrace            tok= 250  pos= 537
+            Field:
+              Ident          'X'               Identifier          tok= 252  pos= 539
+              =              '='               OpEquality          tok= 254  pos= 541
+              Expr:
+                Const        '2'               NumInt32            tok= 256  pos= 543
+                             '}'               KWRBrace            tok= 258  pos= 545
+  end                        <virt>            KWEnd               tok=virt  pos= 547

@@ -128,8 +128,7 @@ let tracingTests =
                         override _.TokenConsumed(_, _, _) = consumeCount <- consumeCount + 1
                     }
 
-                let reader =
-                    XParsec.FSharp.Parser.Reader.ofParseInputWithTracing (lexed.WithDefines Set.empty) traceCallback
+                let reader = ofParseInputWithTracing (lexed.WithDefines Set.empty) traceCallback
 
                 match XParsec.FSharp.Parser.FSharpAst.parse reader with
                 | Error e ->
@@ -149,6 +148,136 @@ let tracingTests =
                     failtestf "Parsing failed:\n%s" (XParsec.FSharp.Parser.ErrorFormatting.splitAndFormatTokenErrors e)
                 | Ok _ -> ()
             }
+        ]
+
+/// Whether `source` parses without an error or a recovery diagnostic.
+let private parsesClean (source: string) : bool =
+    let lexed = XParsec.FSharp.Lexer.Lexing.lexString source
+    let reader = XParsec.FSharp.Parser.Reader.ofParseInput (lexed.WithDefines Set.empty)
+
+    match XParsec.FSharp.Parser.FSharpAst.parse reader with
+    | Ok _ -> Seq.isEmpty reader.State.Diagnostics
+    | Error _ -> false
+
+[<Tests>]
+let inlineBindingTests =
+    testList
+        "InlineBindings"
+        [
+            // fsc parses an inline value, reporting FS0832 after parsing, and refuses explicit type
+            // parameters after a pattern head that is other than a name (FS0010 at `<`).
+            test "an inline value parses, and an inline pattern head with explicit type parameters is refused" {
+                Expect.isTrue (parsesClean "let inline v = 1\n") "an inline value"
+                Expect.isTrue (parsesClean "let inline (a, b) = (1, 2)\n") "an inline tuple value"
+                Expect.isTrue (parsesClean "let inline v<'T> = 1\n") "an inline generic value"
+
+                let refused =
+                    [
+                        "let inline (x, y)<'T> = (1, 2)\n"
+                        "let inline _<'T> = 1\n"
+                        "let inline (x)<'T> = 1\n"
+                        "let inline mutable m = 1\n"
+                    ]
+
+                Expect.equal
+                    [ for source in refused -> source, parsesClean source ]
+                    [ for source in refused -> source, false ]
+                    "each source is refused"
+            }
+        ]
+
+/// The role of an operator at the start of a line in a sequential block.
+type private LineStartOperator =
+    /// The operator continues the preceding expression.
+    | Infix
+    /// The operator begins a new expression of the block.
+    | NewExpression
+
+/// Parses `source` and classifies the operator that starts line `line` (1-based) by the CST node
+/// at its position: an infix application or assignment, or a prefix application. Fails the test
+/// when the source parses with an error or a diagnostic, or when neither node is at the position.
+let private classifyLineStartOperator (source: string) (line: int) : LineStartOperator =
+    let lexed = XParsec.FSharp.Lexer.Lexing.lexString source
+    let reader = XParsec.FSharp.Parser.Reader.ofParseInput (lexed.WithDefines Set.empty)
+
+    match XParsec.FSharp.Parser.FSharpAst.parse reader with
+    | Error e -> failtestf "Parsing failed:\n%s" (XParsec.FSharp.Parser.ErrorFormatting.splitAndFormatTokenErrors e)
+    | Ok ast ->
+        Expect.isEmpty reader.State.Diagnostics "the source parses without diagnostics"
+        let lines = source.Split '\n'
+        let lineStart = lines[.. line - 2] |> Array.sumBy (fun l -> l.Length + 1)
+
+        let offset =
+            lineStart + (lines[line - 1].Length - lines[line - 1].TrimStart().Length)
+
+        let ctx = XParsec.FSharp.Debug.PrintContext(2)
+        XParsec.FSharp.Debug.printFSharpAst ctx lexed ast
+        let printed = ctx.FlushToString().Split '\n' |> Array.map _.TrimEnd()
+
+        let hasRow (nodes: string) =
+            let row = Text.RegularExpressions.Regex($@"^\s*({nodes})\s.*\bpos=\s*{offset}$")
+            printed |> Array.exists row.IsMatch
+
+        match hasRow "InfixApp|Assignment", hasRow "PrefixApp" with
+        | true, false -> Infix
+        | false, true -> NewExpression
+        | _ -> failtestf "Expected one operator node at offset %d in:\n%s" offset (String.concat "\n" printed)
+
+/// fsc's offside rule (LexFilter `isInfix`) for an operator at a sequential block's column: an
+/// infix operator continues the expression, and a `+`/`-`-led operator or `&&` is infix unless it
+/// is adjacent to its operand. Each expectation is the fsi result.
+[<Tests>]
+let lineStartOperatorTests =
+    let case name (expected: LineStartOperator) (line: int) (source: string) =
+        test name { Expect.equal (classifyLineStartOperator source line) expected "the operator's role" }
+
+    testList
+        "LineStartOperators"
+        [
+            case
+                "+ at the column continues a let body"
+                Infix
+                5
+                "let a = \"x\"\nlet b = \"y\"\nlet s =\n    a + \" \"\n    + b\n"
+            case "- at the column continues a let body" Infix 3 "let s =\n    5\n    - 2\n"
+            case
+                "- x at the column continues the last expression of a block"
+                Infix
+                4
+                "let f () =\n    let x = 3\n    x\n    - x\n"
+            case "a +-led custom operator at the column continues" Infix 3 "let s =\n    1\n    +. 2\n"
+            case "+ at the column continues inside parentheses" Infix 3 "let s =\n    (a\n     + b)\n"
+            case
+                "+ at the column continues the body of a nested let"
+                Infix
+                4
+                "let f () =\n    let y =\n        1\n        + 2\n    y\n"
+            case "- at the column continues a list element" Infix 3 "let s =\n    [ a\n      - b ]\n"
+            case "|> at the column continues" Infix 3 "let s =\n    xs\n    |> List.map f\n"
+            case "&& at the column continues" Infix 3 "let s =\n    true\n    && false\n"
+            case ":: at the column continues" Infix 3 "let s =\n    1\n    :: [ 2 ]\n"
+            case ":= at the column continues" Infix 3 "let f () =\n    r\n    := 5\n"
+            case ">>= at the column continues" Infix 3 "let s =\n    1\n    >>= f\n"
+            case "+ one column left of the column continues" Infix 3 "let s =\n    a\n   + b\n"
+            case "|> three columns left of the column continues" Infix 3 "let s =\n    xs\n |> f\n"
+            case
+                "an adjacent -x at the column starts a new expression"
+                NewExpression
+                4
+                "let f () =\n    let x = 3\n    x\n    -x\n"
+            case
+                "an adjacent &&x at the column starts a new expression"
+                NewExpression
+                3
+                "let s =\n    true\n    &&false\n"
+            case "an adjacent -b in a list starts a new element" NewExpression 3 "let s =\n    [ a\n      -b ]\n"
+            case "% at the column starts a new expression" NewExpression 3 "let s =\n    7\n    % 2\n"
+            // fsi rejects this source with FS0010 at `-x`; Vesper reads `-x` as a top-level expression.
+            case
+                "an adjacent -x one column left of the column is outside the infix undentation"
+                NewExpression
+                4
+                "let x = 3\nlet s =\n    x\n   -x\n"
         ]
 
 /// Tests that parsing every prefix of every golden file at token boundaries always returns Ok.

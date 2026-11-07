@@ -1,0 +1,40 @@
+module       'module'          KWModule            tok=   0  pos=   0
+             'MyModule'        Identifier          tok=   2  pos=   7
+SkipsTokens:
+  (skipped)  'let'             KWLet               tok=   8  pos= 105
+  (skipped)  'y'               Identifier          tok=  10  pos= 109
+  (skipped)  ':'               OpColon             tok=  11  pos= 110
+  (skipped)  '{|'              KWLBraceBar         tok=  13  pos= 112
+  (skipped)  'A'               Identifier          tok=  16  pos= 127
+  (skipped)  ':'               OpColon             tok=  17  pos= 128
+  (skipped)  'int'             Identifier          tok=  19  pos= 130
+  (skipped)  'B'               Identifier          tok=  22  pos= 142
+  (skipped)  ':'               OpColon             tok=  23  pos= 143
+  (skipped)  'int'             Identifier          tok=  25  pos= 145
+  (skipped)  '|}'              KWRBraceBar         tok=  28  pos= 153
+  (skipped)  '='               OpEquality          tok=  30  pos= 156
+  (skipped)  '{|'              KWLBraceBar         tok=  32  pos= 158
+  (skipped)  'A'               Identifier          tok=  34  pos= 161
+  (skipped)  '='               OpEquality          tok=  36  pos= 163
+  (skipped)  '1'               NumInt32            tok=  38  pos= 165
+  (skipped)  ';'               OpSemicolon         tok=  39  pos= 166
+  (skipped)  'B'               Identifier          tok=  41  pos= 168
+  (skipped)  '='               OpEquality          tok=  43  pos= 170
+  (skipped)  '2'               NumInt32            tok=  45  pos= 172
+  (skipped)  '|}'              KWRBraceBar         tok=  47  pos= 174
+---
+Diagnostics:
+  UnexpectedTopLevel at 105 (Ln 5, Col 1)
+    module MyModul
+    ^ At index 0 (Ln 1, Col 1)
+    Multiple errors:
+    ├───All choices failed.
+    ├───Operator parsing failed
+    ├───Not a prefix operator
+    └───Expected constant literal
+    
+    ---
+    
+    let y: {
+    ^ At index 105 (Ln 5, Col 1)
+    Expected end of file

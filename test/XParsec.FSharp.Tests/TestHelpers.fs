@@ -12,6 +12,13 @@ open XParsec.FSharp.Lexer
 open XParsec.Parsers
 open XParsec.FSharp.Lexer.Lexing
 
+let ofParseInputWithTracing
+    (input: ParseInput)
+    (trace: XParsec.FSharp.Parser.TraceCallback)
+    : Reader<_, XParsec.FSharp.Parser.ParseState, _> =
+    let initialState = XParsec.FSharp.Parser.ParseState.createWithTracing input trace
+    Reader((input.Lexed.Tokens.AsReadableArray()), initialState, 0)
+
 let truncateMiddle (maxLength: int) (s: string) =
     if s.Length <= maxLength then
         s
@@ -33,7 +40,13 @@ let private sprintToken (input: string) (pt: PositionedToken) (p1: int) =
     | t when t.IsOperator ->
         let id = input.AsSpan(p, p1 - p).ToString()
 
-        sprintf "%d, %s (%s) %s" p (Operator.generateOperatorName t id) id isInComment
+        let name =
+            if t.IsKeyword then
+                id
+            else
+                XParsec.FSharp.OperatorData.nameOfSymbol id
+
+        sprintf "%d, %s (%s) %s" p name id isInComment
     | Token.InvalidOperator
     | Token.Identifier
     | Token.OtherUnlexed
@@ -271,7 +284,7 @@ let private testParseFileWithParser
             ctx.FlushToString()
 
     if updateSnapshots || not (File.Exists expectedPath) then
-        File.WriteAllText(expectedPath, actual)
+        GoldenFiles.write expectedPath actual
 
         if not updateSnapshots then
             if isCi then
@@ -419,8 +432,7 @@ let parseWithStackProbe (stackSize: int) (timeout: System.TimeSpan) (filePath: s
                 base.ContextPop(ctx, depth)
         }
 
-    let reader =
-        XParsec.FSharp.Parser.Reader.ofParseInputWithTracing (lexed.WithDefines Set.empty) traceCallback
+    let reader = ofParseInputWithTracing (lexed.WithDefines Set.empty) traceCallback
 
     let mutable taskResult = Unchecked.defaultof<_>
 
@@ -477,7 +489,7 @@ let parseWithStackProbe (stackSize: int) (timeout: System.TimeSpan) (filePath: s
             ctx.FlushToString()
 
         let expectedPath = filePath + ".parsed"
-        File.WriteAllText(expectedPath, parseOutput)
+        GoldenFiles.write expectedPath parseOutput
 
     taskResult
 

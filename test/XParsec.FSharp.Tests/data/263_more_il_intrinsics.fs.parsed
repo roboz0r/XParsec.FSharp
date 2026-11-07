@@ -170,6 +170,7 @@ Module:
                                       ''T'              TypeParameter       tok= 182  pos= 440
                   Ident               'list'            Identifier          tok= 184  pos= 443
               #)                      '#)'              KWRHashParen        tok= 186  pos= 448
+    type                              'type'            KWType              tok= 190  pos= 456
     TypeDefn.Abbrev:
       TypeName                        '``[]``'          BacktickedIdentifier  tok= 192  pos= 461
       TyparDefns:
@@ -185,6 +186,7 @@ Module:
             Text                      '!0[]'            StringFragment      tok= 202  pos= 478
                                       '"'               StringClose         tok= 203  pos= 482
           #)                          '#)'              KWRHashParen        tok= 205  pos= 484
+    type                              'type'            KWType              tok= 208  pos= 491
     TypeDefn.Abbrev:
       TypeName                        '``[,]``'         BacktickedIdentifier  tok= 210  pos= 496
       TyparDefns:
@@ -200,6 +202,7 @@ Module:
             Text                      '!0[0 ...,0...'   StringFragment      tok= 220  pos= 514
                                       '"'               StringClose         tok= 221  pos= 529
           #)                          '#)'              KWRHashParen        tok= 223  pos= 531
+    type                              'type'            KWType              tok= 247  pos= 623
     TypeDefn.Anon:
       [<                              '[<'              KWLAttrBracket      tok= 227  pos= 539
       NamedType:

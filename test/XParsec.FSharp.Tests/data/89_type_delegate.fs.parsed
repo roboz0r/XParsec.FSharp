@@ -1,5 +1,6 @@
 module       'module'          KWModule            tok=   0  pos=   0
              'MyModule'        Identifier          tok=   2  pos=   7
+type         'type'            KWType              tok=   5  pos=  17
 TypeDefn.Delegate:
   TypeName   'Handler'         Identifier          tok=   7  pos=  22
   =          '='               OpEquality          tok=   9  pos=  30
@@ -14,6 +15,7 @@ TypeDefn.Delegate:
     ->       '->'              OpArrowRight        tok=  23  pos=  67
     NamedType:
       Ident  'unit'            Identifier          tok=  25  pos=  70
+type         'type'            KWType              tok=  27  pos=  75
 TypeDefn.Delegate:
   TypeName   'Transform'       Identifier          tok=  29  pos=  80
   =          '='               OpEquality          tok=  31  pos=  90

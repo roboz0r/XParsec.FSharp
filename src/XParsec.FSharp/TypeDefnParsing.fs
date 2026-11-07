@@ -17,7 +17,7 @@ module PrimaryConstrArgs =
     let parse: Parser<PrimaryConstrArgs<SyntaxToken>, _, _, _> =
         parser {
             let! attrs = opt Attributes.parse
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! lParen = pLParen
             let! pat = opt Pat.parse
             let! rParen = pRParen
@@ -45,7 +45,7 @@ module TypeName =
     /// Parses a TypeName using pre-parsed attributes (from before the `type` keyword).
     let parseWithAttrs (attrs: Attributes<SyntaxToken> voption) : Parser<TypeName<SyntaxToken>, _, _, _> =
         parser {
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! prefixTypars = opt pPrefixTypars
             let! ident = LongIdent.parse
             let! typars = opt TyparDefns.parse
@@ -55,12 +55,6 @@ module TypeName =
             let! postfixConstraints = opt TyparConstraints.parse
 
             return TypeName(attrs, access, prefixTypars, ident, typars, postfixConstraints)
-        }
-
-    let parse: Parser<TypeName<SyntaxToken>, _, _, _> =
-        parser {
-            let! attrs = opt Attributes.parse
-            return! parseWithAttrs attrs
         }
 
 [<RequireQualifiedAccess>]
@@ -159,7 +153,7 @@ member-sig :=
             let! withClause = opt WithClause.parse
 
             match withClause with
-            | ValueSome(withTok, getSet) -> return MemberSig.PropSig(ident, typars, colon, sigType, withTok, getSet)
+            | ValueSome clause -> return MemberSig.PropSig(ident, typars, colon, sigType, clause)
             | ValueNone -> return MemberSig.MethodOrPropSig(ident, typars, colon, sigType)
         }
 
@@ -182,11 +176,15 @@ module MethodOrPropDefn =
     // member x.M args = ... (Method)
     // member x.P with get ... (PropWithGetSet)
 
-    /// The placeholder a rejected `get` / `set` binding leaves behind, carrying the tokens
-    /// skipped past it.
-    let private skippedGetSetBinding (at: SyntaxToken) (skipped: ImArr<SyntaxToken>) : Binding<SyntaxToken> =
+    /// The placeholder a rejected `get` / `set` binding leaves behind, holding its attributes and
+    /// the tokens skipped past it.
+    let private skippedGetSetBinding
+        (attrs: Attributes<SyntaxToken> voption)
+        (at: SyntaxToken)
+        (skipped: ImArr<SyntaxToken>)
+        : Binding<SyntaxToken> =
         {
-            attributes = ValueNone
+            attributes = attrs
             inlineToken = ValueNone
             mutableToken = ValueNone
             access = ValueNone
@@ -198,13 +196,22 @@ module MethodOrPropDefn =
             expr = Expr.Missing
         }
 
+    /// Peeks past an optional access modifier to the `get`/`set` token that begins an accessor binding.
+    let private peekAccessorName =
+        lookAhead (
+            parser {
+                let! _ = opt Access.parse
+                return! peekNextSyntaxToken
+            }
+        )
+
     /// `member x.P with get … and set …`. A property written without a `with`
-    /// clause is an implicit get, so a third name is rejected here and the tree carries
+    /// clause is an implicit get, so a third name is rejected here and the tree has
     /// only `get` and `set` in that position.
     let private pGetSetBinding (propIdent: SyntaxToken) attrs : FSParser<Binding<SyntaxToken>> =
         parser {
             let! state = getUserState
-            let! next = peekNextSyntaxToken
+            let! next = peekAccessorName
 
             if tokenStringIs "get" next state || tokenStringIs "set" next state then
                 return! Binding.parse attrs
@@ -225,7 +232,7 @@ module MethodOrPropDefn =
                     recoverWith
                         StoppingTokens.afterGetSetBinding
                         (DiagnosticCode.Other msg)
-                        (skippedGetSetBinding next)
+                        (skippedGetSetBinding attrs next)
                         (fail errExpectedGetOrSet)
         }
 
@@ -233,7 +240,7 @@ module MethodOrPropDefn =
         parser {
             let! ident = pIdent
             let! w = pWith
-            let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident) ValueNone
+            let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident)
             return fun thisIdent -> MethodOrPropDefn.PropertyWithGetSet(thisIdent, ident, w, bindings, ands)
         }
 
@@ -330,7 +337,7 @@ module MethodOrPropDefn =
                         // A property member whose ident was already consumed above
                         // (`static member BuildPhase with get () = … and set v = …`).
                         let! w = consumePeeked t
-                        let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident) ValueNone
+                        let! bindings, ands = Binding.sepByAnd1 (pGetSetBinding ident)
                         return MethodOrPropDefn.PropertyWithGetSet(ValueNone, ident, w, bindings, ands)
 
                     | _ ->
@@ -376,228 +383,12 @@ module MethodOrPropDefn =
                             "MethodOrPropDefn no ident"
         }
 
-[<AutoOpen>]
-module internal TypeDefnHelpers =
-    // Forward reference for MemberDefn (overriding the one in your stub if needed,
-    // or we use the existing refMemberDefn from your provided MemberHelpers)
-    let refAdditionalConstrExpr = FSRefParser<AdditionalConstrExpr<SyntaxToken>>()
-
-[<RequireQualifiedAccess>]
-module AdditionalConstrExpr =
-
-    // Local virtual-sep parser modeled on ExpressionParsing.pSepVirt: matches `;`
-    // or emits a layout-sensitive VirtualSep when the next token is an expression
-    // starter at the enclosing SeqBlock indent.
-    let private pCtorSepVirt: FSParser<SyntaxToken> =
-        let failSep =
-            fail (Message "Expected ';' or newline at the same indent for constructor body sequencing")
-
-        parser {
-            match! peekNextSyntaxToken with
-            | t when t.Token = Token.EOF -> return! failSep
-            | t when t.Token = Token.OpSemicolon -> return! consumePeeked t
-            | t ->
-                if TokenInfo.canStartExpression t.Token then
-                    let! indent = currentIndent
-                    let! state = getUserState
-
-                    let atContextIndent =
-                        match state.Context with
-                        | { Indent = ctxIndent } :: _ -> indent = ctxIndent
-                        | [] -> indent = 0
-
-                    if atContextIndent then
-                        return virtualToken (PositionedToken.Create(Token.VirtualSep, t.StartIndex))
-                    else
-                        return! failSep
-                else
-                    return! failSep
-        }
-
-    let private pRecordInit: FSParser<AdditionalConstrInitExpr<SyntaxToken>> =
-        parser {
-            let! lBrace = pLBrace
-            // Helper for inherits: inherit Type(expr) — now optional
-            let! inherits =
-                opt (
-                    parser {
-                        let! inh = pInherit
-                        let! t = Type.parse
-                        let! e = opt Expr.parseAtomic
-                        return ClassInheritsDecl.ClassInheritsDecl(inh, t, e)
-                    }
-                )
-
-            // Field initialisers are `;`- (or newline-) separated, mirroring a
-            // record literal (`ExpressionParsing.pRecordFieldsAndClose`). `many`
-            // here used to stop after the first `f = e`, leaving the `;` to fail
-            // `pRBrace`. `sepBy` (0+) keeps the inherits-only `{ inherit … }` form
-            // valid (no fields).
-            let! inits, _seps = withContext OffsideContext.SeqBlock (sepBy FieldInitializer.parse pCtorSepVirt)
-            let! _trailingSep = opt pCtorSepVirt
-            let! rBrace = pRBrace
-            return AdditionalConstrInitExpr.Explicit(lBrace, inherits, inits, rBrace)
-        }
-
-    let private pDelegatedInit: FSParser<AdditionalConstrInitExpr<SyntaxToken>> =
-        parser {
-            let! newTok = pNew
-            let! t = Type.parse
-            let! e = Expr.parseSeqBlock
-            return AdditionalConstrInitExpr.Delegated(newTok, t, e)
-        }
-
-    // Mirrors ExpressionParsing.pLetOrUseIn: real `in`, or VirtualIn when the next
-    // token sits at the let column or the enclosing context column (offside `in`).
-    let private pCtorLetIn (letIndent: int) (reader: Reader<PositionedToken, ParseState, _>) =
-        match peekNextSyntaxToken reader with
-        | Ok t when t.Token = Token.KWIn -> consumePeeked t reader
-        | Ok t ->
-            let indent = ParseState.getIndent reader.State (reader.Index * 1<token>)
-            let state = reader.State
-
-            let atContextIndent =
-                match state.Context with
-                | { Indent = 0 } :: _ -> true
-                | { Indent = ctxIndent } :: _ -> indent = ctxIndent || indent = letIndent
-                | [] -> indent = 0 || indent = letIndent
-
-            if atContextIndent then
-                Ok(virtualToken (PositionedToken.Create(Token.VirtualIn, t.StartIndex)))
-            else
-                fail (Message "Expected 'in' at let-binding indent in constructor body") reader
-        | Error _ ->
-            let pos = reader.Index * 1<token>
-
-            let startIndex =
-                if pos < reader.State.Lexed.Tokens.Length * 1<token> then
-                    reader.State.Lexed.Tokens[pos].StartIndex
-                else
-                    0
-
-            Ok(virtualToken (PositionedToken.Create(Token.VirtualIn, startIndex)))
-
-    // Recursive driver for additional-constr-expr per F# spec §8.6.3:
-    //   add-constr-expr := stmt ';' add-constr-expr        -- SequenceAfter
-    //                    | if expr then add-constr else add-constr  -- Conditional
-    //                    | let binding in add-constr        -- LetIn
-    //                    | additional-constr-init-expr      -- Init
-    // The top-level `parse` adds the optional `then expr` postlude (SequenceBefore).
-    let rec private pConstrExpr (reader: Reader<PositionedToken, ParseState, _>) =
-        match peekNextSyntaxToken reader with
-        | Error e -> Error e
-        | Ok peeked ->
-            match peeked.Token with
-            | Token.KWLet
-            | Token.KWUse ->
-                match consumePeeked peeked reader with
-                | Error e -> Error e
-                | Ok letTok ->
-                    let letIndent =
-                        match letTok.Index with
-                        | TokenIndex.Regular iT -> ParseState.getIndent reader.State iT
-                        | TokenIndex.Virtual -> 0
-
-                    let pDefn =
-                        withContextAt OffsideContext.Let letIndent letTok.PositionedToken (Binding.parse ValueNone)
-
-                    match pDefn reader with
-                    | Error e -> Error e
-                    | Ok binding ->
-                        match pCtorLetIn letIndent reader with
-                        | Error e -> Error e
-                        | Ok inTok ->
-                            match pConstrExpr reader with
-                            | Error e -> Error e
-                            | Ok body -> Ok(AdditionalConstrExpr.LetIn(letTok, binding, inTok, body))
-            | Token.KWIf ->
-                match consumePeeked peeked reader with
-                | Error e -> Error e
-                | Ok ifTok ->
-                    let ifIndent =
-                        match ifTok.Index with
-                        | TokenIndex.Regular iT -> ParseState.getIndent reader.State iT
-                        | TokenIndex.Virtual -> 0
-
-                    let pCond =
-                        withContextAt OffsideContext.If (ifIndent + 1) ifTok.PositionedToken refExpr.Parser
-
-                    match pCond reader with
-                    | Error e -> Error e
-                    | Ok cond ->
-                        match pThen reader with
-                        | Error e -> Error e
-                        | Ok thenTok ->
-                            match pConstrExpr reader with
-                            | Error e -> Error e
-                            | Ok thenBranch ->
-                                match pElse reader with
-                                | Error e -> Error e
-                                | Ok elseTok ->
-                                    match pConstrExpr reader with
-                                    | Error e -> Error e
-                                    | Ok elseBranch ->
-                                        Ok(
-                                            AdditionalConstrExpr.Conditional(
-                                                ifTok,
-                                                cond,
-                                                thenTok,
-                                                thenBranch,
-                                                elseTok,
-                                                elseBranch
-                                            )
-                                        )
-            | Token.KWLBrace ->
-                match pRecordInit reader with
-                | Error e -> Error e
-                | Ok init -> Ok(AdditionalConstrExpr.Init init)
-            | Token.KWNew ->
-                match pDelegatedInit reader with
-                | Error e -> Error e
-                | Ok init -> Ok(AdditionalConstrExpr.Init init)
-            | _ ->
-                // Default: parse a single (non-Sequential) expression. If followed by
-                // a sequence sep, treat as a `stmt` in a SequenceAfter chain; otherwise
-                // it's the final init expression.
-                match refExprNoSeq.Parser reader with
-                | Error e -> Error e
-                | Ok firstExpr ->
-                    match pCtorSepVirt reader with
-                    | Ok semi ->
-                        match pConstrExpr reader with
-                        | Error e -> Error e
-                        | Ok rest -> Ok(AdditionalConstrExpr.SequenceAfter(firstExpr, semi, rest))
-                    | Error _ -> Ok(AdditionalConstrExpr.Init(AdditionalConstrInitExpr.Expression firstExpr))
-
-    let parse =
-        // SeqBlock context anchors VirtualSep emission for stmt-sequence chains.
-        withContext
-            OffsideContext.SeqBlock
-            (parser {
-                let! body = pConstrExpr
-
-                let! thenClause =
-                    opt (
-                        parser {
-                            let! thenTok = pThen
-                            let! expr = Expr.parseSeqBlock
-                            return (thenTok, expr)
-                        }
-                    )
-
-                match thenClause with
-                | ValueSome(thenTok, expr) -> return AdditionalConstrExpr.SequenceBefore(body, thenTok, expr)
-                | ValueNone -> return body
-            })
-
-    do refAdditionalConstrExpr.Set parse
-
 [<RequireQualifiedAccess>]
 module AutoPropDefn =
     let parse: Parser<MethodOrPropDefn<SyntaxToken>, _, _, _> =
         parser {
             let! valTok = pVal
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! ident = pIdent
 
             let! returnType =
@@ -627,20 +418,7 @@ module AutoPropDefn =
                 | _ -> preturn expr
 
             let! withClause = opt WithClause.parse
-
-            return
-                match withClause with
-                | ValueSome struct (withTok, (acc1, acc2)) ->
-                    MethodOrPropDefn.AutoProperty(
-                        valTok,
-                        access,
-                        ident,
-                        returnType,
-                        eq,
-                        expr,
-                        ValueSome struct (withTok, acc1, acc2)
-                    )
-                | ValueNone -> MethodOrPropDefn.AutoProperty(valTok, access, ident, returnType, eq, expr, ValueNone)
+            return MethodOrPropDefn.AutoProperty(valTok, access, ident, returnType, eq, expr, withClause)
         }
 
 [<RequireQualifiedAccess>]
@@ -678,7 +456,7 @@ module MemberDefn =
                             )
                         )
                 | _ ->
-                    let! access = opt pAccessModifier
+                    let! access = opt Access.parse
                     let! defn = MethodOrPropDefn.parse
 
                     return
@@ -695,7 +473,7 @@ module MemberDefn =
             | Token.KWAbstract ->
                 let! abstractTok = consumePeeked t
                 let! memTok = opt pMember
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! sigDef = MemberSig.parse
 
                 return
@@ -712,7 +490,7 @@ module MemberDefn =
             | Token.KWVal ->
                 let! valTok = consumePeeked t
                 let! mut = opt pMutable
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! ident = pIdent
                 let! colon = pColon
                 let! typ = Type.parse
@@ -736,7 +514,7 @@ module MemberDefn =
                         MemberDefn.Member(attrs, ValueNone, MemberKeyword.Member memberTok, inlineTok, ValueNone, defn)
                     )
             | _ ->
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! defn = MethodOrPropDefn.parse
 
                 return
@@ -749,7 +527,7 @@ module MemberDefn =
         parser {
             let! abstractTok = pAbstract
             let! memTok = opt pMember
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! sigDef = MemberSig.parse
 
             return
@@ -785,7 +563,7 @@ module MemberDefn =
                         )
                     )
             | _ ->
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! defn = MethodOrPropDefn.parse
 
                 return
@@ -821,7 +599,7 @@ module MemberDefn =
                         )
                     )
             | _ ->
-                let! access = opt pAccessModifier
+                let! access = opt Access.parse
                 let! defn = MethodOrPropDefn.parse
 
                 return
@@ -834,7 +612,7 @@ module MemberDefn =
         parser {
             let! valTok = pVal
             let! mut = opt pMutable
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! ident = pIdent
             let! colon = pColon
             let! typ = Type.parse
@@ -844,14 +622,17 @@ module MemberDefn =
 
     let private pAdditionalConstrDefn =
         parser {
-            let! access = opt pAccessModifier
+            let! access = opt Access.parse
             let! newTok = pNew
             let! pat = Pat.parse
             let! asDefn = opt AsDefn.parse
             let! equals = pEquals
-            let! body = refAdditionalConstrExpr.Parser
+            let! body = refTypedSeqExprBlock.Parser
 
-            return (fun attrs -> MemberDefn.AdditionalConstructor(attrs, access, newTok, pat, asDefn, equals, body))
+            let shape = ConstructorBody.ofExpr body
+
+            return
+                (fun attrs -> MemberDefn.AdditionalConstructor(attrs, access, newTok, pat, asDefn, equals, body, shape))
         }
 
     let private memberDefnDispatcher =
@@ -889,22 +670,18 @@ module TypeDefnElement =
                 parser {
                     let! intf = pInterface
                     let! t = Type.parse
-                    // Distinguish between InterfaceSpec (in abstract class) and InterfaceImpl (with members)
+
+                    // 'interface IFoo with ...' (implementation) vs 'interface IFoo' (specification)
                     let! withTok = opt pWith
 
                     match withTok with
                     | ValueSome wTok ->
-                        // Parse members using offside rule (light syntax) or until member parsing fails (verbose syntax).
-                        // In verbose syntax, the `end` that terminates the outer class/struct body
-                        // is NOT part of the interface block — it belongs to the outer parser.
                         let! members = withContext OffsideContext.WithAugment (many refMemberDefn.Parser)
 
-                        // Always synthesize a virtual `end` for ObjectMembers.
-                        // In verbose syntax, the outer block's real `end` stays unconsumed for the outer parser.
-                        // In light syntax, there is no real `end` to consume.
-                        // Use `opt` so we never fail here: at EOF or when the next token is offside,
-                        // `peekNextNonTriviaToken` would fail, which (via choiceL) would discard all
-                        // the work done above. Falling back to position 0 is fine for a virtual token.
+                        // The AST requires an 'end' token for ObjectMembers, but interface blocks
+                        // do not have their own 'end'. Synthesize a virtual one at the next token's position.
+                        //
+                        // Note: Using `opt` avoids failing/backtracking if we are at EOF or an offside boundary.
                         let! nextTokOpt = opt peekNextSyntaxToken
 
                         let virtualEnd =
@@ -926,7 +703,7 @@ module TypeDefnElement =
                 parser {
                     let! inh = pInherit
                     let! t = Type.parse
-                    let! e = opt Expr.parseAtomic
+                    let! e = opt Expr.parseInheritArg
                     return TypeDefnElement.Inherit(ClassInheritsDecl.ClassInheritsDecl(inh, t, e))
                 }
                 MemberDefn.parse |>> TypeDefnElement.Member
@@ -953,8 +730,7 @@ module ClassInheritsDecl =
         parser {
             let! inh = pInherit
             let! t = Type.parse
-            // Optional constructor args — atomic only (no infix operators, semicolons, or type annotations at top level)
-            let! e = opt Expr.parseAtomic
+            let! e = opt Expr.parseInheritArg
             return ClassInheritsDecl.ClassInheritsDecl(inh, t, e)
         }
 
@@ -976,20 +752,25 @@ module ClassFunctionOrValueDefn =
                     let! stat = opt pStatic
                     let! l = pLet
                     let! r = opt pRec
-                    let! bindings, ands = Binding.parseSepByAnd1 attrs
+                    let! bindings, ands = Binding.parseSepByAnd1
                     return ClassFunctionOrValueDefn.LetBindings(attrs, stat, l, r, bindings, ands)
                 }
             ]
             "Class Let/Do"
 
-/// Parses the body of a class or anonymous type definition.
+/// Parses the body of a class, struct, interface, or object expression.
 [<RequireQualifiedAccess>]
 module ClassTypeBody =
     let private errExpectedEndOfTypeBody: ErrorType<PositionedToken, ParseState> =
         Message "Expected end of type body"
 
-    // Returns the body AND the consumed end token (from manyTill's terminator)
-    // F# allows let/do bindings to appear after member definitions, so we interleave parsing.
+    /// Parses an explicit class body delimited by an end token (e.g. `class ... end` or `{ new ... with ... }`).
+    ///
+    /// Returns the parsed body and the terminating token.
+    ///
+    /// Note: F# allows `let`/`do` bindings and member definitions to be mixed
+    /// (e.g. static members appearing before instance `let` bindings), so each
+    /// loop iteration tries to parse either a preamble binding or a type member.
     let parse terminator : Parser<ObjectModelBody<SyntaxToken> * SyntaxToken, _, _, _> =
         fun reader ->
             let inh =
@@ -1025,13 +806,12 @@ module ClassTypeBody =
                     },
                     endTok
                 )
-            | ValueNone ->
-                // Terminator not found — fail with a descriptive error
-                fail errExpectedEndOfTypeBody reader
+            | ValueNone -> fail errExpectedEndOfTypeBody reader
 
-    /// Parses class body using offside rule. Use inside a withContext block.
-    /// F# allows let/do bindings to appear after member definitions (e.g., instance lets after static members),
-    /// so we interleave preamble and element parsing in a single loop.
+    /// Parses an indentation-based (offside) class body (e.g. `type Foo() =`).
+    ///
+    /// Must be called within an indentation-sensitive context (`withContext`).
+    /// Stops when no further bindings or members can be parsed at the current indentation level.
     let parseOffside: Parser<ObjectModelBody<SyntaxToken>, _, _, _> =
         fun reader ->
             let inh =
@@ -1195,21 +975,6 @@ module UnionTypeCases =
             return struct (cases, bars)
         }
 
-// --- Record ---
-
-[<RequireQualifiedAccess>]
-module RecordField =
-    let parse: Parser<RecordField<SyntaxToken>, _, _, _> =
-        parser {
-            let! attrs = opt Attributes.parse
-            let! mut = opt pMutable
-            let! acc = opt pAccessModifier
-            let! id = pIdent
-            let! col = pColon
-            let! t = Type.parse
-            return RecordField.RecordField(attrs, mut, acc, id, col, t)
-        }
-
 // --- Enum ---
 
 [<RequireQualifiedAccess>]
@@ -1242,6 +1007,7 @@ module EnumTypeCases =
 
 [<RequireQualifiedAccess>]
 module TypeExtensionElements =
+    /// Parses explicit type extensions/augmentations using the `with ... end` syntax.
     let parse: Parser<TypeExtensionElements<SyntaxToken>, _, _, _> =
         parser {
             let! withTok = pWith
@@ -1250,12 +1016,11 @@ module TypeExtensionElements =
             return TypeExtensionElements.TypeExtensionElements(withTok, elems, endTok)
         }
 
-    /// Light-syntax variant: synthesizes a virtual 'with' when member tokens follow
-    /// without an explicit 'with' keyword (e.g. record/union augmentations in light mode).
+    /// Parses implicit type extensions in indentation-aware (light) syntax,
+    /// where members directly follow a type definition without a `with` keyword.
     let parseLight (anchor: SyntaxToken) : Parser<TypeExtensionElements<SyntaxToken>, _, _, _> =
-        // Without an explicit `with` there is no new block, so `anchor` (the first token of
-        // the representation), `{` / `|` / the abbreviated type is the offside line.
-        // An explicit `with` opens its own block instead, floored by the enclosing context.
+        // The members' offside line is `anchor`, the first token of the definition body
+        // (`TypeDefn.BodyStart.Anchor` for a record or union).
         parser {
             let! withTok = nextSyntaxTokenVirtualIfNot Token.KWWith
             let! elems = withContextAtToken OffsideContext.WithAugment anchor (many1 TypeDefnElement.parse)
@@ -1263,7 +1028,8 @@ module TypeExtensionElements =
             return TypeExtensionElements.TypeExtensionElements(withTok, elems, endTok)
         }
 
-    /// The optional trailing augmentation (explicit `parse` or light-syntax `parseLight`).
+    /// Parses an optional type extension, trying explicit `with` syntax first,
+    /// then falling back to implicit light syntax anchored to the type definition.
     let parseOptAt (anchor: SyntaxToken) =
         opt (choiceL [ parse; parseLight anchor ] "Type Extension")
 
@@ -1281,7 +1047,6 @@ module DelegateSig =
 // ----------------------------------------------------------------------------
 // Top Level TypeDefn
 // ----------------------------------------------------------------------------
-
 [<RequireQualifiedAccess>]
 module TypeDefn =
 
@@ -1294,27 +1059,23 @@ module TypeDefn =
     let private errSingleNullaryUnionCaseIsAbbrev: ErrorType<PositionedToken, ParseState> =
         Message "Single nullary union case is a type abbreviation"
 
-    /// The right-hand side of a type abbreviation, in an implementation or a signature: a
-    /// type, or a measure term where measure operators (`/`, `^`, `*`, a fused `^-`) follow
-    /// a type or a leading `/` (reciprocal) precedes one. A dangling `*` only appears when
-    /// tuple parsing partially succeeded then backtracked mid-element (`kg * (meter / ...)`),
-    /// since a completed tuple consumes the `*` separators.
+    /// Parses the right-hand side of a type abbreviation or measure expression.
+    ///
+    /// First parses a standard type; if immediately followed by measure operators
+    /// (`/`, `*`, `^`, or `^-N`), it fails and retries as a measure expression.
     let parseAbbrevRhs: Parser<Type<SyntaxToken>, _, _, _> =
         choice
             [
                 parser {
                     let! tNormal = Type.parse
-                    // The peek fails at end of input and on an offside token, which is how
-                    // a block-closing dedent presents; either way no operator follows the
-                    // type.
+                    // At EOF or a block dedent, no operator follows so treat as a standard type.
                     let! peekAfter = opt peekNextSyntaxToken
                     let! state = getUserState
 
                     match peekAfter with
                     | ValueNone -> return tNormal
                     | ValueSome peekAfter ->
-                        // The lexer merges `^-N` into a single custom operator at Append
-                        // precedence, so a leading caret is the signal too.
+                        // Match measure operators, including fused negative exponents (e.g. `^-1`).
                         let startsWithCaret = ParseState.tokenStringStartsWith "^" peekAfter state
 
                         if
@@ -1330,20 +1091,59 @@ module TypeDefn =
                 (Measure.parse |>> Type.MeasureType)
             ]
 
-    // Helper to detect specific type bodies based on lookahead or specific tokens
-
-    let private pRecordField =
+    /// Parses a record field of a type definition or signature. The field type ends before a
+    /// token in the field's start column, which begins the next field.
+    let pRecordField =
         parser {
+            let! fieldStart = peekNextSyntaxToken
             let! attrs = opt Attributes.parse
             let! mut = opt pMutable
-            let! acc = opt pAccessModifier
+            let! acc = opt Access.parse
             let! id = pIdent
             let! col = pColon
-            let! t = withContext OffsideContext.SeqBlock Type.parse
+            let! t = withContextAtToken OffsideContext.SeqBlock fieldStart Type.parse
             let! _ = opt pSemi
             return RecordField.RecordField(attrs, mut, acc, id, col, t)
         }
 
+    /// Parses the optional access modifier on a type representation (e.g. `type R = private { ... }`).
+    let pRepresentationAccess = opt Access.parse
+
+    /// The leading tokens of a type body after `=`.
+    type BodyStart =
+        {
+            /// Selects the body kind. For a record or union representation this is the `{` or `|`
+            /// after any access modifier; otherwise it is the first token, which the abbreviation
+            /// branch consumes and diagnoses when it is a modifier.
+            Kind: SyntaxToken
+            /// The first token after `=`: the offside line for light-syntax members.
+            Anchor: SyntaxToken
+        }
+
+    /// Peeks the leading tokens of a type body after `=`.
+    let pBodyStart: FSParser<BodyStart> =
+        parser {
+            let! atModifier = peekNextSyntaxToken
+
+            let! pastModifier =
+                lookAhead (
+                    parser {
+                        let! _ = opt Access.parse
+                        return! peekNextSyntaxToken
+                    }
+                )
+
+            let kind =
+                match pastModifier.Token with
+                | Token.KWLBrace
+                | Token.OpBar -> pastModifier
+                | _ -> atModifier
+
+            return { Kind = kind; Anchor = atModifier }
+        }
+
+    /// Disambiguates between an implicit class definition (e.g., `type Foo() = member ...`)
+    /// and a type abbreviation (e.g., `type Foo = int`).
     let private parseAbbrevOrImplicitClass
         typeName
         (primaryConstr: PrimaryConstrArgs<SyntaxToken> voption)
@@ -1351,8 +1151,8 @@ module TypeDefn =
         equals
         =
         parser {
-            // If it starts with a class-body keyword or has a primary constructor, it's an implicit class.
-            // Otherwise it's a type abbreviation.
+            // Identified as an implicit class if it has a constructor/self-identifier
+            // or starts with a class-body keyword (e.g., member, val, inherit).
             let! isImplicitClass =
                 lookAhead (
                     choiceL
@@ -1365,7 +1165,7 @@ module TypeDefn =
                             pDefault
                             pOverride
                             pStatic
-                            // Attributes followed by a class-body keyword (e.g., [<FieldOffset(0)>] val ...)
+                            // Handle member-level attributes (e.g., [<FieldOffset(0)>] val ...)
                             parser {
                                 let! _ = Attributes.parse
 
@@ -1374,7 +1174,6 @@ module TypeDefn =
                                         [ pMember; pVal; pNew; pAbstract; pDefault; pOverride; pStatic ]
                                         "Attributed class keyword"
                             }
-                            // If primary constructor or as-defn was present, it's definitely a class/struct
                             (if primaryConstr.IsSome || asDefn.IsSome then
                                  preturn (Unchecked.defaultof<_>)
                              else
@@ -1386,13 +1185,14 @@ module TypeDefn =
 
             match isImplicitClass with
             | ValueSome _ ->
-                // Implicit Class — no explicit begin/end; use offside rule to determine body extent
+                // Implicit class: boundary is determined by indentation (offside rule).
                 let! beginTok = nextSyntaxTokenVirtualIfNot Token.KWBegin
                 let! body = withContext OffsideContext.Type ClassTypeBody.parseOffside
                 let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
                 return TypeDefn.Anon(typeName, primaryConstr, asDefn, equals, beginTok, body, endTok)
             | ValueNone ->
-                // Abbreviation.
+                // Type abbreviation: `type Name = [access] TargetType [with type-extensions]`
+                let! representationAccess = pRepresentationAccess
                 let! anchor = peekNextSyntaxToken
 
                 let! t =
@@ -1404,25 +1204,20 @@ module TypeDefn =
 
                 let! ext = TypeExtensionElements.parseOptAt anchor
 
-                return TypeDefn.Abbrev(typeName, equals, t, ext)
+                return TypeDefn.Abbrev(typeName, equals, representationAccess, t, ext)
         }
 
-    /// Parses the body of a type definition after the leading keyword (type or and) has been consumed.
+    /// Parses a type definition body after consuming the leading `type` or `and` keyword.
     let private parseBody (attrs: Attributes<SyntaxToken> voption) : Parser<TypeDefn<SyntaxToken>, _, _, _> =
         parser {
 
             let! typeName = TypeName.parseWithAttrs attrs
 
-            // 1. Check for Primary Constructor (Class/Struct)
+            // 1. Primary constructor and optional self-identifier (e.g., `type Foo(x) as this = ...`)
             let! primaryConstr = opt PrimaryConstrArgs.parse
-
-            // 1b. Check for 'as self' identifier (e.g., type Foo(x) as this = ...)
             let! asDefn = opt AsDefn.parse
 
-            // 2. Check for TypeExtension ('with' without '=') vs regular definition ('=')
-            // The peek fails at end of input and on an offside token, which is how a
-            // block-closing dedent presents. Either way neither `with` nor `=` follows, so a
-            // body-less `type m` ENDING a module body is the abstract form like any other.
+            // 2. Check for type extension (`with`), definition (`=`), or opaque/abstract type (neither).
             let! next2 = opt peekNextSyntaxToken
             let nextTok = next2 |> ValueOption.map (fun t -> t.Token)
 
@@ -1430,36 +1225,29 @@ module TypeDefn =
                 let! elements = TypeExtensionElements.parse
                 return TypeDefn.TypeExtension(typeName, elements)
             elif nextTok <> ValueSome Token.OpEquality then
-                // No '=' — abstract/opaque type (e.g., [<Measure>] type token)
+                // Opaque/abstract declaration (e.g., `[<Measure>] type kg` or abstract types in signatures)
                 return TypeDefn.AbstractType(typeName)
             else
 
-                // 3. Check for '='
+                // 3. Consume '='
                 let! equals = pEquals
 
-                // 4. Branch based on what follows
-
-                let! next = peekNextSyntaxToken
+                // 4. Branch based on type kind
+                let! bodyStart = pBodyStart
+                let next = bodyStart.Kind
+                let bodyAnchor = bodyStart.Anchor
 
                 match next.Token with
                 | Token.KWStruct ->
-                    // Explicit Struct
+                    // Explicit struct: `type S = struct ... end`
                     let! str = pStruct
                     let! body, endTok = StructTypeBody.parse pEnd
                     return TypeDefn.Struct(typeName, primaryConstr, asDefn, equals, str, body, endTok)
 
                 | Token.KWInterface when primaryConstr.IsNone ->
-                    // Two distinct F# shapes both lead with `interface`:
-                    //   (a) explicit interface TYPE:  type IFoo = interface <member-specs> end
-                    //       (the `interface` is the type-kind keyword; no operand type)
-                    //   (b) implicit class whose ONLY body is an interface IMPL:
-                    //       type AddOne = interface Fun<int,int> with member _.Invoke x = ...
-                    //       (F# `classDefnMember := interfaceImplementation`; a fieldless
-                    //       captureless `[<Struct>]` closure is exactly this shape).
-                    // Distinguish by lookahead: `interface <Type> with` is an interface
-                    // impl (b). Without this, (b) fell into the explicit-interface branch
-                    // and the light-syntax `manyTill pEnd` body never found its `end`,
-                    // tripping parse recovery.
+                    // Lookahead disambiguation:
+                    // - `interface Type with ...` -> Implicit class implementing an interface directly
+                    // - `interface ... end`       -> Explicit interface definition
                     let! isInterfaceImpl =
                         lookAhead (
                             parser {
@@ -1473,50 +1261,44 @@ module TypeDefn =
                         |>> ValueOption.defaultValue false
 
                     if isInterfaceImpl then
-                        // Implicit class with an interface-impl body — same path as a
-                        // body-keyword-led implicit class.
                         let! beginTok = nextSyntaxTokenVirtualIfNot Token.KWBegin
                         let! body = withContext OffsideContext.Type ClassTypeBody.parseOffside
                         let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
                         return TypeDefn.Anon(typeName, primaryConstr, asDefn, equals, beginTok, body, endTok)
                     else
-                        // Explicit Interface type: type IFoo = interface ... end
                         let! intf = pInterface
                         let! body, endTok = InterfaceTypeBody.parse pEnd
                         return TypeDefn.Interface(typeName, equals, intf, body, endTok)
 
                 | Token.KWClass ->
-                    // Explicit Class
+                    // Explicit class: `type C = class ... end`
                     let! cls = pClass
                     let! body, endTok = ClassTypeBody.parse pEnd
                     return TypeDefn.Class(typeName, primaryConstr, asDefn, equals, cls, body, endTok)
 
                 | Token.KWDelegate ->
+                    // Delegate: `type D = delegate of ...`
                     let! delSig = DelegateSig.parse
                     return TypeDefn.Delegate(typeName, equals, delSig)
 
                 | Token.KWLBrace ->
-                    // Record — wrap each field's Type.parse in a SeqBlock context so that
-                    // the postfix type suffix loop doesn't consume the next field's identifier.
-                    // The SeqBlock indent is set to the type's start column (e.g., `float` at column 7),
-                    // so the next field name at column 4 is offside and stops the type parser.
+                    // Record: `type R = [access] { field: int }`
+                    // Note: SeqBlock prevents field type parsing from consuming the next field name.
+                    let! representationAccess = pRepresentationAccess
                     let! lBrace = pLBrace
                     let! fields = many1 pRecordField
                     let! rBrace = pRBrace
 
-                    let! ext = TypeExtensionElements.parseOptAt next
+                    let! ext = TypeExtensionElements.parseOptAt bodyAnchor
 
-                    return TypeDefn.Record(typeName, equals, lBrace, fields, rBrace, ext)
+                    return TypeDefn.Record(typeName, equals, representationAccess, lBrace, fields, rBrace, ext)
 
                 | Token.OpBar ->
-                    // Try Enum first (each case has '= <value>'), then Union.
-                    // Push a SeqBlock at the leading `|` column: a union case's field
-                    // type (`S of int`) ends at the offside line, so a postfix suffix
-                    // (`int option`) on a following line is a continuation only when
-                    // indented past the `|`. Without this the type parser's suffix loop
-                    // runs at the enclosing module indent and swallows the next
-                    // declaration's leading identifier (`S of int⏎printfn …` → `int
-                    // printfn`). F# uses the same offside reference (the case list).
+                    // Leading `|`: Try enum first (`| Case = 1`), fallback to union (`| Case of int`).
+                    // Note: SeqBlock aligned at `|` prevents case type suffixes from consuming
+                    // subsequent top-level declarations on following lines.
+                    let! representationAccess = pRepresentationAccess
+
                     return!
                         withContext
                             OffsideContext.SeqBlock
@@ -1524,23 +1306,25 @@ module TypeDefn =
                                 [
                                     parser {
                                         let! cases, bars = EnumTypeCases.parse
-                                        return TypeDefn.Enum(typeName, equals, cases, bars)
+                                        return TypeDefn.Enum(typeName, equals, representationAccess, cases, bars)
                                     }
                                     parser {
                                         let! cases, bars = UnionTypeCases.parse
-                                        let! ext = TypeExtensionElements.parseOptAt next
-                                        return TypeDefn.Union(typeName, equals, cases, bars, ext)
+                                        let! ext = TypeExtensionElements.parseOptAt bodyAnchor
+                                        return TypeDefn.Union(typeName, equals, representationAccess, cases, bars, ext)
                                     }
                                 ]
                                 "Union or Enum")
 
                 | _ ->
-                    // Try union without leading '|' (e.g., type Foo = Foo of int | Bar of string)
-                    // A single nullary case (type Foo = Bar) is ambiguous — treat as type abbreviation.
+                    // Handles unions without a leading pipe (e.g., `type U = A | B`).
+                    // If it parses as a single parameterless case (`type T = Alias`),
+                    // fail this branch and treat it as a type abbreviation instead.
                     return!
                         choiceL
                             [
                                 parser {
+                                    let! representationAccess = pRepresentationAccess
                                     let! cases, bars = UnionTypeCases.parse
 
                                     match cases.Length with
@@ -1549,23 +1333,22 @@ module TypeDefn =
                                          | UnionTypeCase.UnionTypeCase(_, UnionTypeCaseData.Nullary _) -> true
                                          | _ -> false)
                                         ->
-                                        // Single nullary case without '|' is a type abbreviation, not a DU
                                         return! fail errSingleNullaryUnionCaseIsAbbrev
                                     | _ ->
-                                        let! ext = TypeExtensionElements.parseOptAt next
-                                        return TypeDefn.Union(typeName, equals, cases, bars, ext)
+                                        let! ext = TypeExtensionElements.parseOptAt bodyAnchor
+                                        return TypeDefn.Union(typeName, equals, representationAccess, cases, bars, ext)
                                 }
                                 parseAbbrevOrImplicitClass typeName primaryConstr asDefn equals
                             ]
                             "Union or Type body"
         }
 
-    let parse: Parser<TypeDefn<SyntaxToken>, _, _, _> =
+    /// Parses a primary type definition starting with 'type', returning the `type` keyword with it.
+    let parse: Parser<SyntaxToken * TypeDefn<SyntaxToken>, _, _, _> =
         parser {
             let! attrs = opt Attributes.parse
-            let! _ = pType
-            // Attributes can also appear between 'type' and the type name:
-            //   type [<NoEquality>] MyRecord = ...
+            let! typeToken = pType
+            // Attributes can appear before or after 'type' (e.g. `[<A>] type [<B>] T = ...`)
             let! attrsAfterType = opt Attributes.parse
 
             let mergedAttrs =
@@ -1575,11 +1358,11 @@ module TypeDefn =
                 | ValueNone, ValueSome a -> ValueSome a
                 | ValueSome a1, ValueSome a2 -> ValueSome(a1.AddRange(a2))
 
-            return! parseBody mergedAttrs
+            let! defn = parseBody mergedAttrs
+            return typeToken, defn
         }
 
-    /// Parses a type definition continuation starting with 'and' (for mutual recursion groups).
-    /// In F# syntax: and [attrs] TypeName = ...  (attributes come after 'and')
+    /// Parses a mutually recursive type definition continuation starting with 'and' (e.g., `and [<Attr>] T = ...`).
     let parseAndContinuation: Parser<TypeDefn<SyntaxToken>, _, _, _> =
         parser {
             let! _ = pAnd

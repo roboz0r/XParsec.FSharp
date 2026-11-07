@@ -1,4 +1,5 @@
 AnonymousModule:
+type                         'type'            KWType              tok=   4  pos=  11
 TypeDefn.Anon:
   [<                         '[<'              KWLAttrBracket      tok=   0  pos=   0
   NamedType:
@@ -23,11 +24,13 @@ TypeDefn.Anon:
             Ident            'uint64'          Identifier          tok=  28  pos=  75
                              ')'               KWRParen            tok=  29  pos=  81
       =                      '='               OpEquality          tok=  31  pos=  83
-      {                      '{'               KWLBrace            tok=  33  pos=  85
-      Ident                  'value'           Identifier          tok=  35  pos=  87
-      =                      '='               OpEquality          tok=  37  pos=  93
-      Ident                  'value'           Identifier          tok=  39  pos=  95
-      }                      '}'               KWRBrace            tok=  41  pos= 101
+      Record                 '{'               KWLBrace            tok=  33  pos=  85
+        Field:
+          Ident              'value'           Identifier          tok=  35  pos=  87
+          =                  '='               OpEquality          tok=  37  pos=  93
+          Expr:
+            Ident            'value'           Identifier          tok=  39  pos=  95
+                             '}'               KWRBrace            tok=  41  pos= 101
     static                   'static'          KWStatic            tok=  45  pos= 108
     member                   'member'          KWMember            tok=  47  pos= 115
     Pat.NamedSimple          'Create'          Identifier          tok=  49  pos= 122

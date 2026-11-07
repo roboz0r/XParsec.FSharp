@@ -2,6 +2,13 @@ namespace rec XParsec.FSharp.Parser
 
 open XParsec.FSharp
 
+// Represents: access := private | internal | public
+[<RequireQualifiedAccess>]
+type Access<'T> =
+    | Private of privateToken: 'T
+    | Internal of internalToken: 'T
+    | Public of publicToken: 'T
+
 // 13. Custom Attributes and Reflection
 // Represents: attribute-target
 [<RequireQualifiedAccess>]
@@ -190,10 +197,13 @@ type ReturnType<'T> = | ReturnType of colon: 'T * typ: Type<'T>
 
 type Binding<'T> =
     {
+        /// The attributes written after the binding's `let`, `let rec`, `and` or `with` keyword.
+        /// Attributes written before `let` belong to the enclosing declaration and apply to its first
+        /// binding (`CstDeclarations.bindingAttributes`).
         attributes: Attributes<'T> voption
         inlineToken: 'T voption
         mutableToken: 'T voption
-        access: 'T voption
+        access: Access<'T> voption
         /// For values: the binding pattern (Pat.NamedSimple, Pat.Tuple, etc.)
         /// For functions with a plain name: Pat.NamedSimple
         /// For functions with an operator name: Pat.Op
@@ -215,6 +225,9 @@ type LetOrUseKeyword<'T> =
 
 // Represents: record, object, and interface implementation grammar
 type FieldInitializer<'T> = | FieldInitializer of longIdent: LongIdent<'T> * equals: 'T * expr: Expr<'T>
+
+/// The `inherit Base(args)` clause opening a record expression, and the separator after it.
+type RecordInherit<'T> = | RecordInherit of decl: ClassInheritsDecl<'T> * separator: 'T voption
 
 type ObjectConstruction<'T> =
     | ObjectConstruction of typ: Type<'T> * expr: Expr<'T>
@@ -298,6 +311,7 @@ type Expr<'T> =
         rBrace: 'T
     | Record of
         lBrace: ParenKind<'T> *
+        inherits: RecordInherit<'T> voption *
         fieldInitializers: ImArr<FieldInitializer<'T>> *
         separators: ImArr<'T> *
         rBrace: 'T
@@ -328,6 +342,9 @@ type Expr<'T> =
     | Fun of funToken: 'T * argumentPats: ImArr<Pat<'T>> * arrow: 'T * expr: Expr<'T>
     | Function of functionToken: 'T * rules: Rules<'T>
     | Sequential of exprs: ImArr<Expr<'T>> * semicolons: ImArr<'T>
+    /// `expr then thenExpr`, which evaluates `thenExpr` after `expr` and has the value of `expr`.
+    /// F# accepts it only in a secondary-constructor body (FS0743).
+    | SequentialThen of expr: Expr<'T> * thenToken: 'T * thenExpr: Expr<'T>
     | Match of matchToken: 'T * matchExpr: Expr<'T> * withToken: 'T * rules: Rules<'T>
     | TryWith of tryToken: 'T * expr: Expr<'T> * withToken: 'T * rules: Rules<'T>
     | TryFinally of tryToken: 'T * tryExpr: Expr<'T> * finallyToken: 'T * finallyExpr: Expr<'T>
@@ -391,7 +408,6 @@ type Expr<'T> =
     | SkipsTokens of skippedTokens: ImArr<'T> // Placeholder for skipped tokens
     // Added to make things work
     | Ident of ident: 'T
-    | Pat of pattern: Pat<'T>
     // Ranges and Slices Note: Spec has these as separate grammar productions, but they are closely related and it's easier to represent them with a single set of types.
     | Range of fromExpr: Expr<'T> * dotdot: 'T * toExpr: Expr<'T>
     | SteppedRange of fromExpr: Expr<'T> * dotdot1: 'T * stepExpr: Expr<'T> * dotdot2: 'T * toExpr: Expr<'T>
@@ -467,7 +483,6 @@ and [<RequireQualifiedAccess>] Pat<'T> =
     /// reinterprets the expression when binding the surrounding pattern
     /// construct — currently emitted inside `Pat.EnclosedBlock(ParenKind.Quoted, …)`
     /// for active-pattern quotation arguments per spec patterns:60-61.
-    /// Mirrors `Expr.Pat` on the expression side.
     | Expr of expr: Expr<'T>
     | Missing
     | SkipsTokens of skippedTokens: ImArr<'T>
@@ -493,7 +508,7 @@ and Rules<'T> = | Rules of leadingBar: 'T voption * rules: ImArr<Rule<'T>> * bar
 type PrimaryConstrArgs<'T> =
     | PrimaryConstrArgs of
         attributes: Attributes<'T> voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         lParen: 'T *
         // Should be simple-pat, but we allow full patterns here for better error recovery and to simplify the parser; the compiler will report an error if the pattern is not simple.
         pat: Pat<'T> voption *
@@ -509,7 +524,7 @@ type PrefixTypars<'T> =
 type TypeName<'T> =
     | TypeName of
         attributes: Attributes<'T> voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         prefixTypars: PrefixTypars<'T> voption *
         ident: LongIdent<'T> *
         typarDefns: TyparDefns<'T> voption *
@@ -528,6 +543,19 @@ type CurriedSig<'T> = | CurriedSig of args: ImArr<struct (ArgsSpec<'T> * 'T)> * 
 
 type UncurriedSig<'T> = | UncurriedSig of args: ArgsSpec<'T> * arrow: 'T * returnType: Type<'T>
 
+/// A `get` or `set` accessor with its optional access modifier (e.g. `private set`).
+type Accessor<'T> = | Accessor of access: Access<'T> voption * accessorToken: 'T
+
+/// The second accessor in a `with get, set` clause, together with its separating comma.
+type TrailingAccessor<'T> = | TrailingAccessor of comma: 'T * accessor: Accessor<'T>
+
+/// A property's accessor clause: `with get`, `with set`, `with get, set`, or `with set, get`.
+/// The case records which accessor was written first; the trailing accessor holds the other.
+[<RequireQualifiedAccess>]
+type WithClause<'T> =
+    | GetFirst of withToken: 'T * getter: Accessor<'T> * setter: TrailingAccessor<'T> voption
+    | SetFirst of withToken: 'T * setter: Accessor<'T> * getter: TrailingAccessor<'T> voption
+
 [<RequireQualifiedAccess>]
 type MemberSig<'T> =
     // `ident` is IdentOrOp so member/abstract sigs can use operator names: `static member (+): T * T -> T`.
@@ -537,8 +565,7 @@ type MemberSig<'T> =
         typarDefns: TyparDefns<'T> voption *
         colon: 'T *
         sign: CurriedSig<'T> *
-        withToken: 'T *
-        getSet: ('T * 'T voption) // (get, option<set>) or (set, option<get>)
+        withClause: WithClause<'T>
 
 // Represents: method-or-prop-defn
 [<RequireQualifiedAccess>]
@@ -553,12 +580,12 @@ type MethodOrPropDefn<'T> =
         ands: ImArr<'T>
     | AutoProperty of
         valToken: 'T *
-        access: 'T voption *
+        access: Access<'T> voption *
         ident: 'T *
         returnType: ReturnType<'T> voption *
         equals: 'T *
         expr: Expr<'T> *
-        withClause: struct ('T * 'T * 'T voption) voption // with, get/set, optional comma and other get/set
+        withClause: WithClause<'T> voption
     | AbstractSignature of sign: MemberSig<'T>
 
 [<RequireQualifiedAccess>]
@@ -571,31 +598,51 @@ type MemberKeyword<'T> =
 // Represents: class, struct, and interface bodies
 type ClassInheritsDecl<'T> = | ClassInheritsDecl of inheritToken: 'T * typ: Type<'T> * expr: Expr<'T> voption
 
-type AdditionalConstrInitExpr<'T> =
-    | Explicit of
+type AsDefn<'T> = | AsDefn of asToken: 'T * ident: 'T
+
+/// An initialisation in tail position of a secondary-constructor body.
+[<RequireQualifiedAccess>]
+type ConstructorInit<'T> =
+    /// `{ [inherit Base(args)] field = value; ... }`, initialising the fields of the object.
+    | Fields of
         lBrace: 'T *
         inherits: ClassInheritsDecl<'T> voption *
-        initializers: ImArr<FieldInitializer<'T>> *
+        initialisers: ImArr<FieldInitializer<'T>> *
         rBrace: 'T
-    | Delegated of newToken: 'T * typ: Type<'T> * expr: Expr<'T>
+    /// `new T(args)`, delegating construction to another constructor.
+    | Delegated of newToken: 'T * typ: Type<'T> * args: Expr<'T>
+    /// Any other expression. Delegation written as an application, `T(args)`, has this form.
     | Expression of expr: Expr<'T>
 
-// Represents: additional-constr-defn and its expression body
+/// A secondary-constructor body as the evaluation path to its initialisations (F# spec §8.6.3,
+/// `additional-constr-expr`). Every path through the body ends in exactly one `Init`.
 [<RequireQualifiedAccess>]
-type AdditionalConstrExpr<'T> =
-    | SequenceAfter of stmt: Expr<'T> * semicolon: 'T * rest: AdditionalConstrExpr<'T>
-    | SequenceBefore of before: AdditionalConstrExpr<'T> * thenToken: 'T * expr: Expr<'T>
+type ConstructorBody<'T> =
+    /// `statement; rest`, or the two on consecutive lines.
+    | Statement of statement: Expr<'T> * rest: ConstructorBody<'T>
+    /// `body then postlude`.
+    | Postlude of body: ConstructorBody<'T> * thenToken: 'T * postlude: Expr<'T>
+    /// `let [rec] bindings in body`.
+    | Let of letToken: 'T * isRec: 'T voption * bindings: ImArr<Binding<'T>> * body: ConstructorBody<'T>
+    /// `if condition then thenBranch else elseBranch`. `ifToken` is the `if`, the `elif`, or the
+    /// `if` of an `else if`. Each `elif` arm is a `Conditional` in the `elseBranch` of the arm before.
     | Conditional of
         ifToken: 'T *
-        cond: Expr<'T> *
-        thenToken: 'T *
-        thenBranch: AdditionalConstrExpr<'T> *
-        elseToken: 'T *
-        elseBranch: AdditionalConstrExpr<'T>
-    | LetIn of letToken: 'T * binding: Binding<'T> * inToken: 'T * body: AdditionalConstrExpr<'T>
-    | Init of initExpr: AdditionalConstrInitExpr<'T>
+        condition: Expr<'T> *
+        thenBranch: ConstructorBody<'T> *
+        elseBranch: ConstructorBody<'T>
+    /// `match scrutinee with arms`.
+    | Match of matchToken: 'T * scrutinee: Expr<'T> * arms: ImArr<ConstructorArm<'T>>
+    | Init of init: ConstructorInit<'T>
 
-type AsDefn<'T> = | AsDefn of asToken: 'T * ident: 'T
+/// A rule of a `match` in a secondary-constructor body.
+and ConstructorArm<'T> =
+    {
+        Pattern: Pat<'T>
+        Guard: PatternGuard<'T> voption
+        Body: ConstructorBody<'T>
+    }
+
 
 // Represents: member-defn
 [<RequireQualifiedAccess>]
@@ -605,25 +652,27 @@ type MemberDefn<'T> =
         staticToken: 'T voption *
         keyword: MemberKeyword<'T> *
         inlineToken: 'T voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         defn: MethodOrPropDefn<'T>
     | Value of
         attributes: Attributes<'T> voption *
         staticToken: 'T voption *
         valToken: 'T *
         mutableToken: 'T voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         ident: 'T *
         colon: 'T *
         typ: Type<'T>
+    /// `new(pat) = body`, with `shape` the paths of `body` to its initialisations.
     | AdditionalConstructor of
         attributes: Attributes<'T> voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         newToken: 'T *
         pat: Pat<'T> *
         asDefn: AsDefn<'T> voption *
         equals: 'T *
-        body: AdditionalConstrExpr<'T>
+        body: Expr<'T> *
+        shape: ConstructorBody<'T>
 
 // Represents: type-defn-element and related constructs
 type TypeDefnElement<'T> =
@@ -679,7 +728,7 @@ type RecordField<'T> =
     | RecordField of
         attributes: Attributes<'T> voption *
         mutableToken: 'T voption *
-        access: 'T voption *
+        access: Access<'T> voption *
         ident: 'T *
         colon: 'T *
         typ: Type<'T>
@@ -717,10 +766,16 @@ type DelegateSig<'T> = | DelegateSig of delegateToken: 'T * ofToken: 'T * sign: 
 // Represents: type-defn, the top-level definition
 [<RequireQualifiedAccess>]
 type TypeDefn<'T> =
-    | Abbrev of typeName: TypeName<'T> * equals: 'T * typ: Type<'T> * extensions: TypeExtensionElements<'T> voption
+    | Abbrev of
+        typeName: TypeName<'T> *
+        equals: 'T *
+        representationAccess: Access<'T> voption *
+        typ: Type<'T> *
+        extensions: TypeExtensionElements<'T> voption
     | Record of
         typeName: TypeName<'T> *
         equals: 'T *
+        representationAccess: Access<'T> voption *
         lBrace: 'T *
         fields: RecordFields<'T> *
         rBrace: 'T *
@@ -728,6 +783,7 @@ type TypeDefn<'T> =
     | Union of
         typeName: TypeName<'T> *
         equals: 'T *
+        representationAccess: Access<'T> voption *
         cases: UnionTypeCases<'T> *
         bars: ImArr<'T> *
         extensions: TypeExtensionElements<'T> voption
@@ -756,7 +812,12 @@ type TypeDefn<'T> =
         body: ObjectModelBody<'T> *
         endToken: 'T
     | Interface of typeName: TypeName<'T> * equals: 'T * interfaceToken: 'T * body: ObjectModelBody<'T> * endToken: 'T
-    | Enum of typeName: TypeName<'T> * equals: 'T * cases: EnumTypeCases<'T> * bars: ImArr<'T>
+    | Enum of
+        typeName: TypeName<'T> *
+        equals: 'T *
+        representationAccess: Access<'T> voption *
+        cases: EnumTypeCases<'T> *
+        bars: ImArr<'T>
     | Delegate of typeName: TypeName<'T> * equals: 'T * sign: DelegateSig<'T>
     | TypeExtension of typeName: TypeName<'T> * elements: TypeExtensionElements<'T>
     | AbstractType of typeName: TypeName<'T>
@@ -796,7 +857,7 @@ type Constant<'T> =
     /// e.g., `10<kg>` or `9.8<m/s^2>`
     | MeasuredLiteral of value: 'T * lAngle: 'T * measure: Measure<'T> * rAngle: 'T
 
-/// The kind of string literal, carrying the opening token.
+/// The kind of string literal, with the opening token as its payload.
 and [<RequireQualifiedAccess>] StringKind<'T> =
     /// Regular string: "..."
     | String of 'T

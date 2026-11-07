@@ -1,4 +1,4 @@
-// IF FSHARP block comments
+// The ML compatibility markers (*F# and (*IF-FSHARP open ordinary block comments
 let x = 1
 (*F#
 let y = 2

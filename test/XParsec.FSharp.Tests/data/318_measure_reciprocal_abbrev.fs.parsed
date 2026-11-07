@@ -1,11 +1,13 @@
 module               'module'          KWModule            tok=   0  pos=   0
                      'Test'            Identifier          tok=   2  pos=   7
+type                 'type'            KWType              tok=  14  pos=  90
 TypeDefn.Abstract:
   [<                 '[<'              KWLAttrBracket      tok=  10  pos=  78
   NamedType:
     Ident            'Measure'         Identifier          tok=  11  pos=  80
   >]                 '>]'              KWRAttrBracket      tok=  12  pos=  87
   TypeName           'second'          Identifier          tok=  16  pos=  95
+type                 'type'            KWType              tok=  23  pos= 115
 TypeDefn.Abbrev:
   [<                 '[<'              KWLAttrBracket      tok=  19  pos= 103
   NamedType:

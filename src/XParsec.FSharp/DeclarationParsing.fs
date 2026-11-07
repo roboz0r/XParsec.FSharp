@@ -16,7 +16,7 @@ module ImportDecl =
             let! openTok = pOpen
             let! typeTok = opt pType
 
-            // Committed after consuming 'open' — recover with virtual ident if LongIdent fails
+            // Recover with a virtual identifier if LongIdent fails after 'open'
             let! ident = recoverLongIdent "Expected identifier after 'open'" LongIdent.parse
 
             match typeTok with
@@ -40,7 +40,7 @@ module CompilerDirectiveDecl =
     let parse: FSParser<CompilerDirectiveDecl<SyntaxToken>> =
         parser {
             let! hash = pHash
-            // Committed after consuming '#' — recover with virtual identifier if missing
+            // Recover with a virtual identifier if missing after '#'
             let! ident =
                 recoverWithVirtualToken
                     Token.Identifier
@@ -60,9 +60,8 @@ module ModuleFunctionOrValueDefn =
     let private errExpectedLetOrDo: ErrorType<PositionedToken, ParseState> =
         Message "Expected 'let' or 'do'"
 
-    // Consume a trailing `in` only when another token follows. If the `in` is the last
-    // meaningful token in the file, leave it for the existing missing-body diagnostic
-    // to fire via the script-expression fallback in FSharpAst.parse.
+    // Only consume trailing 'in' if followed by another token.
+    // If at EOF, fail so the missing-body diagnostic handles it downstream.
     let private pTrailingIn =
         parser {
             let! inTok = pIn
@@ -80,18 +79,16 @@ module ModuleFunctionOrValueDefn =
                 match isRec with
                 | ValueSome recTok ->
                     parser {
-                        let! bindings, ands = Binding.parseSepByAnd1 attrs
+                        let! bindings, ands = Binding.parseSepByAnd1
                         return ValueSome recTok, bindings, ands
                     }
                 | ValueNone ->
                     parser {
-                        let! binding = Binding.parse attrs
+                        let! binding = Binding.parseAttributed
                         return ValueNone, ImmutableArray.Create(binding), ImmutableArray.Empty
                     }
 
-            // F# allows an ML-style trailing `in` to terminate a module-level let binding
-            // (LexFilter turns it into ODECLEND in the reference compiler). Capture it so
-            // the AST preserves the source token.
+            // Capture optional ML-style trailing 'in' to preserve it in the AST
             let! inTok = opt pTrailingIn
             return ModuleFunctionOrValueDefn.Let(attrs, letTok, recTok, bindings, ands, inTok)
         }
@@ -104,8 +101,7 @@ module ModuleFunctionOrValueDefn =
 
             match token.Token with
             | Token.KWDo ->
-                // Committed after 'do' — recover with Expr.Missing if expression fails.
-                // Grammar: moduleDoBinding: opt_attributes DO typedSeqExprBlock
+                // Recover with Expr.Missing if the 'do' body expression fails
                 let! expr =
                     recoverWith
                         StoppingTokens.afterExpr
@@ -137,7 +133,7 @@ module ModuleDefn =
                 | TokenIndex.Virtual -> 0
 
             let! beginTok = nextSyntaxTokenVirtualIfNot Token.KWBegin
-            // Module body at module_col + 1, anchored to the keyword's column
+            // Indent module body 1 column past the 'module' keyword
             let! elems = withContextAt OffsideContext.Module (indent + 1) modTok.PositionedToken (opt elementParser)
             let! endTok = nextSyntaxTokenVirtualIfNot Token.KWEnd
             return ModuleDefnBody(beginTok, elems, endTok)
@@ -149,7 +145,7 @@ module ModuleDefn =
             let! modTok = pModule
             let! access = opt Access.parse
             let! isRec = opt pRec
-            // Committed after 'module' — recover ident and '=' with virtuals if missing
+            // Recover missing identifier and '=' with virtual tokens after 'module' keyword
             let! ident =
                 recoverWithVirtualToken
                     Token.Identifier
@@ -164,36 +160,35 @@ module ModuleDefn =
 
 [<RequireQualifiedAccess>]
 module ModuleElem =
+    // Forward reference for mutual recursion: ModuleElem -> ModuleDefn -> ModuleElem
     let private refModuleElem = RefParser<ModuleElem<SyntaxToken>, _, _, _>()
 
-    // Forward reference setup to handle: ModuleElem -> ModuleDefn -> ModuleElem
-    /// Plain parseElems: no recovery. Used in AnonymousModule where backtracking must remain possible.
+    /// Parses module elements without error recovery. Used where backtracking is required (e.g. anonymous modules).
     let parseElems = many refModuleElem.Parser
 
-    /// parseElems with recovery: after `many` stops on failure, skips tokens to the next
-    /// module-elem boundary and resumes. Only safe in committed contexts (after namespace/module keyword).
-    /// Recovery happens *outside* `many` to avoid zero-width infinite loops.
+    /// Parses module elements with error recovery. On failure, skips tokens until the next element boundary and continues.
+    /// Safe only in committed contexts (e.g., inside an explicit module or namespace).
     let parseElemsWithRecovery: Parser<ModuleElems<SyntaxToken>, _, _, _> =
         fun reader ->
             let result = ResizeArray<ModuleElem<SyntaxToken>>()
             let mutable keepGoing = true
 
             while keepGoing do
-                // Run many to collect as many module elements as possible
+                // Parse as many valid module elements as possible
                 match many refModuleElem.Parser reader with
                 | Ok elems ->
                     for e in elems do
                         result.Add(e)
                 | Error _ -> ()
 
-                // Check if there are leftover non-EOF tokens
+                // Check for remaining tokens
                 match peekNextSyntaxToken reader with
                 | Error _ -> keepGoing <- false
                 | Ok tok ->
                     if tok.Token = Token.EOF then
                         keepGoing <- false
                     else
-                        // Skip tokens until the next module-elem-starting keyword or EOF
+                        // Skip unparsed tokens until reaching the next module element boundary or EOF
                         let skipped = ResizeArray<SyntaxToken>()
                         let mutable skipping = true
 
@@ -226,7 +221,7 @@ module ModuleElem =
 
                             result.Add(ModuleElem.SkipsTokens(ImmutableArray.CreateRange(skipped)))
                         else
-                            // Can't skip anything and can't parse — avoid infinite loop
+                            // Prevent infinite loop if no tokens can be parsed or skipped
                             keepGoing <- false
 
             Ok(ImmutableArray.CreateRange(result))
@@ -237,33 +232,29 @@ module ModuleElem =
                 Token.KWOpen, ImportDecl.parse |>> ModuleElem.Import
                 Token.KWHash, CompilerDirectiveDecl.parse |>> ModuleElem.CompilerDirective
             ]
-            // Fallback: parsers that might be preceded by Attributes
-            // (Module, Type, Exception, Let, Do, bare expressions)
+            // Fallback for constructs that may begin with attributes (types, modules, bindings, etc.)
             (choiceL
                 [
-                    // Type Definitions (with mutual recursion via 'and')
+                    // Type definitions (including mutually recursive types linked by 'and')
                     parser {
-                        let! first = TypeDefn.parse
+                        let! typeToken, first = TypeDefn.parse
                         let! rest = many TypeDefn.parseAndContinuation
                         let builder = ImmutableArray.CreateBuilder(rest.Length + 1)
                         builder.Add(first)
                         builder.AddRange(rest)
-                        return ModuleElem.Type(builder.ToImmutable())
+                        return ModuleElem.Type(typeToken, builder.ToImmutable())
                     }
 
-                    // Exception Definitions
                     ExceptionDefn.parse |>> ModuleElem.Exception
 
-                    // Module Abbreviation (must precede ModuleDefn so `module X = A.B.C` isn't consumed as a nested module)
+                    // Module abbreviations must precede nested module definitions (e.g., `module M = A.B.C`)
                     ModuleAbbrev.parse |>> ModuleElem.ModuleAbbrev
 
-                    // Module Definition (Recursive)
                     (ModuleDefn.parse parseElemsWithRecovery) |>> ModuleElem.Module
 
-                    // Let / Do bindings
                     ModuleFunctionOrValueDefn.parse |>> ModuleElem.FunctionOrValue
 
-                    // Bare expressions (scripts, interactive)
+                    // Top-level expressions (scripts and interactive sessions)
                     Expr.parse |>> ModuleElem.Expression
                 ]
                 "ModuleElem")
@@ -280,12 +271,12 @@ module NamespaceDeclGroup =
 
             match globalTok with
             | ValueSome gTok ->
-                // namespace global
+                // Global namespace: `namespace global`
                 let! elems = ModuleElem.parseElemsWithRecovery
                 return NamespaceDeclGroup.Global(nsTok, gTok, elems)
 
             | ValueNone ->
-                // namespace [rec] LongIdent — committed after 'namespace'
+                // Named namespace: `namespace [rec] Path`
                 let! isRec = opt pRec
                 let! ident = recoverLongIdent "Expected namespace identifier" LongIdent.parse
                 let! elems = ModuleElem.parseElemsWithRecovery

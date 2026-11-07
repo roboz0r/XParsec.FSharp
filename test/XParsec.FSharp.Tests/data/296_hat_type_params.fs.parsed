@@ -1,5 +1,6 @@
 module                       'module'          KWModule            tok=   0  pos=   0
                              'Test'            Identifier          tok=   2  pos=   7
+type                         'type'            KWType              tok=  10  pos=  87
 TypeDefn.Anon:
   TypeName                   'MyBuilder'       Identifier          tok=  12  pos=  92
   (                          '('               KWLParen            tok=  13  pos= 101

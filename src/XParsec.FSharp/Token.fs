@@ -14,74 +14,97 @@ type TokenKind =
     | Spare = 7
 
 /// Represents the precedence levels of F# operators, from lowest to highest.
-/// The integer values match the official F# documentation, revised to reflect the actual rules in the F# compiler.
+/// The integer values match the official F# documentation, revised to reflect the actual rules in the F# compiler parser (`pars.fsy`).
 type PrecedenceLevel =
+    /// Pattern / type annotation: `as`
     | As = 1
-    | When = 2
-    /// Sequential pipe/bar, NOT the |> operator
-    | Pipe = 3
-    | Semicolon = 4
-    /// Slot reserved for `->` to mirror its position in pars.fsy (`%right RARROW`, between SEMICOLON and LET/NEW).
-    /// `->` never participates as an infix operator in expressions — it only appears as a syntactic marker in
-    /// `match | pat -> body`, `fun x -> body`, function types `T -> U`, etc. The slot is unused at runtime;
-    /// kept to preserve the 1:1 numeric mapping with pars.fsy's precedence ladder.
-    | RArrow = 5
-    | Let = 6
-    /// includes function, fun, match, try, do
-    | Function = 7
-    | If = 8
-    /// &lt;-, :=
-    /// pars.fsy declares these at two separate `%right` levels — LARROW (line 342) below COLON_EQUALS (line 343) —
-    /// but they are collapsed here into a single level. Combining them in one expression (e.g. `cell := record.field &lt;- value`)
-    /// is grammatically possible but pathological: the LHS of `&lt;-` is restricted to mutable LHS forms (field, indexer,
-    /// mutable binding), and `:=` is effectively a function call on `ref&lt;_&gt;`, so the inner subexpression always has
-    /// type `unit` — forcing the outer target to be `ref&lt;unit&gt;` for the program to typecheck. No real-world code is
-    /// known to depend on the precedence ordering between them; merging the slots simplifies the Pratt table without
-    /// changing observable behavior.
-    | Assignment = 9
-    | Comma = 10
-    /// The binary '..' operator. Non-associative. The ternary '.. ..' form is a special grammar rule.
-    | Range = 11
-    /// or, ||
-    | LogicalOr = 12
-    /// &, &&
-    | LogicalAnd = 13
-    /// :>, :?>
-    | Cast = 14
-    /// =, &lt;, &gt;, !=, $, |OP, &OP
-    | ComparisonAndBitwise = 15
-    /// ^OP, @OP
-    | Append = 16
-    /// ::
-    | Cons = 17
-    /// :?
-    | TypeTest = 18
-    /// +, -
-    | InfixAdd = 19
-    /// *, /, %
-    | InfixMultiply = 20
-    /// **
-    | Power = 21
-    /// ?? isn't actually a built-in operator, but it's
-    /// listed as a keyword and given a precedence level in the F# compiler.
-    | QMarkQMark = 22
-    /// f x, lazy x, assert x
-    | Application = 23
-    /// | rule ->
-    | PatternMatchBar = 24
-    /// !x, ~x
-    | Prefix = 25
-    /// ., ?
-    | Dot = 26
-    /// f[x]
-    | HighIndexApplication = 27
-    /// f(x)
-    | HighApplication = 28
-    /// f&lt;types&gt;
-    | HighTypeApplication = 29
-    /// Parentheses have the highest precedence
-    | Parens = 30
 
+    /// Pattern guard: `when`
+    | When = 2
+
+    /// Sequential pattern bar `|` (not the infix `|>` operator)
+    | Pipe = 3
+
+    /// Expression sequencing: `;`
+    | Semicolon = 4
+
+    /// Reserved slot for `->` (mirrors `pars.fsy` table layout; unused in expression Pratt parsing)
+    | RArrow = 5
+
+    /// Value bindings: `let`, `use`, `new`
+    | Let = 6
+
+    /// Block expressions: `fun`, `function`, `match`, `try`, `do`
+    | Function = 7
+
+    /// Conditional branch: `if ... then ... else`
+    | If = 8
+
+    /// Mutation and reference assignment: `<-`, `:=`
+    | Assignment = 9
+
+    /// Tuple construction: `,`
+    | Comma = 10
+
+    /// Range expression: `..`
+    | Range = 11
+
+    /// Boolean OR: `||`, `or`
+    | LogicalOr = 12
+
+    /// Boolean AND: `&&`, `&`
+    | LogicalAnd = 13
+
+    /// Type conversions: `:>`, `:?>`
+    | Cast = 14
+
+    /// Comparisons and custom pipe/bitwise ops: `=`, `<`, `>`, `<>`, `|..`, `&..`, `$`
+    | ComparisonAndBitwise = 15
+
+    /// Concatenation: `@`, `^` (and operators starting with them)
+    | Append = 16
+
+    /// List construction: `::`
+    | Cons = 17
+
+    /// Dynamic type test: `:?`
+    | TypeTest = 18
+
+    /// Infix addition and subtraction: `+`, `-`
+    | InfixAdd = 19
+
+    /// Infix multiplication, division, and modulo: `*`, `/`, `%`
+    | InfixMultiply = 20
+
+    /// Exponentiation: `**`
+    | Power = 21
+
+    /// Reserved null-coalescing keyword: `??`
+    | QMarkQMark = 22
+
+    /// Function and keyword application: `f x`, `lazy x`, `assert x`
+    | Application = 23
+
+    /// Match case clause: `| pat -> ...`
+    | PatternMatchBar = 24
+
+    /// Prefix operators: `!x`, `~x`, `-x`, `+x`
+    | Prefix = 25
+
+    /// Member access and dynamic lookup: `.`, `?`
+    | Dot = 26
+
+    /// Item indexing: `expr[idx]`
+    | HighIndexApplication = 27
+
+    /// High-precedence paren application: `expr(arg)`
+    | HighApplication = 28
+
+    /// Generic type application: `expr<type>`
+    | HighTypeApplication = 29
+
+    /// Grouping delimiters: `(...)`, `begin ... end`
+    | Parens = 30
 
 [<Struct; RequireQualifiedAccess>]
 type Associativity =
@@ -130,9 +153,6 @@ module TokenRepresentation =
     // SECTION 1: Token Kind (Bits 15-13)
     // ==========================================================
     [<Literal>]
-    let KindMask = 0xE000us
-
-    [<Literal>]
     let KindShift = 13
 
     // 000...
@@ -164,8 +184,8 @@ module TokenRepresentation =
     // SECTION 2: Global Flags (Bits 12-11)
     // ==========================================================
 
-    // Bit 12: Indicates the token was found inside a comment block
-    // (Replaces InBlockComment and InOCamlBlockComment)
+    // Bit 12: Indicates the token is inside a block comment. The `(*` and `*)` delimiting the
+    // outermost comment are unflagged; nested delimiters are flagged.
     [<Literal>]
     let InComment = 0x1000us // Bit 12
 
@@ -195,19 +215,6 @@ module TokenRepresentation =
     // ==========================================================
     // 8 bits = 256 unique values.
 
-    [<Literal>]
-    let PayloadMask = 0x00FFus
-
-    // --- Helpers for Kind Checks ---
-
-    // A token is a literal if it is String (0x4000) or Number (0x6000)
-    // We check this by masking the top 2 bits (0xC000) and checking for 0x4000 bit.
-    [<Literal>]
-    let internal LiteralGroupMask = 0xC000us
-
-    [<Literal>]
-    let internal LiteralGroupCheck = 0x4000us
-
     // --- Payload Definitions ---
 
     // 1. Numeric Literals (Payload Bits 0-6)
@@ -230,11 +237,6 @@ module TokenRepresentation =
     [<Literal>]
     let internal NumericBaseBinary = 0b0110_0000us
 
-    // 2. String/Text Literals (Payload Bits 0-5)
-    // Fits your requirement of ~60 types within 6 bits.
-    [<Literal>]
-    let TextTypeIDMask = 0b00111111us
-
     // 3. Operators
     // Layout:
     //   Bits 10-6: within-family operator ID (5 bits, 0-31) — distinguishes specific
@@ -248,10 +250,6 @@ module TokenRepresentation =
 
     [<Literal>]
     let PrecedenceMask = 0b0001_1111us
-
-    // Within-family operator ID lives in bits 10-6.
-    [<Literal>]
-    let OpFamilyShift = 6
 
     [<Literal>]
     let OpFamilyMask = 0b0000_0111_1100_0000us
@@ -812,62 +810,6 @@ module TokenRepresentation =
         let ReservedOperator = 255us // A reserved operator (i.e. containing a reserved symbol $ or :)
 
 
-    // ==========================================================
-    // HELPER: String/Text Subtypes (Must fit in 8 bits: 0-255)
-    // ==========================================================
-    module internal StringType =
-        [<Literal>]
-        let Regular = 0us
-
-        [<Literal>]
-        let Verbatim = 1us
-
-        [<Literal>]
-        let TripleQuote = 2us
-
-        [<Literal>]
-        let ByteArray = 3us
-
-        [<Literal>]
-        let VerbatimByteArray = 4us
-
-        [<Literal>]
-        let Char = 5us
-
-        // Interpolation parts
-        [<Literal>]
-        let InterpolatedOpen = 10us // $"
-
-        [<Literal>]
-        let InterpolatedClose = 11us // "
-
-        [<Literal>]
-        let InterpolatedPart = 12us // text inside
-
-        [<Literal>]
-        let InterpolatedExprOpen = 13us // {
-
-        [<Literal>]
-        let InterpolatedExprClose = 14us // }
-
-        // Triple Interpolation
-        [<Literal>]
-        let TripleInterpolatedOpen = 20us // $"""
-
-        [<Literal>]
-        let TripleInterpolatedClose = 21us
-
-        // Verbatim Interpolation
-        [<Literal>]
-        let VerbatimInterpolatedOpen = 30us // $@"
-
-        // Formatting / Escapes
-        [<Literal>]
-        let FormatPlaceholder = 50us
-
-        [<Literal>]
-        let EscapeChar = 51us
-
     module internal Special =
         [<Literal>]
         let EOF = 1us
@@ -938,20 +880,6 @@ module TokenRepresentation =
 
         [<Literal>]
         let DirectiveIndent = 25us
-
-
-        [<Literal>]
-        let StartFSharpBlockComment = 100us // "(*IF-FSHARP" | "(*F#" starts a block comment ignored by F#
-
-        [<Literal>]
-        let EndFSharpBlockComment = 101us // "ENDIF-FSHARP*)" | "F#*)" ends a block comment ignored by F#
-
-        [<Literal>]
-        let StartOCamlBlockComment = 102us // "(*IF-CAML*)" | "(*IF-OCAML*)" starts a block comment ignored by OCaml
-
-        [<Literal>]
-        let EndOCamlBlockComment = 103us // "ENDIF-CAML*)" | "ENDIF-OCAML*)" ends a block comment ignored by OCaml
-
 
         // Fallback for others
         [<Literal>]
@@ -1137,58 +1065,16 @@ module TokenRepresentation =
     module internal Precedence =
         // Used to define the precedence in the Token enum
         [<Literal>]
-        let As = 1us
-
-        [<Literal>]
-        let When = 2us
-
-        [<Literal>]
-        let Pipe = 3us
-
-        [<Literal>]
-        let Semicolon = 4us
-
-        [<Literal>]
-        let RArrow = 5us
-
-        [<Literal>]
-        let Let = 6us
-
-        [<Literal>]
-        let Function = 7us
-
-        [<Literal>]
-        let If = 8us
-
-        [<Literal>]
-        let Assignment = 9us
-
-        [<Literal>]
-        let Comma = 10us
-
-        [<Literal>]
-        let Range = 11us
-
-        [<Literal>]
         let LogicalOr = 12us
 
         [<Literal>]
         let LogicalAnd = 13us
 
         [<Literal>]
-        let Cast = 14us
-
-        [<Literal>]
         let ComparisonAndBitwise = 15us
 
         [<Literal>]
         let Append = 16us
-
-        [<Literal>]
-        let Cons = 17us
-
-        [<Literal>]
-        let TypeTest = 18us
 
         [<Literal>]
         let InfixAdd = 19us
@@ -1198,15 +1084,6 @@ module TokenRepresentation =
 
         [<Literal>]
         let Exponentiation = 21us
-
-        [<Literal>]
-        let QMarkQMark = 22us
-
-        [<Literal>]
-        let Application = 23us
-
-        [<Literal>]
-        let PatternMatchBar = 24us
 
         [<Literal>]
         let Prefix = 25us
@@ -1219,9 +1096,6 @@ module TokenRepresentation =
 
         [<Literal>]
         let HighApplication = 28us
-
-        [<Literal>]
-        let HighTypeApplication = 29us
 
     /// Within-family operator IDs — bits 10-6 of the Token value, 5 bits, 32 slots.
     /// IDs are globally unique across the whole Token enum: when an operator's
@@ -1403,7 +1277,7 @@ type Token =
     // Comments (Using Special IDs we defined or mapped)
     | LineComment = (KindSpecial ||| Special.LineComment)
     | BlockCommentStart = (KindSpecial ||| Special.BlockCommentStart) // Start marker
-    | BlockCommentEnd = (KindSpecial ||| Special.BlockCommentEnd) // End marker (Parser logic usually handles nesting)
+    | BlockCommentEnd = (KindSpecial ||| Special.BlockCommentEnd) // End marker
     | Indent = (KindSpecial ||| Special.Indent)
 
     // 3.3 Conditional Compilation
@@ -1431,12 +1305,6 @@ type Token =
     // 19.4 File Extensions and Lexical Matters
     | IndentDirective = (KindSpecial ||| Special.DirectiveIndent) // #indent
     | InvalidDirective = (KindSpecial ||| Special.DirectiveInvalid) // Any other invalid directive starting with #
-
-    // 19.1 ML Compatibility
-    | StartFSharpBlockComment = (KindSpecial ||| Special.StartFSharpBlockComment) // "(*IF-FSHARP" | "(*F#" starts a block comment ignored by F#
-    | EndFSharpBlockComment = (KindSpecial ||| Special.EndFSharpBlockComment) // "ENDIF-FSHARP*)" | "F#*)" ends a block comment ignored by F#
-    | StartOCamlBlockComment = (KindSpecial ||| Special.StartOCamlBlockComment) // "(*IF-CAML*)" | "(*IF-OCAML*)" starts a block comment ignored by OCaml
-    | EndOCamlBlockComment = (KindSpecial ||| Special.EndOCamlBlockComment) // "ENDIF-CAML*)" | "ENDIF-OCAML*)" ends a block comment ignored by OCaml
 
     // ==============================================================================
     // 2. IDENTIFIERS (KindIdentifier 0x2000)
@@ -1708,10 +1576,6 @@ type Token =
     | OpGreaterThanOrEqual = (KindOperator ||| OpFamily.OpGe ||| Precedence.ComparisonAndBitwise) // >=
     | OpLessThan = (KindOperator ||| OpFamily.OpLt ||| Precedence.ComparisonAndBitwise) // <
     | OpGreaterThan = (KindOperator ||| OpFamily.OpGt ||| Precedence.ComparisonAndBitwise) // >
-    // |>, ||>, |||> — the F# spec classifies these at Pipe precedence, but the
-    // current lexer/parser pipeline has treated them at ComparisonAndBitwise since
-    // inception. Preserve today's emitted value for behavioral parity; the
-    // within-family ID still makes each uniquely identifiable.
     | OpPipeRight = (KindOperator ||| OpFamily.OpPipeGt ||| Precedence.ComparisonAndBitwise) // |>
     | OpPipeRight2 = (KindOperator ||| OpFamily.OpPipeGtGt ||| Precedence.ComparisonAndBitwise) // ||>
     | OpPipeRight3 = (KindOperator ||| OpFamily.OpPipeGtGtGt ||| Precedence.ComparisonAndBitwise) // |||>
@@ -2011,8 +1875,8 @@ module internal Token =
                     || trimIgnored.Length < span.Length // prefix operators cannot start with ignored chars
                 then
                     Token.InvalidPrefixOperator
+                // any number of ~ (4+) is a valid prefix operator
                 else if span.Length > 3 && span.Trim('~').Length = 0 then
-                    // any number of ~ (4+) is a valid prefix operator
                     ofUInt16 (KindOperator ||| CanBePrefix ||| Precedence.Prefix)
                 else
                     let s = span.ToString()
@@ -2085,16 +1949,10 @@ module internal TokenInfo =
     let isText (token: Token) = token |> kind = TokenKind.TextLiteral
     let isOperator (token: Token) = token |> kind = TokenKind.Operator
     let isKeyword (token: Token) = token |> kind = TokenKind.Keyword
-    let isInvalid (token: Token) = token |> kind = TokenKind.Invalid
     let isSpecial (token: Token) = token |> kind = TokenKind.Special
 
-    let isDeprecated (token: Token) = failwith "TODO: Implement isDeprecated"
-    let isReserved (token: Token) = failwith "TODO: Implement isReserved"
     let inComment (token: Token) = hasFlag token InComment
     let isVirtual (token: Token) = hasFlag token IsVirtual
-
-    let isVirtualKeyword (token: Token) =
-        isKeyword token && hasFlag token IsVirtual
 
     let withoutCommentFlags (token: Token) : Token =
         let mask = ~~~InComment
@@ -2106,19 +1964,23 @@ module internal TokenInfo =
 
     let canBePrefix token = hasFlag token CanBePrefix
 
-    /// Can this token appear as the first token of an expression?
-    /// Used to guard virtual separator emission in seq blocks — only tokens that can
-    /// actually start an expression should trigger a virtual `;`.
+    /// Checks if a token can begin an expression.
+    /// Used to decide when to insert virtual semicolons in sequence blocks.
     let canStartExpression (token: Token) =
         match token with
         // Identifiers
         | Token.Identifier
         | Token.BacktickedIdentifier
         | Token.UnterminatedBacktickedIdentifier
-        // Boolean and null keywords (classified as keywords, not literals)
+
+        // Constants & Boolean/Null keywords
         | Token.KWTrue
         | Token.KWFalse
         | Token.KWNull
+        | Token.SourceDirectoryIdentifier
+        | Token.SourceFileIdentifier
+        | Token.LineIdentifier
+
         // Opening delimiters
         | Token.KWLParen
         | Token.KWLBracket
@@ -2127,7 +1989,8 @@ module internal TokenInfo =
         | Token.KWLBrace
         | Token.KWBegin
         | Token.KWStruct
-        // Keyword expression starters (control flow, binding, computation)
+
+        // Control flow, bindings, and computation keywords
         | Token.KWIf
         | Token.KWMatch
         | Token.KWMatchBang
@@ -2154,54 +2017,67 @@ module internal TokenInfo =
         | Token.KWUpcast
         | Token.KWDowncast
         | Token.KWBase
-        // Wildcard for shorthand lambda: _.Property
+
+        // Shorthand lambda wildcard (e.g. _.Property)
         | Token.Wildcard
-        // Quotation markers
+
+        // Quotations
         | Token.OpQuotationTypedLeft
         | Token.OpQuotationUntypedLeft
-        // Interpolated string opens
+
+        // String openers
         | Token.InterpolatedStringOpen
         | Token.VerbatimInterpolatedStringOpen
         | Token.Interpolated3StringOpen
-        // Plain string opens
         | Token.StringOpen
         | Token.VerbatimStringOpen
         | Token.String3Open
-        // ? for optional argument expressions (e.g., f(?x=value))
+
+        // Optional arguments (e.g. ?arg = value)
         | Token.OpDynamic -> true
-        // Literals (numeric and text kinds cover all number/string/char/byte-array tokens)
+
+        // Numeric, character, and byte-array literals
         | _ when isLiteral token -> true
-        // Prefix operators (-, +, !, ~, &, &&, .., *, not, etc.)
+
+        // Unary/prefix operators (e.g. -, +, !, ~, &&, not)
         | _ when isOperator token && canBePrefix token -> true
         | _ -> false
 
-    /// Can this token appear as the first token of a pattern?
-    /// Used to guard virtual separator emission in pattern SeqBlock contexts — only tokens
-    /// that can actually start a pattern should trigger a virtual `;`. This is narrower than
-    /// `canStartExpression` because pattern atoms are a subset (no `if`/`match`/`fun`/etc.).
+    /// Checks if a token can begin a pattern.
+    /// Used to decide when to insert virtual semicolons in pattern sequence blocks.
     let canStartPattern (token: Token) =
         match token with
+        // Identifiers & Wildcards
         | Token.Identifier
         | Token.BacktickedIdentifier
         | Token.UnterminatedBacktickedIdentifier
         | Token.Wildcard
+
+        // Constants & Delimiters
         | Token.KWNull
         | Token.KWTrue
         | Token.KWFalse
+        | Token.SourceDirectoryIdentifier
+        | Token.SourceFileIdentifier
+        | Token.LineIdentifier
         | Token.KWLParen
         | Token.KWLBracket
         | Token.KWLArrayBracket
         | Token.KWLBrace
         | Token.KWLAttrBracket
         | Token.KWStruct
+
+        // Pattern operators & String openers
         | Token.OpTypeTest
         | Token.OpDynamic
         | Token.StringOpen
         | Token.VerbatimStringOpen
         | Token.String3Open -> true
-        // Literals (numeric and text kinds cover all number/string/char/byte-array tokens)
+
+        // Numeric, character, and byte-array literals
         | _ when isLiteral token -> true
-        // `-` and `+` prefixing a numeric literal inside a const pattern
+
+        // Signed numeric patterns (e.g. -1, +5)
         | _ when isOperator token && canBePrefix token -> true
         | _ -> false
 
@@ -2358,10 +2234,6 @@ module internal TokenInfo =
             | Token.VirtualApp -> PrecedenceLevel.Application
             | Token.VirtualTyApp -> PrecedenceLevel.HighTypeApplication
             | t -> raise (new NotImplementedException($"{t}"))
-        // elif isSpecial token then
-        //     match token with
-        //     | Token.Whitespace -> PrecedenceLevel.Application
-        //     | t -> raise (new NotImplementedException($"{t}"))
         else
             uint16 token &&& PrecedenceMask |> int |> enum
 
@@ -2405,10 +2277,8 @@ type PositionedToken =
         | TokenKind.Invalid
         | TokenKind.Spare -> sprintf "%d, %O%s%s" this.StartIndex tokNoFlags inComment isVirtual
         | TokenKind.Operator ->
-            // Named operators (non-zero OpFamily ID) have unique enum values, so %O resolves
-            // to the F# case name (e.g. "OpAddition"). Generic-slot ops share enum values
-            // across multiple cases — fall back to the binary representation in that case
-            // so the precedence and prefix flag remain visible.
+            // Named operators (non-zero OpFamily ID) have unique enum values, so %O resolves to the F# case name (e.g. "OpAddition").
+            // Otherwise fall back to the binary representation so the precedence and prefix flag remain visible.
             let opFamily = uint16 tokNoFlags &&& OpFamilyMask
 
             if opFamily <> 0us then
@@ -2436,12 +2306,8 @@ type PositionedToken =
 module TokenExtensions =
     type Token with
         member this.IsIdentifier = TokenInfo.isIdentifier this
-        member this.IsLiteral = TokenInfo.isLiteral this
         member this.IsOperator = TokenInfo.isOperator this
         member this.IsKeyword = TokenInfo.isKeyword this
-        member this.IsDeprecated = TokenInfo.isDeprecated this
-        member this.IsReserved = TokenInfo.isReserved this
-        member this.IsInvalid = TokenInfo.isInvalid this
         member this.IsVirtual = TokenInfo.isVirtual this
         member this.InComment = TokenInfo.inComment this
         member this.IsNumeric = TokenInfo.isNumeric this
@@ -2453,23 +2319,9 @@ module TokenExtensions =
             let mask = ~~~InComment
             uint16 this &&& mask |> uint16 |> LanguagePrimitives.EnumOfValue
 
-        member this.Kind: TokenKind = TokenInfo.kind this
-
     type PositionedToken with
         member this.IsIdentifier = TokenInfo.isIdentifier this.Token
-        member this.IsLiteral = TokenInfo.isLiteral this.Token
-        member this.IsOperator = TokenInfo.isOperator this.Token
-        member this.IsKeyword = TokenInfo.isKeyword this.Token
-        member this.IsDeprecated = TokenInfo.isDeprecated this.Token
-        member this.IsReserved = TokenInfo.isReserved this.Token
-        member this.IsInvalid = TokenInfo.isInvalid this.Token
-        member this.IsVirtual = TokenInfo.isVirtual this.Token
         member this.InComment = TokenInfo.inComment this.Token
-        member this.IsNumeric = TokenInfo.isNumeric this.Token
-        member this.IsText = TokenInfo.isText this.Token
-
-        member this.IsCommentedOut = TokenInfo.inComment this.Token
-
         member this.TokenWithoutCommentFlags: Token = TokenInfo.withoutCommentFlags this.Token
 
 [<Struct>]
@@ -2479,19 +2331,9 @@ type NumericInfo =
             _token: PositionedToken
         }
 
-    member this.PositionedToken = this._token
-    member this.Token: Token = this._token.Token
-    member this.StartIndex: int64 = this._token.StartIndex
-
     member this.Base: NumericBase = TokenInfo.numericBase this._token.Token
 
     member this.Kind: NumericKind = TokenInfo.numericKind this._token.Token
-
-    static member TryCreate(token: PositionedToken) =
-        if TokenInfo.isNumeric token.Token then
-            ValueSome { _token = token }
-        else
-            ValueNone
 
     static member Create(token: PositionedToken) =
         if TokenInfo.isNumeric token.Token then
@@ -2546,6 +2388,7 @@ type OperatorInfo =
     member this.Token: Token = this._token.Token
     member this.StartIndex: int64 = this._token.StartIndex
 
+    /// Indicates whether the token can appear in a prefix position (e.g. keywords starting expressions, unary operators).
     member this.CanBePrefix: bool =
         match this.Token with
         | Token.KWLet
@@ -2568,7 +2411,7 @@ type OperatorInfo =
         | Token.KWFun
         | Token.KWFunction
         | Token.OpDereference
-        // & and && are keyword-encoded but can be prefix (address-of / native address-of)
+        // Unary address-of (&) and native address-of (&&)
         | Token.OpAmp
         | Token.OpAmpAmp -> true
         | t -> TokenInfo.isOperator t && TokenInfo.canBePrefix t
@@ -2576,25 +2419,24 @@ type OperatorInfo =
     member this.Associativity = OperatorInfo.associativity this.Precedence
     member this.Precedence = this._precedence
 
-    /// The compiled `op_*` name of the operator `token` as written `literal`
-    /// (`&&&` → `op_BitwiseAnd`). `literal` must be an operator spelling of `token`.
-    /// `ValueNone` for a non-operator token and for keyword-encoded punctuation with
-    /// no operator function (`;`, `->`, `::`).
+    /// Gets the compiled .NET method name for an operator (e.g., "&&&" -> "op_BitwiseAnd").
+    /// Returns ValueNone if the token is not an operator or is non-overloadable punctuation (e.g., ";", "->", "::").
     static member TryGetOpName(token: Token, literal: string) : string voption =
         if TokenInfo.isOperator token || TokenInfo.isNamedOperatorKeyword token then
             ValueSome(OperatorData.nameOfSymbol literal)
         else
             ValueNone
 
-    /// Display name for a token dump. A keyword-encoded token shows its token name
-    /// (`OpEquality`), because most of its occurrences (`let x = 1`) are not operator
-    /// uses; the syntactic position needed to say `op_Equality` is not known here.
+    /// Gets a friendly name for debugging and AST dumps.
+    /// Keywords return their token name (e.g., "OpEquality") rather than "op_Equality"
+    /// when their syntactic context is not known.
     member this.GetName(literal: string) =
         if TokenInfo.isKeyword this.Token then
             this.Token.ToString()
         else
             OperatorData.nameOfSymbol literal
 
+    /// Attempts to wrap a token into an OperatorInfo if it represents an operator or operator keyword.
     static member TryCreate(token: PositionedToken) =
         if TokenInfo.isOperator token.Token || TokenInfo.isOperatorKeyword token.Token then
             ValueSome
@@ -2604,8 +2446,3 @@ type OperatorInfo =
                 }
         else
             ValueNone
-
-    static member Create(token: PositionedToken) =
-        match OperatorInfo.TryCreate token with
-        | ValueSome opInfo -> opInfo
-        | ValueNone -> invalidArg "token" (sprintf "Token %A is not an operator." token)

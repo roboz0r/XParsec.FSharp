@@ -28,7 +28,7 @@ FunctionOrValue:
         NamedType:
           Ident            'int'             Identifier          tok=  42  pos= 316
         with               'with'            KWWith              tok=  44  pos= 320
-        get/set            'get'             Identifier          tok=  46  pos= 325
+        get                'get'             Identifier          tok=  46  pos= 325
         )                  ')'               KWRParen            tok=  47  pos= 328
         Ident              'x'               Identifier          tok=  49  pos= 330
         )                  ')'               KWRParen            tok=  50  pos= 331
@@ -67,7 +67,7 @@ FunctionOrValue:
         NamedType:
           Ident            'string'          Identifier          tok=  90  pos= 425
         with               'with'            KWWith              tok=  92  pos= 432
-        get/set            'set'             Identifier          tok=  94  pos= 437
+        set                'set'             Identifier          tok=  94  pos= 437
         )                  ')'               KWRParen            tok=  95  pos= 440
         ParenBlock         '('               KWLParen            tok=  97  pos= 442
           Tuple:
@@ -103,8 +103,9 @@ FunctionOrValue:
         NamedType:
           Ident            'int'             Identifier          tok= 136  pos= 530
         with               'with'            KWWith              tok= 138  pos= 534
-        get/set            'get'             Identifier          tok= 140  pos= 539
-        set/get            'set'             Identifier          tok= 143  pos= 544
+        get                'get'             Identifier          tok= 140  pos= 539
+        ,                  ','               OpComma             tok= 141  pos= 542
+        set                'set'             Identifier          tok= 143  pos= 544
         )                  ')'               KWRParen            tok= 144  pos= 547
         Ident              'x'               Identifier          tok= 146  pos= 549
         )                  ')'               KWRParen            tok= 147  pos= 550
@@ -136,8 +137,9 @@ FunctionOrValue:
         NamedType:
           Ident            'int'             Identifier          tok= 178  pos= 605
         with               'with'            KWWith              tok= 180  pos= 609
-        get/set            'set'             Identifier          tok= 182  pos= 614
-        set/get            'get'             Identifier          tok= 185  pos= 619
+        set                'set'             Identifier          tok= 182  pos= 614
+        ,                  ','               OpComma             tok= 183  pos= 617
+        get                'get'             Identifier          tok= 185  pos= 619
         )                  ')'               KWRParen            tok= 186  pos= 622
         Ident              'x'               Identifier          tok= 188  pos= 624
         )                  ')'               KWRParen            tok= 189  pos= 625
@@ -166,7 +168,7 @@ FunctionOrValue:
                            '^'               OpConcatenate       tok= 218  pos= 718
                            'T'               Identifier          tok= 219  pos= 719
         with               'with'            KWWith              tok= 221  pos= 721
-        get/set            'get'             Identifier          tok= 223  pos= 726
+        get                'get'             Identifier          tok= 223  pos= 726
         )                  ')'               KWRParen            tok= 224  pos= 729
       >                    '>'               op_GreaterThan      tok= 225  pos= 730
     Pats:
@@ -189,7 +191,7 @@ FunctionOrValue:
                            '^'               OpConcatenate       tok= 246  pos= 770
                            'T'               Identifier          tok= 247  pos= 771
         with               'with'            KWWith              tok= 249  pos= 773
-        get/set            'get'             Identifier          tok= 251  pos= 778
+        get                'get'             Identifier          tok= 251  pos= 778
         )                  ')'               KWRParen            tok= 252  pos= 781
         ParenBlock         '('               KWLParen            tok= 254  pos= 783
                            ')'               KWRParen            tok= 255  pos= 784
@@ -233,7 +235,7 @@ FunctionOrValue:
           Typar.Named:
                            ''V'              TypeParameter       tok= 300  pos= 912
         with               'with'            KWWith              tok= 302  pos= 915
-        get/set            'get'             Identifier          tok= 304  pos= 920
+        get                'get'             Identifier          tok= 304  pos= 920
         )                  ')'               KWRParen            tok= 305  pos= 923
         ParenBlock         '('               KWLParen            tok= 307  pos= 925
           Tuple:

@@ -1,0 +1,28 @@
+module       'module'          KWModule            tok=   0  pos=   0
+             'MyModule'        Identifier          tok=   2  pos=   7
+SkipsTokens:
+  (skipped)  'let'             KWLet               tok=   8  pos=  99
+  (skipped)  'f'               Identifier          tok=  10  pos= 103
+  (skipped)  '('               KWLParen            tok=  12  pos= 105
+  (skipped)  'x'               Identifier          tok=  13  pos= 106
+  (skipped)  ':'               OpColon             tok=  14  pos= 107
+  (skipped)  '__SOURCE_F...'   SourceFileIdentifier  tok=  16  pos= 109
+  (skipped)  ')'               KWRParen            tok=  17  pos= 124
+  (skipped)  '='               OpEquality          tok=  19  pos= 126
+  (skipped)  'x'               Identifier          tok=  21  pos= 128
+---
+Diagnostics:
+  UnexpectedTopLevel at 99 (Ln 5, Col 1)
+    module MyModul
+    ^ At index 0 (Ln 1, Col 1)
+    Multiple errors:
+    ├───All choices failed.
+    ├───Operator parsing failed
+    ├───Not a prefix operator
+    └───Expected constant literal
+    
+    ---
+    
+    let f (x: __SOURCE_FILE__) =
+    ^ At index 99 (Ln 5, Col 1)
+    Expected end of file

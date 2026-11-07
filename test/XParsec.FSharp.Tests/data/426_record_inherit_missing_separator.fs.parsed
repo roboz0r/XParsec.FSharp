@@ -1,0 +1,90 @@
+module                     'module'          KWModule            tok=   0  pos=   0
+                           'MyModule'        Identifier          tok=   2  pos=   7
+type                       'type'            KWType              tok=   5  pos=  17
+TypeDefn.Anon:
+  TypeName                 'B'               Identifier          tok=   7  pos=  22
+  (                        '('               KWLParen            tok=   8  pos=  23
+  Pat.Typed:
+    Pat.NamedSimple        'x'               Identifier          tok=   9  pos=  24
+    Colon                  ':'               OpColon             tok=  10  pos=  25
+    NamedType:
+      Ident                'int'             Identifier          tok=  12  pos=  27
+  )                        ')'               KWRParen            tok=  13  pos=  30
+  =                        '='               OpEquality          tok=  15  pos=  32
+  begin                    <virt>            KWBegin             tok=virt  pos=  38
+    member                 'member'          KWMember            tok=  18  pos=  38
+    self                   '_'               Wildcard            tok=  20  pos=  45
+    Pat.NamedSimple        'X'               Identifier          tok=  22  pos=  47
+    =                      '='               OpEquality          tok=  24  pos=  49
+      Ident                'x'               Identifier          tok=  26  pos=  51
+    AdditionalConstructor:
+      new                  'new'             KWNew               tok=  29  pos=  57
+      ParenBlock           '('               KWLParen            tok=  30  pos=  60
+                           ')'               KWRParen            tok=  31  pos=  61
+      =                    '='               OpEquality          tok=  33  pos=  63
+      HighPrecedenceApp:
+        Func:
+          Ident            'B'               Identifier          tok=  35  pos=  65
+        (                  '('               KWLParen            tok=  36  pos=  66
+        Arg:
+          Const            '0'               NumInt32            tok=  37  pos=  67
+                           ')'               KWRParen            tok=  38  pos=  68
+  end                      <virt>            KWEnd               tok=virt  pos=  71
+type                       'type'            KWType              tok=  41  pos=  71
+TypeDefn.Anon:
+  TypeName                 'D'               Identifier          tok=  43  pos=  76
+  =                        '='               OpEquality          tok=  45  pos=  78
+  begin                    <virt>            KWBegin             tok=virt  pos=  84
+    inherit                'inherit'         KWInherit           tok=  48  pos=  84
+    NamedType:
+      Ident                'B'               Identifier          tok=  50  pos=  92
+    Val:
+      val                  'val'             KWVal               tok=  53  pos=  98
+      ident                'Y'               Identifier          tok=  55  pos= 102
+      :                    ':'               OpColon             tok=  56  pos= 103
+      NamedType:
+        Ident              'int'             Identifier          tok=  58  pos= 105
+    AdditionalConstructor:
+      new                  'new'             KWNew               tok=  65  pos= 200
+      ParenBlock           '('               KWLParen            tok=  66  pos= 203
+        Pat.Typed:
+          Pat.NamedSimple  'n'               Identifier          tok=  67  pos= 204
+          Colon            ':'               OpColon             tok=  68  pos= 205
+          NamedType:
+            Ident          'int'             Identifier          tok=  70  pos= 207
+                           ')'               KWRParen            tok=  71  pos= 210
+      =                    '='               OpEquality          tok=  73  pos= 212
+      ComputationBlock     '{'               KWLBrace            tok=  75  pos= 214
+        SkipsTokens:
+          (skipped)        'inherit'         KWInherit           tok=  77  pos= 216
+          (skipped)        'B'               Identifier          tok=  79  pos= 224
+          (skipped)        '('               KWLParen            tok=  80  pos= 225
+          (skipped)        '1'               NumInt32            tok=  81  pos= 226
+                           <virt>            KWRBrace            tok=virt  pos= 227
+  end                      <virt>            KWEnd               tok=virt  pos= 227
+SkipsTokens:
+  (skipped)                ')'               KWRParen            tok=  82  pos= 227
+  (skipped)                'Y'               Identifier          tok=  84  pos= 229
+  (skipped)                '='               OpEquality          tok=  86  pos= 231
+  (skipped)                'n'               Identifier          tok=  88  pos= 233
+  (skipped)                '}'               KWRBrace            tok=  90  pos= 235
+  (skipped)                'member'          KWMember            tok=  94  pos= 242
+  (skipped)                '_'               Wildcard            tok=  96  pos= 249
+  (skipped)                '.'               OpDot               tok=  97  pos= 250
+  (skipped)                'Z'               Identifier          tok=  98  pos= 251
+  (skipped)                '='               OpEquality          tok= 100  pos= 253
+  (skipped)                '1'               NumInt32            tok= 102  pos= 255
+---
+Diagnostics:
+  MissingExpression at 216 (Ln 12, Col 21)
+        new(n: int) = { inherit B(1) Y = n
+                        ^ At index 216 (Ln 12, Col 21)
+    Multiple errors:
+    ├───Operator parsing failed
+    ├───Not a prefix operator
+    └───Expected constant literal
+  UnclosedDelimiter(KWLBrace, KWRBrace) at 227 (Ln 12, Col 32)
+  MissingModuleElem at 227 (Ln 12, Col 32)
+    
+    ^ At index 257 (Ln 15, Col 1)
+    Unexpected token(s) in module
