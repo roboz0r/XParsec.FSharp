@@ -9,7 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Fixtures.fs" />
-    <Compile Include="BenchConfig.fs" />
     <Compile Include="LexingBenchmarks.fs" />
     <Compile Include="ParsingBenchmarks.fs" />
     <Compile Include="EndToEndBenchmarks.fs" />
