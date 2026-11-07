@@ -267,7 +267,7 @@ type TraceCallback() =
 type WarnCode =
     /// An F# compiler code, written `42`, `"42"` or `"FS0042"`.
     | FSharp of number: int
-    /// Any other code, such as `"V278"`.
+    /// Any other code, such as an analyzer's `"XYZ001"`.
     | Named of code: string
 
     override this.ToString() =
