@@ -5,6 +5,8 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <GenerateProgramFile>false</GenerateProgramFile>
+    <!-- Fixtures are found via __SOURCE_DIRECTORY__, which a CI (deterministic) build maps to /_/ -->
+    <DeterministicSourcePaths>false</DeterministicSourcePaths>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="TestHelpers.fs" />
