@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="XParsec" Version="1.0.0" />
+    <PackageVersion Include="FSharp.Core" Version="8.0.300" />
+    <PackageVersion Include="System.Collections.Immutable" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'" Label="Test">
+    <PackageVersion Include="Expecto" Version="10.2.2" />
+    <PackageVersion Include="Expecto.FsCheck" Version="10.2.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.15.3" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(IsBenchmarkProject)' == 'true'" Label="Benchmark">
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageVersion Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.15.8" />
+    <PackageVersion Include="FSharp.Compiler.Service" Version="43.12.202" />
+    <PackageVersion Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.2" />
+  </ItemGroup>
+</Project>

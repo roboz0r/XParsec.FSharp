@@ -192,54 +192,20 @@
         "resolved": "4.7.0",
         "contentHash": "VybpaOQQhqE6siHppMktjfGBw1GCwvCqiufqmP8F1nj7fTUNtW35LOEt3UZTEsECfo+ELAl/9o9nJx3U91i7vA=="
       },
-      "xparsec": {
-        "type": "Project",
-        "dependencies": {
-          "FSharp.Core": "[8.0.300, )"
-        }
-      },
       "xparsec.fsharp": {
         "type": "Project",
         "dependencies": {
           "XParsec": "[1.0.0, )"
         }
       },
-      "xparsec.fsharp.codegen.clr": {
-        "type": "Project",
-        "dependencies": {
-          "FSharp.Core": "[8.0.300, )",
-          "System.Reflection.MetadataLoadContext": "[8.0.0, )",
-          "XParsec.FSharp.Codegen.Common": "[1.0.0, )",
-          "XParsec.FSharp.SemanticAnalysis": "[1.0.0, )"
-        }
-      },
-      "xparsec.fsharp.codegen.common": {
-        "type": "Project",
-        "dependencies": {
-          "FSharp.Core": "[8.0.300, )",
-          "XParsec.FSharp.SemanticAnalysis": "[1.0.0, )"
-        }
-      },
-      "xparsec.fsharp.semanticanalysis": {
-        "type": "Project",
-        "dependencies": {
-          "FSharp.Core": "[8.0.300, )",
-          "XParsec.FSharp": "[1.0.0, )",
-          "XParsec.Toml": "[1.0.0, )"
-        }
-      },
-      "xparsec.toml": {
-        "type": "Project",
-        "dependencies": {
-          "FSharp.Core": "[8.0.300, )",
-          "XParsec": "[1.0.0, )"
-        }
-      },
-      "System.Reflection.MetadataLoadContext": {
+      "XParsec": {
         "type": "CentralTransitive",
-        "requested": "[8.0.0, )",
-        "resolved": "8.0.0",
-        "contentHash": "SZxrQ4sQYnIcdwiO3G/lHZopbPYQ2lW0ioT4JezgccWUrKaKbHLJbAGZaDfkYjWcta1pWssAo3MOXLsR0ie4tQ=="
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "YAfi6Rq9DbEp/pnc/AM02MymF3ArpME3lc3VP+ak9nT9tIv9/ORXh6jSwilBCeNlybd+rQQKbvD2/2+eLhsvDQ==",
+        "dependencies": {
+          "FSharp.Core": "8.0.300"
+        }
       }
     }
   }

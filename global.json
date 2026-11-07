@@ -1,0 +1,9 @@
+{
+    "sdk": {
+        "version": "10.0.204",
+        "rollForward": "disable"
+    },
+    "notes": [
+        "rollForward was disabled to address https://github.com/dotnet/sdk/issues/38200"
+    ]
+}

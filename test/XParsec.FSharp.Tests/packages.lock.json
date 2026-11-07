@@ -133,16 +133,19 @@
         "resolved": "13.0.1",
         "contentHash": "ppPFpBcvxdsfUonNcvITKqLl3bqxWbDCZIzDWHzjpdAHRFfZe0Dw9HmA0+za13IdyrgJwpkDTDA9fHaxOrt20A=="
       },
-      "xparsec": {
-        "type": "Project",
-        "dependencies": {
-          "FSharp.Core": "[8.0.300, )"
-        }
-      },
       "xparsec.fsharp": {
         "type": "Project",
         "dependencies": {
-          "XParsec": "[0.3.0, )"
+          "XParsec": "[1.0.0, )"
+        }
+      },
+      "XParsec": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "YAfi6Rq9DbEp/pnc/AM02MymF3ArpME3lc3VP+ak9nT9tIv9/ORXh6jSwilBCeNlybd+rQQKbvD2/2+eLhsvDQ==",
+        "dependencies": {
+          "FSharp.Core": "8.0.300"
         }
       }
     }

@@ -8,10 +8,13 @@
         "resolved": "8.0.0",
         "contentHash": "AurL6Y5BA1WotzlEvVaIDpqzpIPvYnnldxru8oXJU2yFxFUy3+pNXjXd1ymO+RA0rq0+590Q8gaz2l3Sr7fmqg=="
       },
-      "xparsec": {
-        "type": "Project",
+      "XParsec": {
+        "type": "Direct",
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "YAfi6Rq9DbEp/pnc/AM02MymF3ArpME3lc3VP+ak9nT9tIv9/ORXh6jSwilBCeNlybd+rQQKbvD2/2+eLhsvDQ==",
         "dependencies": {
-          "FSharp.Core": "[8.0.300, )"
+          "FSharp.Core": "8.0.300"
         }
       },
       "FSharp.Core": {
